@@ -102,7 +102,7 @@ const html = `<!DOCTYPE html>
   html, body { height: 100%; }
   body {
     margin: 0; font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: var(--bg); color: var(--fg); height: 100vh; display: flex; overflow: hidden;
+    background: var(--bg); color: var(--fg); height: 100vh; display: flex; flex-direction: column; overflow: hidden;
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   }
   /* sidebar */
@@ -148,11 +148,15 @@ const html = `<!DOCTYPE html>
   #flowheader .trigger b { color: var(--muted); font-weight: 600; }
   /* the board: a subtle dot-grid backdrop for the sticky lane */
   #lane-wrap {
-    flex: 1; min-height: 250px; overflow: auto; padding: 30px 24px;
+    flex: 1; min-height: 250px; overflow: hidden; padding: 0; position: relative; cursor: grab;
     background-image: radial-gradient(circle, #1b1b22 1px, transparent 1.4px);
     background-size: 22px 22px; background-position: -1px -1px;
   }
-  #lane { position: relative; min-width: max-content; }
+  #lane-wrap.grabbing { cursor: grabbing; }
+  #lane { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+  #zoomctl { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 20; }
+  #zoomctl button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); user-select: none; }
+  #zoomctl button:hover { background: var(--line); }
   svg.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
   .sticky {
     position: absolute; width: 176px; min-height: 92px; border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
@@ -223,9 +227,44 @@ const html = `<!DOCTYPE html>
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #2c2c34; border-radius: 6px; border: 2px solid var(--panel); }
   ::-webkit-scrollbar-thumb:hover { background: #3a3a45; }
+  /* top tab bar: Flows board vs. Gallery of every sticky */
+  #tabbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .tab { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 15px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background .1s, color .1s; }
+  .tab:hover { background: var(--accent); color: var(--dim); }
+  .tab.active { background: var(--accent-2); color: #fff; border-color: var(--line); }
+  #shell { flex: 1; min-height: 0; display: flex; }
+  /* gallery: a wall of every sticky in the model, filtered by type chips + search */
+  #gallery { flex: 1; min-width: 0; display: none; flex-direction: column; }
+  #gallery.show { display: flex; }
+  .gallery-head { padding: 16px 24px 13px; border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+  .gallery-head h2 { margin: 0 0 11px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .gallery-head h2 .count { font-size: 11px; font-weight: 700; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 2px 9px; letter-spacing: 0; }
+  .gallery-search { padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; font-size: 13px; width: 100%; max-width: 420px; background: var(--input); color: var(--fg); outline: none; transition: border-color .12s, box-shadow .12s; }
+  .gallery-search::placeholder { color: var(--muted); }
+  .gallery-search:focus { border-color: var(--ring); box-shadow: 0 0 0 3px rgba(120,120,140,.16); }
+  .type-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .tchip { font-size: 10px; font-weight: 700; letter-spacing: .03em; padding: 4px 11px; border-radius: 99px; cursor: pointer; border: 1px solid transparent; user-select: none; text-transform: uppercase; opacity: .38; transition: opacity .1s, box-shadow .1s; }
+  .tchip:hover { opacity: .75; }
+  .tchip.on { opacity: 1; }
+  .tchip-all { background: var(--accent-2); color: var(--dim); border-color: var(--line); }
+  .gallery-grid { flex: 1; overflow-y: auto; padding: 18px 24px 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; align-content: start; }
+  .gcard { border-radius: var(--radius); padding: 12px 14px; cursor: pointer; border: 1px solid rgba(0,0,0,.28); box-shadow: var(--shadow); position: relative; min-height: 104px; display: flex; flex-direction: column; transition: transform .1s, box-shadow .1s; }
+  .gcard:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+  .gcard.selected { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .gcard .gtype { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 5px; }
+  .gcard .glabel { font-size: 13px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+  .gcard .gdesc { font-size: 11px; line-height: 1.45; margin-top: 6px; opacity: .82; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .gcard .gmeta { margin-top: auto; padding-top: 9px; font-size: 10px; font-weight: 600; opacity: .72; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .gcard .gdead { background: rgba(0,0,0,.2); border-radius: 99px; padding: 1px 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .gempty { grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 22px 2px; }
 </style>
 </head>
 <body>
+<div id="tabbar">
+  <button id="tab-flows" class="tab active">Flows</button>
+  <button id="tab-gallery" class="tab">Gallery</button>
+</div>
+<div id="shell">
 <aside id="sidebar">
   <header><h1>${esc(title)}</h1><div class="sub">strategic flows recovered from the tactical codebase</div></header>
   <input id="search" placeholder="Filter flows..." type="search">
@@ -234,20 +273,27 @@ const html = `<!DOCTYPE html>
 </aside>
 <div id="main">
   <div id="flowheader"></div>
-  <div id="lane-wrap"><div id="lane"></div></div>
+  <div id="lane-wrap"><div id="lane"></div><div id="zoomctl"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">&minus;</button><button id="zfit" title="Fit to view">&#10530;</button></div></div>
   <div id="findings" style="display:none">
     <div id="hotspots"></div>
     <div id="instances"></div>
   </div>
 </div>
+<section id="gallery"></section>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
+</div>
 <script>
 const MODEL = ${modelJson};
 const REPO_ROOT = ${JSON.stringify(repoRoot)};
 const PALETTE = ${JSON.stringify(PALETTE)};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
-let currentFlow = null, selectedId = null;
+let currentFlow = null, selectedId = null, currentMode = 'flows';
+
+// types present in the model, in palette order (drives the gallery filter chips + sort)
+const galleryTypes = Object.keys(PALETTE).filter(t => t !== 'hotspot' && MODEL.nodes.some(n => n.type === t));
+const galleryState = { q: '', active: new Set(galleryTypes) };
+let galleryBuilt = false;
 
 function el(tag, attrs, ...children) {
   const e = document.createElement(tag);
@@ -452,7 +498,52 @@ function layoutFlow(f, lane) {
   }
 
   const wrap = document.getElementById('lane-wrap');
-  requestAnimationFrame(() => { wrap.scrollTop = Math.max(0, offY + 44 - wrap.clientHeight / 2); wrap.scrollLeft = 0; });
+  const pz = setupPanZoom(wrap, lane);
+  // double rAF so the board's flex height has settled before we compute the fit scale
+  requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(maxR + PAD, maxB + PAD)));
+}
+
+// One pan/zoom controller for the board: wheel zooms toward the cursor, left-drag on the
+// background pans, buttons zoom/fit. Attached to the persistent #lane-wrap once; later renders
+// just swap in the new #lane and re-fit.
+let PZ = null;
+function setupPanZoom(wrap, lane) {
+  if (PZ) { PZ.lane = lane; return PZ; }
+  const st = { wrap, lane, scale: 1, tx: 0, ty: 0, cw: 0, ch: 0 };
+  const MIN = 0.12, MAX = 2.6;
+  const apply = () => { st.lane.style.transform = 'translate(' + st.tx + 'px,' + st.ty + 'px) scale(' + st.scale + ')'; };
+  st.fit = (cw, ch) => {
+    st.cw = cw; st.ch = ch;
+    const vw = wrap.clientWidth, vh = wrap.clientHeight, m = 48;
+    st.scale = Math.max(MIN, Math.min(1, (vw - m) / cw, (vh - m) / ch));
+    st.tx = (vw - cw * st.scale) / 2;
+    st.ty = (vh - ch * st.scale) / 2;
+    apply();
+  };
+  st.zoomAt = (factor, px, py) => {
+    const ns = Math.min(MAX, Math.max(MIN, st.scale * factor)), k = ns / st.scale;
+    st.tx = px - (px - st.tx) * k; st.ty = py - (py - st.ty) * k; st.scale = ns; apply();
+  };
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect();
+    st.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  let panning = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  wrap.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.sticky, .inv, .dupdot, #zoomctl')) return;
+    panning = true; sx = e.clientX; sy = e.clientY; ox = st.tx; oy = st.ty;
+    wrap.classList.add('grabbing'); wrap.setPointerCapture(e.pointerId);
+  });
+  wrap.addEventListener('pointermove', e => { if (panning) { st.tx = ox + (e.clientX - sx); st.ty = oy + (e.clientY - sy); apply(); } });
+  const endPan = e => { if (panning) { panning = false; wrap.classList.remove('grabbing'); try { wrap.releasePointerCapture(e.pointerId); } catch (_) { } } };
+  wrap.addEventListener('pointerup', endPan);
+  wrap.addEventListener('pointercancel', endPan);
+  const btn = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+  btn('zin', () => st.zoomAt(1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  btn('zout', () => st.zoomAt(1 / 1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  btn('zfit', () => st.fit(st.cw, st.ch));
+  PZ = st; return st;
 }
 
 function placeCard(o, lane, x, y, dupColor) {
@@ -496,11 +587,92 @@ function curveD(p1, p2) {
 }
 
 function selectFlow(id) {
+  setMode('flows');                       // jumping to a flow (e.g. from a gallery card) shows the board
   currentFlow = MODEL.flows.find(f => f.id === id);
   selectedId = null;
   renderSidebar((document.getElementById('search').value || '').toLowerCase());
   renderFlow();
   closeDetail();
+}
+
+// ---- Gallery: every sticky in the model, filtered by type chips + text search ----
+function nodeFlows(id) {
+  return MODEL.flows.filter(f => (f.steps || []).includes(id) || (f.edges || []).some(e => e.from === id || e.to === id));
+}
+function syncChips() {
+  galleryTypes.forEach(t => { const c = document.querySelector('.tchip[data-type="' + t + '"]'); if (c) c.classList.toggle('on', galleryState.active.has(t)); });
+  const all = document.getElementById('chip-all');
+  if (all) all.classList.toggle('on', galleryTypes.every(t => galleryState.active.has(t)));
+}
+function buildGallery() {
+  const g = document.getElementById('gallery');
+  g.innerHTML = '';
+  const head = el('div', { class: 'gallery-head' });
+  head.append(el('h2', {}, 'All stickies', el('span', { class: 'count', id: 'gcount' }, '')));
+  const search = el('input', { class: 'gallery-search', id: 'gsearch', type: 'search', placeholder: 'Search stickies by name or description...' });
+  search.addEventListener('input', e => { galleryState.q = e.target.value.toLowerCase(); renderGrid(); });
+  head.append(search);
+  const chips = el('div', { class: 'type-chips' });
+  const allChip = el('div', { class: 'tchip tchip-all on', id: 'chip-all' }, 'All',
+    (() => { const s = el('span', {}); return s; })());
+  allChip.textContent = 'All';
+  allChip.addEventListener('click', () => { galleryTypes.forEach(t => galleryState.active.add(t)); syncChips(); renderGrid(); });
+  chips.append(allChip);
+  for (const t of galleryTypes) {
+    const p = PALETTE[t];
+    const c = el('div', { class: 'tchip on', 'data-type': t, style: 'background:' + p.fill + ';color:' + p.text }, p.name);
+    c.addEventListener('click', () => {
+      if (galleryState.active.has(t)) galleryState.active.delete(t); else galleryState.active.add(t);
+      syncChips(); renderGrid();
+    });
+    chips.append(c);
+  }
+  head.append(chips);
+  g.append(head);
+  g.append(el('div', { class: 'gallery-grid', id: 'ggrid' }));
+  galleryBuilt = true;
+}
+function renderGrid() {
+  const grid = document.getElementById('ggrid'); if (!grid) return;
+  grid.innerHTML = '';
+  const q = galleryState.q;
+  const nodes = MODEL.nodes
+    .filter(n => galleryState.active.has(n.type))
+    .filter(n => !q || (n.label + ' ' + (n.description || '') + ' ' + (PALETTE[n.type] ? PALETTE[n.type].name : '')).toLowerCase().includes(q))
+    .sort((a, b) => (galleryTypes.indexOf(a.type) - galleryTypes.indexOf(b.type)) || String(a.label).localeCompare(String(b.label)));
+  document.getElementById('gcount').textContent = nodes.length + ' of ' + MODEL.nodes.length;
+  if (!nodes.length) { grid.append(el('div', { class: 'gempty' }, 'No stickies match the current filters.')); return; }
+  for (const n of nodes) {
+    const p = PALETTE[n.type] || PALETTE.invariant;
+    const flows = nodeFlows(n.id);
+    const allDead = flows.length > 0 && flows.every(f => f.status && f.status !== 'live');
+    const card = el('div', {
+      class: 'gcard' + (selectedId === n.id ? ' selected' : ''),
+      style: 'background:' + p.fill + ';border-color:' + p.edge + ';color:' + p.text,
+      onclick: () => openDetail(n.id)
+    }, el('div', { class: 'gtype' }, p.name), el('div', { class: 'glabel' }, n.label));
+    if (n.description) card.append(el('div', { class: 'gdesc' }, n.description));
+    const meta = el('div', { class: 'gmeta' });
+    meta.append(el('span', {}, flows.length ? ('in ' + flows.length + ' flow' + (flows.length > 1 ? 's' : '')) : 'not in any flow'));
+    if (allDead) meta.append(el('span', { class: 'gdead' }, 'retired'));
+    card.append(meta);
+    grid.append(card);
+  }
+}
+function renderGallery() {
+  if (!galleryBuilt) buildGallery();
+  syncChips();
+  renderGrid();
+}
+function setMode(m) {
+  currentMode = m;
+  const flowsOn = m === 'flows';
+  document.getElementById('tab-flows').classList.toggle('active', flowsOn);
+  document.getElementById('tab-gallery').classList.toggle('active', !flowsOn);
+  document.getElementById('sidebar').style.display = flowsOn ? '' : 'none';
+  document.getElementById('main').style.display = flowsOn ? '' : 'none';
+  document.getElementById('gallery').classList.toggle('show', !flowsOn);
+  if (!flowsOn) renderGallery();
 }
 
 function renderFlow() {

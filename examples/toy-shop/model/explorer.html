@@ -63,11 +63,15 @@
   #flowheader .trigger b { color: var(--muted); font-weight: 600; }
   /* the board: a subtle dot-grid backdrop for the sticky lane */
   #lane-wrap {
-    flex: 1; min-height: 250px; overflow: auto; padding: 30px 24px;
+    flex: 1; min-height: 250px; overflow: hidden; padding: 0; position: relative; cursor: grab;
     background-image: radial-gradient(circle, #1b1b22 1px, transparent 1.4px);
     background-size: 22px 22px; background-position: -1px -1px;
   }
-  #lane { position: relative; min-width: max-content; }
+  #lane-wrap.grabbing { cursor: grabbing; }
+  #lane { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+  #zoomctl { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 20; }
+  #zoomctl button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); user-select: none; }
+  #zoomctl button:hover { background: var(--line); }
   svg.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
   .sticky {
     position: absolute; width: 176px; min-height: 92px; border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
@@ -149,7 +153,7 @@
 </aside>
 <div id="main">
   <div id="flowheader"></div>
-  <div id="lane-wrap"><div id="lane"></div></div>
+  <div id="lane-wrap"><div id="lane"></div><div id="zoomctl"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">&minus;</button><button id="zfit" title="Fit to view">&#10530;</button></div></div>
   <div id="findings" style="display:none">
     <div id="hotspots"></div>
     <div id="instances"></div>
@@ -367,7 +371,52 @@ function layoutFlow(f, lane) {
   }
 
   const wrap = document.getElementById('lane-wrap');
-  requestAnimationFrame(() => { wrap.scrollTop = Math.max(0, offY + 44 - wrap.clientHeight / 2); wrap.scrollLeft = 0; });
+  const pz = setupPanZoom(wrap, lane);
+  // double rAF so the board's flex height has settled before we compute the fit scale
+  requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(maxR + PAD, maxB + PAD)));
+}
+
+// One pan/zoom controller for the board: wheel zooms toward the cursor, left-drag on the
+// background pans, buttons zoom/fit. Attached to the persistent #lane-wrap once; later renders
+// just swap in the new #lane and re-fit.
+let PZ = null;
+function setupPanZoom(wrap, lane) {
+  if (PZ) { PZ.lane = lane; return PZ; }
+  const st = { wrap, lane, scale: 1, tx: 0, ty: 0, cw: 0, ch: 0 };
+  const MIN = 0.12, MAX = 2.6;
+  const apply = () => { st.lane.style.transform = 'translate(' + st.tx + 'px,' + st.ty + 'px) scale(' + st.scale + ')'; };
+  st.fit = (cw, ch) => {
+    st.cw = cw; st.ch = ch;
+    const vw = wrap.clientWidth, vh = wrap.clientHeight, m = 48;
+    st.scale = Math.max(MIN, Math.min(1, (vw - m) / cw, (vh - m) / ch));
+    st.tx = (vw - cw * st.scale) / 2;
+    st.ty = (vh - ch * st.scale) / 2;
+    apply();
+  };
+  st.zoomAt = (factor, px, py) => {
+    const ns = Math.min(MAX, Math.max(MIN, st.scale * factor)), k = ns / st.scale;
+    st.tx = px - (px - st.tx) * k; st.ty = py - (py - st.ty) * k; st.scale = ns; apply();
+  };
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect();
+    st.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  let panning = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  wrap.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.sticky, .inv, .dupdot, #zoomctl')) return;
+    panning = true; sx = e.clientX; sy = e.clientY; ox = st.tx; oy = st.ty;
+    wrap.classList.add('grabbing'); wrap.setPointerCapture(e.pointerId);
+  });
+  wrap.addEventListener('pointermove', e => { if (panning) { st.tx = ox + (e.clientX - sx); st.ty = oy + (e.clientY - sy); apply(); } });
+  const endPan = e => { if (panning) { panning = false; wrap.classList.remove('grabbing'); try { wrap.releasePointerCapture(e.pointerId); } catch (_) { } } };
+  wrap.addEventListener('pointerup', endPan);
+  wrap.addEventListener('pointercancel', endPan);
+  const btn = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+  btn('zin', () => st.zoomAt(1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  btn('zout', () => st.zoomAt(1 / 1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  btn('zfit', () => st.fit(st.cw, st.ch));
+  PZ = st; return st;
 }
 
 function placeCard(o, lane, x, y, dupColor) {

@@ -214,13 +214,36 @@ function layoutFlow(f, lane) {
   const spine = nodes.filter(n => !isRM(n) && !isInv(n));
   const spineIds = new Set(spine.map(n => n.id));
 
-  // rank spine nodes by longest causal path (cap iterations to tolerate cycles)
+  // rank spine nodes by longest causal path. Flows contain cycles (e.g. a policy loop:
+  // aggregate -> event -> policy -> command -> aggregate), so first strip the cycle-closing
+  // back-edges via DFS — otherwise longest-path inflates ranks and scatters the graph.
+  // The back-edges are still DRAWN later (as loop-back connectors); they just don't set rank.
   const spineEdges = (f.edges || []).filter(e => spineIds.has(e.from) && spineIds.has(e.to) && CAUSAL_VERBS.has(e.verb));
+  const adj = {}; spine.forEach(n => (adj[n.id] = []));
+  for (const e of spineEdges) adj[e.from].push(e.to);
+  const state = {}, back = new Set();
+  const dfs = u => { state[u] = 1; for (const v of adj[u]) { if (state[v] === 1) back.add(u + '|' + v); else if (!state[v]) dfs(v); } state[u] = 2; };
+  const indeg = {}; spine.forEach(n => (indeg[n.id] = 0));
+  for (const e of spineEdges) indeg[e.to]++;
+  spine.filter(n => indeg[n.id] === 0).forEach(n => { if (!state[n.id]) dfs(n.id); });
+  spine.forEach(n => { if (!state[n.id]) dfs(n.id); });
+  const dagEdges = spineEdges.filter(e => !back.has(e.from + '|' + e.to));
   const rank = {}; spine.forEach(n => (rank[n.id] = 0));
   for (let it = 0; it < spine.length + 2; it++) {
     let ch = false;
-    for (const e of spineEdges) if (rank[e.to] < rank[e.from] + 1) { rank[e.to] = rank[e.from] + 1; ch = true; }
+    for (const e of dagEdges) if (rank[e.to] < rank[e.from] + 1) { rank[e.to] = rank[e.from] + 1; ch = true; }
     if (!ch) break;
+  }
+  // A non-actor node with no causal producer (e.g. an aggregate this flow only READS, like a
+  // routing Team) defaults to rank 0 and lands among the actors. Pull it to the column where
+  // it is actually referenced instead.
+  const dagIndeg = {}; spine.forEach(n => (dagIndeg[n.id] = 0));
+  for (const e of dagEdges) dagIndeg[e.to]++;
+  for (const n of spine) {
+    if (n.type === 'actor' || dagIndeg[n.id] > 0) continue;
+    const nbRanks = (f.edges || []).filter(e => e.from === n.id || e.to === n.id)
+      .map(e => (e.from === n.id ? e.to : e.from)).filter(x => spineIds.has(x) && x !== n.id).map(x => rank[x]);
+    if (nbRanks.length) rank[n.id] = Math.max(0, Math.min(...nbRanks));
   }
   const byRank = {};
   spine.forEach(n => (byRank[rank[n.id]] ||= []).push(n));

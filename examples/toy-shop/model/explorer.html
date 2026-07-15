@@ -77,7 +77,17 @@
   .sticky.selected { outline: 2px solid var(--fg); outline-offset: 2px; z-index: 3; }
   .sticky .ntype { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 5px; overflow-wrap: anywhere; }
   .sticky .nlabel { font-size: 12.5px; font-weight: 650; line-height: 1.32; overflow-wrap: anywhere; }
-  .sticky .flags { position: absolute; top: 7px; right: 9px; font-size: 9px; opacity: .72; font-weight: 600; }
+  .sticky .flags { position: absolute; bottom: 7px; right: 10px; font-size: 9px; opacity: .72; font-weight: 600; }
+  /* corner dot marking a node that appears more than once (same color = same node) */
+  .dupdot { position: absolute; top: 7px; right: 8px; width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.5); cursor: pointer; transition: transform .1s; z-index: 4; }
+  .dupdot:hover { transform: scale(1.4); }
+  .inv .dupdot { top: 5px; right: 6px; width: 8px; height: 8px; }
+  /* hover-focus: dim everything except the hovered node's neighborhood + its duplicates */
+  .sticky, .inv, .edge-verb { transition: opacity .13s; }
+  svg.edges path { transition: opacity .13s; }
+  #lane.focusing .sticky.lo, #lane.focusing .inv.lo { opacity: .12; }
+  #lane.focusing .edge-verb.lo { opacity: .06; }
+  #lane.focusing svg.edges path.lo { opacity: .08; }
   .inv { position: absolute; width: 150px; border-radius: 7px; padding: 7px 10px; font-size: 10.5px; cursor: pointer; line-height: 1.35; transition: transform .1s; overflow-wrap: anywhere; z-index: 1; }
   .inv:hover { transform: translateY(-2px); z-index: 3; }
   .edge-verb { position: absolute; font-size: 9px; color: var(--muted); background: var(--bg); padding: 0 4px; border-radius: 3px; pointer-events: none; letter-spacing: .02em; white-space: nowrap; z-index: 2; transform: translate(-50%, -50%); }
@@ -203,21 +213,20 @@ const CAUSAL_VERBS = new Set(['issues', 'handled by', 'emits', 'triggers', 'call
 const READ_VERBS = new Set(['reads', 'read by']);
 const svgNS = 'http://www.w3.org/2000/svg';
 
+const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9f43', '#4d96ff', '#ff6ec7', '#c0eb75', '#f78fb3', '#5ed0e0', '#e0a458'];
+
 function layoutFlow(f, lane) {
   lane.innerHTML = '';
   lane.style.position = 'relative';
-  const ids = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
-  const nodes = [...ids].map(id => nodeById.get(id)).filter(Boolean);
+  const flowIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
   const stepIdx = {}; (f.steps || []).forEach((id, i) => (stepIdx[id] = i));
   const isRM = n => n && n.type === 'readModel';
   const isInv = n => n && n.type === 'invariant';
-  const spine = nodes.filter(n => !isRM(n) && !isInv(n));
+  const nodesArr = [...flowIds].map(id => nodeById.get(id)).filter(Boolean);
+  const spine = nodesArr.filter(n => !isRM(n) && !isInv(n));
   const spineIds = new Set(spine.map(n => n.id));
 
-  // rank spine nodes by longest causal path. Flows contain cycles (e.g. a policy loop:
-  // aggregate -> event -> policy -> command -> aggregate), so first strip the cycle-closing
-  // back-edges via DFS — otherwise longest-path inflates ranks and scatters the graph.
-  // The back-edges are still DRAWN later (as loop-back connectors); they just don't set rank.
+  // --- rank the spine (cycle-broken longest path) ---
   const spineEdges = (f.edges || []).filter(e => spineIds.has(e.from) && spineIds.has(e.to) && CAUSAL_VERBS.has(e.verb));
   const adj = {}; spine.forEach(n => (adj[n.id] = []));
   for (const e of spineEdges) adj[e.from].push(e.to);
@@ -229,133 +238,132 @@ function layoutFlow(f, lane) {
   spine.forEach(n => { if (!state[n.id]) dfs(n.id); });
   const dagEdges = spineEdges.filter(e => !back.has(e.from + '|' + e.to));
   const rank = {}; spine.forEach(n => (rank[n.id] = 0));
-  for (let it = 0; it < spine.length + 2; it++) {
-    let ch = false;
-    for (const e of dagEdges) if (rank[e.to] < rank[e.from] + 1) { rank[e.to] = rank[e.from] + 1; ch = true; }
-    if (!ch) break;
-  }
-  // A non-actor node with no causal producer (e.g. an aggregate this flow only READS, like a
-  // routing Team) defaults to rank 0 and lands among the actors. Pull it to the column where
-  // it is actually referenced instead.
-  const dagIndeg = {}; spine.forEach(n => (dagIndeg[n.id] = 0));
-  for (const e of dagEdges) dagIndeg[e.to]++;
+  for (let it = 0; it < spine.length + 2; it++) { let ch = false; for (const e of dagEdges) if (rank[e.to] < rank[e.from] + 1) { rank[e.to] = rank[e.from] + 1; ch = true; } if (!ch) break; }
+  const dind = {}; spine.forEach(n => (dind[n.id] = 0)); for (const e of dagEdges) dind[e.to]++;
   for (const n of spine) {
-    if (n.type === 'actor' || dagIndeg[n.id] > 0) continue;
-    const nbRanks = (f.edges || []).filter(e => e.from === n.id || e.to === n.id)
-      .map(e => (e.from === n.id ? e.to : e.from)).filter(x => spineIds.has(x) && x !== n.id).map(x => rank[x]);
-    if (nbRanks.length) rank[n.id] = Math.max(0, Math.min(...nbRanks));
+    if (n.type === 'actor' || dind[n.id] > 0) continue;
+    const nb = (f.edges || []).filter(e => e.from === n.id || e.to === n.id).map(e => (e.from === n.id ? e.to : e.from)).filter(x => spineIds.has(x) && x !== n.id).map(x => rank[x]);
+    if (nb.length) rank[n.id] = Math.max(0, Math.min(...nb));
   }
-  const byRank = {};
-  spine.forEach(n => (byRank[rank[n.id]] ||= []).push(n));
+
+  // --- build INSTANCES: nodes duplicate so the flow stays strictly left-to-right ---
+  let uid = 0;
+  const insts = [], primary = {}, instsOf = {}, instByIid = {};
+  const mk = (node, r, kind, anchorIid) => { const o = { iid: ++uid, id: node.id, node, rank: r, kind: kind || 'spine', anchorIid }; insts.push(o); (instsOf[node.id] ||= []).push(o); instByIid[o.iid] = o; return o; };
+  spine.forEach(n => { primary[n.id] = mk(n, rank[n.id], 'spine'); });
+  const drawn = [];
+  for (const e of (f.edges || [])) {
+    const nf = nodeById.get(e.from), nt = nodeById.get(e.to); if (!nf || !nt) continue;
+    if (isRM(nf) || isRM(nt)) {                              // read model: one copy per reference, beside its partner
+      const rmId = isRM(nf) ? e.from : e.to, spId = isRM(nf) ? e.to : e.from, anchor = primary[spId]; if (!anchor) continue;
+      const rmInst = mk(nodeById.get(rmId), anchor.rank, 'rm', anchor.iid);
+      drawn.push({ from: (e.from === rmId ? rmInst : anchor).iid, to: (e.to === rmId ? rmInst : anchor).iid, verb: e.verb, dashed: true });
+    } else if (isInv(nt)) {                                  // invariant below its aggregate
+      const anchor = primary[e.from]; if (!anchor) continue;
+      const invInst = mk(nodeById.get(e.to), anchor.rank, 'inv', anchor.iid);
+      drawn.push({ from: anchor.iid, to: invInst.iid, verb: '', dashed: true });
+    } else if (isInv(nf)) { continue; }
+    else if (CAUSAL_VERBS.has(e.verb)) {                     // causal: forward, duplicating target if it would go backward
+      const u = primary[e.from]; if (!u) continue;
+      const v = rank[e.to] > rank[e.from] ? primary[e.to] : mk(nodeById.get(e.to), rank[e.from] + 1, 'spine');
+      drawn.push({ from: u.iid, to: v.iid, verb: e.verb, dashed: false });
+    } else {                                                 // spine-spine query (e.g. reads): dotted, no dup
+      const u = primary[e.from], v = primary[e.to]; if (!u || !v) continue;
+      drawn.push({ from: u.iid, to: v.iid, verb: e.verb, dashed: true });
+    }
+  }
+
+  // --- positions ---
+  const COLW = 300, ROWH = 150;
+  const spineInsts = insts.filter(o => o.kind === 'spine');
+  const byRank = {}; spineInsts.forEach(o => (byRank[o.rank] ||= []).push(o));
   const ranks = Object.keys(byRank).map(Number).sort((a, b) => a - b);
-  ranks.forEach(r => byRank[r].sort((a, b) => (stepIdx[a.id] ?? 1e9) - (stepIdx[b.id] ?? 1e9)));
-
-  // geometry: rank -> x column; lane index within rank -> y offset from centerline.
-  // wide columns leave room for the verb labels that ride on the connectors.
-  const COLW = 320, ROWH = 150;
-  const pos = {};
-  for (const r of ranks) byRank[r].forEach((n, i) => { pos[n.id] = { x: r * COLW, y: (i - (byRank[r].length - 1) / 2) * ROWH }; });
-  let minY = 0, maxY = 0;
-  spine.forEach(n => { minY = Math.min(minY, pos[n.id].y); maxY = Math.max(maxY, pos[n.id].y); });
-
-  const neighborsIn = id => (f.edges || []).filter(e => e.from === id || e.to === id).map(e => (e.from === id ? e.to : e.from)).filter(x => pos[x] && spineIds.has(x));
-
-  // read models: band above the spine, x near their connected spine node(s); stagger only on x-collision
-  const rms = nodes.filter(isRM);
-  const rmSlots = [];
-  rms.forEach(n => {
-    const nb = neighborsIn(n.id).map(x => pos[x]);
-    const x = nb.length ? nb.reduce((s, p) => s + p.x, 0) / nb.length : 0;
-    let row = 0;
-    while (rmSlots.some(s => s.row === row && Math.abs(s.x - x) < COLW * 0.9)) row++;
-    rmSlots.push({ x, row });
-    pos[n.id] = { x, y: minY - ROWH * (1.08 + row * 0.92) };
-  });
-  // invariants: band below their aggregate
-  const invAggOf = id => { const e = (f.edges || []).find(e => e.to === id && e.verb === 'enforces'); return e ? e.from : null; };
-  const invByAgg = {};
-  nodes.filter(isInv).forEach(n => { const a = invAggOf(n.id); (invByAgg[a] ||= []).push(n); });
-  for (const a in invByAgg) invByAgg[a].forEach((n, i) => { pos[n.id] = { x: (pos[a] ? pos[a].x : 0), y: maxY + ROWH * (0.86 + i * 0.6) }; });
-
-  // place all cards
-  const placed = nodes.filter(n => pos[n.id]);
-  const xs = placed.map(n => pos[n.id].x), ys = placed.map(n => pos[n.id].y);
-  const PAD = 34, offX = PAD - Math.min(...xs), offY = PAD - Math.min(...ys);
-  const cardEls = {};
-  for (const n of placed) cardEls[n.id] = placeCard(n, lane, pos[n.id].x + offX, pos[n.id].y + offY);
-
-  // measure, size the canvas
-  const box = {}; let maxR = 0, maxB = 0;
-  for (const id in cardEls) {
-    const e = cardEls[id];
-    const b = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight };
-    b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[id] = b;
-    maxR = Math.max(maxR, b.x + b.w); maxB = Math.max(maxB, b.y + b.h);
+  const preds = {}; spineInsts.forEach(o => (preds[o.iid] = []));
+  for (const d of drawn) { const to = instByIid[d.to], from = instByIid[d.from]; if (!d.dashed && to.kind === 'spine' && from.kind === 'spine') preds[to.iid].push(from.iid); }
+  const yOf = {};
+  for (const r of ranks) {
+    const col = byRank[r];
+    col.forEach(o => { const ps = preds[o.iid]; o._pref = ps.length ? ps.reduce((s, i) => s + (yOf[i] ?? 0), 0) / ps.length : (stepIdx[o.id] ?? o.iid) * 0.001; });
+    col.sort((a, b) => a._pref - b._pref);
+    col.forEach((o, i) => { yOf[o.iid] = (i - (col.length - 1) / 2) * ROWH; o.x = r * COLW; o.y = yOf[o.iid]; });
   }
-  lane.style.width = (maxR + PAD) + 'px';
-  lane.style.height = (maxB + PAD) + 'px';
+  const above = {}, below = {};
+  for (const o of insts) {
+    if (o.kind === 'rm') { const a = instByIid[o.anchorIid], c = (above[o.anchorIid] = (above[o.anchorIid] || 0) + 1) - 1; o.x = a.x + c * 30; o.y = a.y - ROWH * (1.02 + c * 0.06); }
+    else if (o.kind === 'inv') { const a = instByIid[o.anchorIid], c = (below[o.anchorIid] = (below[o.anchorIid] || 0) + 1) - 1; o.x = a.x; o.y = a.y + ROWH * (0.9 + c * 0.58); }
+  }
 
-  // SVG connector layer behind the cards
+  // duplicated nodes get a unifying corner-dot color
+  let dupI = 0; const dupColor = {};
+  for (const id in instsOf) if (instsOf[id].length > 1) dupColor[id] = DUP_COLORS[dupI++ % DUP_COLORS.length];
+
+  // place cards, measure, size canvas
+  const PAD = 40, offX = PAD - Math.min(...insts.map(o => o.x)), offY = PAD - Math.min(...insts.map(o => o.y));
+  const cardByIid = {};
+  for (const o of insts) cardByIid[o.iid] = placeCard(o, lane, o.x + offX, o.y + offY, dupColor[o.id]);
+  const box = {}; let maxR = 0, maxB = 0;
+  for (const o of insts) { const e = cardByIid[o.iid], b = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight }; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[o.iid] = b; maxR = Math.max(maxR, b.x + b.w); maxB = Math.max(maxB, b.y + b.h); }
+  lane.style.width = (maxR + PAD) + 'px'; lane.style.height = (maxB + PAD) + 'px';
+
   const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('class', 'edges');
-  svg.setAttribute('width', maxR + PAD); svg.setAttribute('height', maxB + PAD);
-  svg.innerHTML =
-    '<defs>' +
+  svg.setAttribute('class', 'edges'); svg.setAttribute('width', maxR + PAD); svg.setAttribute('height', maxB + PAD);
+  svg.innerHTML = '<defs>' +
     '<marker id="ah" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#b7b7c2"/></marker>' +
     '<marker id="ahd" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7f7f8e"/></marker>' +
     '</defs>';
   lane.prepend(svg);
 
-  // give every causal wire its own exit/entry PORT so fan-out and convergence don't overlap;
-  // then each label rides on the target end of its own distinct wire -> never ambiguous.
-  const isDashed = e => READ_VERBS.has(e.verb) || e.verb === 'enforces' || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to)) || isInv(nodeById.get(e.to));
-  const solidEdges = (f.edges || []).filter(e => box[e.from] && box[e.to] && !isDashed(e));
-  const outE = {}, inE = {};
-  for (const e of solidEdges) { (outE[e.from] ||= []).push(e); (inE[e.to] ||= []).push(e); }
-  for (const k in outE) outE[k].sort((x, y) => box[x.to].cy - box[y.to].cy);   // top target -> top port (no crossings)
-  for (const k in inE) inE[k].sort((x, y) => box[x.from].cy - box[y.from].cy);
-  const portY = (b, arr, e) => b.y + b.h * (arr.indexOf(e) + 1) / (arr.length + 1);
+  // curved connectors (the flow is left-to-right thanks to duplication, so short forward hops)
+  const edgeEls = [];
+  for (const d of drawn) {
+    const a = box[d.from], b = box[d.to]; if (!a || !b) continue;
+    const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
+    const path = makePath(curveD(p1, p2), d.dashed); svg.append(path);
+    let labelEl = null;
+    if (d.verb && !d.dashed) { labelEl = el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, d.verb); lane.append(labelEl); }
+    edgeEls.push({ path, labelEl, from: d.from, to: d.to });
+  }
 
-  for (const e of (f.edges || [])) {
-    const a = box[e.from], b = box[e.to]; if (!a || !b) continue;
-    if (isDashed(e)) {
-      // read-model / enforces links: dotted curves, no label (attached, not in the flow)
-      const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
-      svg.append(makePath(curveD(p1, p2), true));
-      continue;
-    }
-    const ay = portY(a, outE[e.from], e), by = portY(b, inE[e.to], e), ax = a.x + a.w, bx = b.x;
-    if (bx >= ax + 12) {
-      // right-angle route between this edge's own ports; label on the target-side segment
-      const midX = Math.round((ax + bx) / 2);
-      const d = Math.abs(ay - by) < 2 ? 'M' + ax + ',' + ay + ' H' + bx : 'M' + ax + ',' + ay + ' H' + midX + ' V' + by + ' H' + bx;
-      svg.append(makePath(d, false));
-      if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + (bx - 38) + 'px;top:' + by + 'px' }, e.verb));
-    } else {
-      // backward / non-rightward causal edge (loop-back): curve it, label at midpoint
-      const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
-      svg.append(makePath(curveD(p1, p2), false));
-      if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, e.verb));
+  // hover-focus. Light a set of instances + everything they connect to; dim the rest.
+  // Hovering a STICKY focuses just that instance's neighborhood; hovering its corner DOT
+  // focuses every duplicate of that node (and all their neighbors).
+  const focusSet = S => {
+    const keep = new Set(S), lit = new Set();
+    edgeEls.forEach((ed, i) => { if (S.has(ed.from) || S.has(ed.to)) { lit.add(i); keep.add(ed.from); keep.add(ed.to); } });
+    lane.classList.add('focusing');
+    for (const o of insts) cardByIid[o.iid].classList.toggle('lo', !keep.has(o.iid));
+    edgeEls.forEach((ed, i) => { const off = !lit.has(i); ed.path.classList.toggle('lo', off); if (ed.labelEl) ed.labelEl.classList.toggle('lo', off); });
+  };
+  const unfocus = () => { lane.classList.remove('focusing'); lane.querySelectorAll('.lo').forEach(e => e.classList.remove('lo')); };
+  for (const o of insts) {
+    const c = cardByIid[o.iid];
+    c.addEventListener('mouseenter', () => focusSet(new Set([o.iid])));
+    c.addEventListener('mouseleave', unfocus);
+    const dot = c.querySelector('.dupdot');
+    if (dot) {
+      dot.addEventListener('mouseenter', () => focusSet(new Set(instsOf[o.id].map(x => x.iid))));
+      dot.addEventListener('mouseleave', () => focusSet(new Set([o.iid])));  // back onto the sticky
     }
   }
 
-  // land looking at the spine: center the causal centerline (y = 0 pre-offset) in the board
   const wrap = document.getElementById('lane-wrap');
   requestAnimationFrame(() => { wrap.scrollTop = Math.max(0, offY + 44 - wrap.clientHeight / 2); wrap.scrollLeft = 0; });
 }
 
-function placeCard(n, lane, x, y) {
-  const p = PALETTE[n.type] || PALETTE.invariant;
+function placeCard(o, lane, x, y, dupColor) {
+  const n = o.node, p = PALETTE[n.type] || PALETTE.invariant;
+  let c;
   if (n.type === 'invariant') {
-    const c = el('div', { class: 'inv', style: 'left:' + x + 'px;top:' + y + 'px;background:' + p.fill + ';border:1px dashed ' + p.edge + ';color:' + p.text, onclick: () => openDetail(n.id) }, '⚖ ' + n.label);
-    lane.append(c); return c;
+    c = el('div', { class: 'inv', style: 'left:' + x + 'px;top:' + y + 'px;background:' + p.fill + ';border:1px dashed ' + p.edge + ';color:' + p.text, onclick: () => openDetail(n.id) }, '⚖ ' + n.label);
+  } else {
+    c = el('div', { class: 'sticky' + (selectedId === n.id ? ' selected' : ''), style: 'left:' + x + 'px;top:' + y + 'px;background:' + p.fill + ';border-color:' + p.edge + ';color:' + p.text, onclick: () => openDetail(n.id) },
+      el('div', { class: 'ntype' }, p.name), el('div', { class: 'nlabel' }, n.label));
+    const flags = [];
+    if (n.ownedBy) flags.push('⛓ ' + n.ownedBy.replace(/^ext-/, ''));
+    if (n.synchronous) flags.push('inline');
+    if (flags.length) c.append(el('div', { class: 'flags' }, flags.join(' · ')));
   }
-  const c = el('div', { class: 'sticky' + (selectedId === n.id ? ' selected' : ''), style: 'left:' + x + 'px;top:' + y + 'px;background:' + p.fill + ';border-color:' + p.edge + ';color:' + p.text, onclick: () => openDetail(n.id) },
-    el('div', { class: 'ntype' }, p.name), el('div', { class: 'nlabel' }, n.label));
-  const flags = [];
-  if (n.ownedBy) flags.push('⛓ ' + n.ownedBy.replace(/^ext-/, ''));
-  if (n.synchronous) flags.push('inline');
-  if (flags.length) c.append(el('div', { class: 'flags' }, flags.join(' · ')));
+  if (dupColor) c.append(el('div', { class: 'dupdot', style: 'background:' + dupColor, title: 'this node appears more than once in the flow (same dot color = same node)' }));
   lane.append(c); return c;
 }
 

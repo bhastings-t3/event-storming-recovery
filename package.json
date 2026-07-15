@@ -5,8 +5,8 @@
   "license": "MIT",
   "type": "commonjs",
   "bin": {
-    "es-merge": "src/merge-flows.js",
-    "es-generate": "src/generate-views.js"
+    "es-merge": "tools/merge-flows.js",
+    "es-generate": "tools/generate-views.js"
   },
   "scripts": {
     "demo": "node scripts/build-example.mjs",

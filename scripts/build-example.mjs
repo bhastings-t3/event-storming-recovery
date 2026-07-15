@@ -10,6 +10,6 @@ const ex = join(root, 'examples', 'toy-shop');
 const model = join(ex, 'model', 'flows.json');
 const run = (args) => execFileSync('node', args, { stdio: 'inherit', cwd: root });
 
-run([join(root, 'src', 'merge-flows.js'), join(ex, 'traces'), model]);
-run([join(root, 'src', 'generate-views.js'), model, join(ex, 'model'), '--title', 'Toy Shop Event Storming']);
+run([join(root, 'tools', 'merge-flows.js'), join(ex, 'traces'), model]);
+run([join(root, 'tools', 'generate-views.js'), model, join(ex, 'model'), '--title', 'Toy Shop Event Storming']);
 console.log('\nbuilt ' + join(ex, 'model', 'explorer.html'));

@@ -62,7 +62,7 @@ tell it to **verify, not trust** — the best findings are the contradictions.
 
 ## Phase 4 — Merge & consistency
 
-`node src/merge-flows.js <tracesDir> <out>/model/flows.json` — merges shared nodes,
+`node tools/merge-flows.js <tracesDir> <out>/model/flows.json` — merges shared nodes,
 accumulates per-flow tactical `usages`, and validates (all ids resolve, aggregates never issue
 commands, invariants attach to aggregates). Then run a **consistency pass**: look for the same
 concept modeled under different ids (ubiquitous-language drift), unresolved `supersededBy`, and
@@ -72,7 +72,7 @@ walkable.
 
 ## Phase 5 — Generate & verify
 
-`node src/generate-views.js <out>/model/flows.json <out>/model --repo-root {REPO_ROOT} --title "<Project> Event Storming"`
+`node tools/generate-views.js <out>/model/flows.json <out>/model --repo-root {REPO_ROOT} --title "<Project> Event Storming"`
 emits `flows.dot` and the self-contained `explorer.html`. **Open the explorer in a browser and
 verify** it renders (sidebar lists flows, a flow renders a sticky lane, clicking a sticky opens
 the tactical panel, hotspot cards show). Write the deliverable README. Leave committing to the user.

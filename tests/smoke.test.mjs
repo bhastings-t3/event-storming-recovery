@@ -9,8 +9,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const merge = join(root, 'src', 'merge-flows.js');
-const generate = join(root, 'src', 'generate-views.js');
+const merge = join(root, 'tools', 'merge-flows.js');
+const generate = join(root, 'tools', 'generate-views.js');
 const toyTraces = join(root, 'examples', 'toy-shop', 'traces');
 
 test('merge validates the toy-shop traces and emits the expected model', () => {
@@ -81,4 +81,16 @@ test('merge REJECTS an invalid model (aggregate issuing a command)', () => {
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
+});
+
+test('plugin + marketplace manifests are well-formed and agree', () => {
+  const plugin = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'));
+  assert.ok(plugin.name, 'plugin.json has a name');
+
+  const mkt = JSON.parse(readFileSync(join(root, '.claude-plugin', 'marketplace.json'), 'utf8'));
+  assert.ok(mkt.name, 'marketplace has a name');
+  assert.ok(mkt.owner?.name, 'marketplace has owner.name');
+  assert.ok(Array.isArray(mkt.plugins) && mkt.plugins.length >= 1, 'marketplace lists plugins');
+  for (const p of mkt.plugins) assert.ok(p.name && p.source, 'each plugin entry has name + source');
+  assert.ok(mkt.plugins.some((p) => p.name === plugin.name), 'marketplace lists this plugin by name');
 });

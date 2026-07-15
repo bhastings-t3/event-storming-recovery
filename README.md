@@ -17,8 +17,8 @@ one **deep-trace** agent per flow reads the code end-to-end, and the results mer
 ## See the output in 30 seconds
 
 ```sh
-node src/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json
-node src/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"
+node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json
+node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"
 # then open examples/toy-shop/model/explorer.html in a browser
 ```
 
@@ -52,8 +52,8 @@ deterministic parts are the schema, the merge/validate, and the render). Two way
 Then the deterministic pipeline:
 
 ```sh
-node src/merge-flows.js  <tracesDir> <out>/model/flows.json          # merge many trace slices + validate
-node src/generate-views.js <out>/model/flows.json <out>/model \      # emit flows.dot + explorer.html
+node tools/merge-flows.js  <tracesDir> <out>/model/flows.json          # merge many trace slices + validate
+node tools/generate-views.js <out>/model/flows.json <out>/model \      # emit flows.dot + explorer.html
     --repo-root "/abs/path/to/your/checkout" --title "<Project> Event Storming"
 ```
 
@@ -109,7 +109,7 @@ See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning beh
 
 | path | what |
 |---|---|
-| `src/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + explorer) |
+| `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + explorer) |
 | `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing templates |
 | `docs/` | `METHOD.md` (the methodology and its reasoning) and `flows-schema.md` (the node/edge/flow contract) |
 | `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo) |
@@ -117,6 +117,7 @@ See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning beh
 | `examples/toy-shop/` | a tiny synthetic model so the pipeline runs out of the box |
 | `skills/event-storming-recovery/` | the skill loaded when installed as a Claude Code plugin |
 | `.claude-plugin/` | marketplace + plugin manifests that make this repo installable as a plugin |
+| `.github/workflows/ci.yml` | runs the tests + example build on every push |
 
 ## Limits (read before trusting it)
 

@@ -30,19 +30,19 @@ const title = argVal('--title', (model.meta && model.meta.title) || 'Event Storm
 const nodeById = new Map(model.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(model.hotspots.map(h => [h.id, h]));
 
-// Event-storming palette, tuned to read as vivid sticky notes on a dark board.
-// Fills stay on-hue with the canonical sticky colors; text is dark for contrast on the fill
-// (except hotspot/invariant). Actor vs aggregate keep distinct yellow shades per skill guidance.
+// Event-storming palette for a dark board. Each sticky's TEXT is a darker tone of its OWN
+// fill hue (tonal, not near-black) so the label reads as part of the card, not stamped on it.
+// Actor vs aggregate keep distinct yellow shades per skill guidance.
 const PALETTE = {
-  event:          { fill: '#F5A524', edge: '#7a5205', text: '#2b1a00', name: 'Domain Event' },
-  command:        { fill: '#5B9DF0', edge: '#1e4e8a', text: '#08182f', name: 'Command' },
-  actor:          { fill: '#D4A017', edge: '#6e5300', text: '#241a00', name: 'Actor' },
-  aggregate:      { fill: '#F3E27E', edge: '#8a7a1f', text: '#2a2600', name: 'Aggregate' },
-  policy:         { fill: '#BB8FEA', edge: '#603a99', text: '#22103a', name: 'Policy' },
-  readModel:      { fill: '#5FD08A', edge: '#237a47', text: '#062a17', name: 'Read Model' },
-  externalSystem: { fill: '#F080AE', edge: '#9c355f', text: '#360a20', name: 'External System' },
-  invariant:      { fill: '#2c2c34', edge: '#4a4a56', text: '#c9c9d4', name: 'Invariant' },
-  hotspot:        { fill: '#EF4E4E', edge: '#8f1d1d', text: '#ffffff', name: 'Hotspot' },
+  event:          { fill: '#E9A23B', edge: '#a56a14', text: '#4a2c02', name: 'Domain Event' },
+  command:        { fill: '#6BA3E8', edge: '#2f68b0', text: '#123252', name: 'Command' },
+  actor:          { fill: '#D2A63A', edge: '#98741a', text: '#432f03', name: 'Actor' },
+  aggregate:      { fill: '#E3D68A', edge: '#a89a4a', text: '#4c4212', name: 'Aggregate' },
+  policy:         { fill: '#BF9BE0', edge: '#8058b0', text: '#3a2160', name: 'Policy' },
+  readModel:      { fill: '#6FC993', edge: '#358a5a', text: '#124a2c', name: 'Read Model' },
+  externalSystem: { fill: '#E68DAF', edge: '#b05378', text: '#59213b', name: 'External System' },
+  invariant:      { fill: '#26262e', edge: '#42424e', text: '#b7b7c2', name: 'Invariant' },
+  hotspot:        { fill: '#E5645E', edge: '#a83530', text: '#4c110e', name: 'Hotspot' },
 };
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -119,11 +119,19 @@ const html = `<!DOCTYPE html>
   #search:focus { border-color: var(--ring); box-shadow: 0 0 0 3px rgba(120,120,140,.16); }
   #flowlist { overflow-y: auto; flex: 1; padding: 4px 8px 16px; }
   .flow-group { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 15px 8px 6px; font-weight: 600; }
-  .flow-item { padding: 8px 10px; border-radius: var(--radius); cursor: pointer; display: flex; gap: 8px; align-items: baseline; transition: background .1s; }
+  .flow-item { position: relative; padding: 9px 10px 9px 17px; border-radius: var(--radius); cursor: pointer; display: flex; gap: 8px; align-items: center; transition: background .1s; }
+  .flow-item::before { content: ''; position: absolute; left: 7px; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--kind, #3f3f46); }
   .flow-item:hover { background: var(--accent); }
   .flow-item.active { background: var(--accent-2); }
+  .flow-item.dim { opacity: .5; }
+  .flow-item.dim:hover { opacity: .75; }
+  .flow-item .nm { flex: 1; font-size: 12.5px; color: var(--dim); line-height: 1.32; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .flow-item.active .nm { color: #fff; font-weight: 600; }
-  .flow-item .nm { flex: 1; font-size: 13px; color: var(--dim); line-height: 1.35; }
+  .fi-tags { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .status-dot { width: 7px; height: 7px; border-radius: 99px; }
+  .status-dot.dead { background: #e5645e; }
+  .status-dot.superseded { background: #d2a63a; }
+  .hs-count { font-size: 10px; font-weight: 700; color: #e18d88; background: rgba(229,100,94,.14); border-radius: 99px; padding: 1px 6px; min-width: 17px; text-align: center; }
   .badge { font-size: 9px; padding: 2px 7px; border-radius: 99px; font-weight: 700; letter-spacing: .03em; white-space: nowrap; text-transform: uppercase; }
   .badge.dead { background: #3a1414; color: #fca5a5; }
   .badge.superseded { background: #382b10; color: #fcd34d; }
@@ -135,7 +143,7 @@ const html = `<!DOCTYPE html>
   #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   #flowheader { padding: 18px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); }
   #flowheader h2 { margin: 0 0 6px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
-  #flowheader .summary { color: var(--muted); font-size: 13px; max-width: 940px; line-height: 1.6; }
+  #flowheader .summary { color: var(--muted); font-size: 12.5px; max-width: 900px; line-height: 1.55; }
   #flowheader .trigger { font-size: 12px; margin-top: 9px; color: var(--dim); }
   #flowheader .trigger b { color: var(--muted); font-weight: 600; }
   /* the board: a subtle dot-grid backdrop for the sticky lane */
@@ -160,20 +168,28 @@ const html = `<!DOCTYPE html>
   .arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 56px; padding-top: 40px; }
   .arrow .verb { font-size: 9px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; letter-spacing: .02em; }
   .arrow svg { display: block; }
-  #hotspots { padding: 6px 24px 22px; max-height: 320px; overflow-y: auto; flex-shrink: 0; border-top: 1px solid var(--line); }
-  #hotspots h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #f87171; margin: 14px 0 10px; font-weight: 700; }
+  /* findings band: distinct panel surface below the dark board, scrolls if tall */
+  #findings { background: var(--panel); border-top: 1px solid var(--line); flex-shrink: 0; max-height: 42vh; overflow-y: auto; }
+  #hotspots { padding: 14px 24px 18px; }
+  #hotspots h3, #instances h3 { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 11px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  #hotspots h3 { color: #e5645e; }
+  #hotspots h3 .n, #instances h3 .n { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
   .hs-cards { display: flex; gap: 12px; flex-wrap: wrap; }
   .hs-card {
-    background: rgba(239,78,78,.08); border: 1px solid rgba(239,78,78,.32); border-radius: var(--radius);
-    padding: 11px 14px; width: 322px; cursor: pointer; transition: background .12s, border-color .12s, transform .1s;
+    background: rgba(229,100,94,.07); border: 1px solid rgba(229,100,94,.28); border-radius: var(--radius);
+    padding: 11px 14px; width: 320px; cursor: pointer; transition: background .12s, border-color .12s, transform .1s;
   }
-  .hs-card:hover { background: rgba(239,78,78,.14); border-color: rgba(239,78,78,.55); transform: translateY(-2px); }
-  .hs-card b { display: block; font-size: 12.5px; margin-bottom: 4px; color: #fca5a5; line-height: 1.35; }
-  .hs-card span { font-size: 11px; color: #cf9d9d; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
-  #instances { padding: 2px 24px 24px; font-size: 12px; }
-  #instances h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; font-weight: 700; }
-  #instances table { border-collapse: collapse; }
-  #instances td { padding: 4px 16px 4px 0; color: var(--muted); }
+  .hs-card:hover { background: rgba(229,100,94,.13); border-color: rgba(229,100,94,.5); transform: translateY(-2px); }
+  .hs-card b { display: block; font-size: 12px; margin-bottom: 4px; color: #eda3a0; line-height: 1.35; }
+  .hs-card span { font-size: 11px; color: #b98e8c; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
+  #instances { padding: 4px 24px 22px; font-size: 12px; }
+  #instances h3 { color: var(--muted); }
+  #instances table { border-collapse: collapse; width: 100%; }
+  #instances tr { border-bottom: 1px solid rgba(255,255,255,.04); }
+  #instances td { padding: 5px 16px 5px 0; vertical-align: top; }
+  #instances .i-label { color: var(--dim); font-weight: 500; }
+  #instances .i-route { color: var(--muted); font: 11px/1.5 ui-monospace, Consolas, monospace; }
+  #instances .i-file { color: #7d7d88; font: 11px/1.5 ui-monospace, Consolas, monospace; }
   /* detail panel */
   #detail { width: 0; min-width: 0; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; transition: width .16s, min-width .16s; }
   #detail.open { width: 440px; min-width: 440px; }
@@ -211,8 +227,10 @@ const html = `<!DOCTYPE html>
 <div id="main">
   <div id="flowheader"></div>
   <div id="lane-wrap"><div id="lane"></div></div>
-  <div id="hotspots"></div>
-  <div id="instances"></div>
+  <div id="findings" style="display:none">
+    <div id="hotspots"></div>
+    <div id="instances"></div>
+  </div>
 </div>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
 <script>
@@ -241,12 +259,20 @@ function renderSidebar(filter) {
     const flows = MODEL.flows.filter(pred).filter(f => !filter || (f.name + f.id).toLowerCase().includes(filter));
     if (!flows.length) continue;
     list.append(el('div', { class: 'flow-group' }, title));
+    const kindColor = { read: '#6FC993', policy: '#BF9BE0', write: '#6BA3E8' };
     for (const f of flows) {
-      const item = el('div', { class: 'flow-item' + (currentFlow && currentFlow.id === f.id ? ' active' : ''), onclick: () => selectFlow(f.id) },
-        el('span', { class: 'nm' }, f.name));
-      item.append(el('span', { class: 'badge ' + (f.kind === 'read' ? 'read' : f.kind === 'policy' ? 'policy' : 'write') }, f.kind || 'write'));
-      if (f.status && f.status !== 'live') item.append(el('span', { class: 'badge ' + f.status }, f.status));
-      if ((f.hotspots || []).length) item.append(el('span', { class: 'badge hs' }, String(f.hotspots.length)));
+      const dead = f.status && f.status !== 'live';
+      const hs = (f.hotspots || []).length;
+      const item = el('div', {
+        class: 'flow-item' + (currentFlow && currentFlow.id === f.id ? ' active' : '') + (dead ? ' dim' : ''),
+        style: '--kind:' + (kindColor[f.kind] || kindColor.write),
+        title: f.name + (dead ? '  [' + f.status + (f.supersededBy ? ' → ' + f.supersededBy : '') + ']' : '') + '  ·  ' + (f.kind || 'write'),
+        onclick: () => selectFlow(f.id)
+      }, el('div', { class: 'nm' }, f.name));
+      const tags = el('div', { class: 'fi-tags' });
+      if (dead) tags.append(el('div', { class: 'status-dot ' + f.status }));
+      if (hs) tags.append(el('div', { class: 'hs-count' }, String(hs)));
+      if (dead || hs) item.append(tags);
       list.append(item);
     }
   }
@@ -327,28 +353,37 @@ function renderFlow() {
   hs.innerHTML = '';
   const spots = (f.hotspots || []).map(h => hotspotById.get(h)).filter(Boolean);
   if (spots.length) {
-    hs.append(el('h3', {}, 'Hotspots — questions a human should answer'));
+    hs.append(el('h3', {}, 'Hotspots', el('span', { class: 'n' }, String(spots.length)), el('span', { style: 'color:var(--muted);font-weight:600' }, 'questions a human should answer')));
     const cards = el('div', { class: 'hs-cards' });
-    for (const s of spots) cards.append(el('div', { class: 'hs-card', onclick: () => openHotspot(s.id) }, el('b', {}, s.label), el('span', {}, s.description)));
+    for (const s of spots) cards.append(el('div', { class: 'hs-card', title: s.description || '', onclick: () => openHotspot(s.id) }, el('b', {}, s.label), el('span', {}, s.description)));
     hs.append(cards);
   }
 
   const inst = document.getElementById('instances');
   inst.innerHTML = '';
   if ((f.instances || []).length) {
-    inst.append(el('h3', {}, 'Instances of this pattern (' + f.instances.length + ')'));
+    inst.append(el('h3', {}, 'Instances of this pattern', el('span', { class: 'n' }, String(f.instances.length))));
     const t = el('table', {});
-    for (const i of f.instances) t.append(el('tr', {}, el('td', {}, i.label || ''), el('td', {}, i.route || ''), el('td', {}, i.file || '')));
+    for (const i of f.instances) {
+      const base = (i.file || '').split('/').pop();
+      t.append(el('tr', {},
+        el('td', { class: 'i-label' }, i.label || ''),
+        el('td', { class: 'i-route' }, i.route || ''),
+        el('td', { class: 'i-file', title: i.file || '' }, base)));
+    }
     inst.append(t);
   }
+
+  document.getElementById('findings').style.display = (spots.length || (f.instances || []).length) ? '' : 'none';
 }
 
 function svgArrow(rev) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '46'); svg.setAttribute('height', '12');
+  svg.setAttribute('width', '54'); svg.setAttribute('height', '16');
+  const c = '#b7b7c2';
   svg.innerHTML = rev
-    ? '<path d="M46 6 H4 M10 1 L3 6 L10 11" stroke="#71717a" stroke-width="1.5" fill="none"/>'
-    : '<path d="M0 6 H42 M36 1 L43 6 L36 11" stroke="#71717a" stroke-width="1.5" fill="none"/>';
+    ? '<line x1="54" y1="8" x2="14" y2="8" stroke="' + c + '" stroke-width="2.25"/><polygon points="14,2 2,8 14,14" fill="' + c + '"/>'
+    : '<line x1="0" y1="8" x2="40" y2="8" stroke="' + c + '" stroke-width="2.25"/><polygon points="40,2 52,8 40,14" fill="' + c + '"/>';
   return svg;
 }
 

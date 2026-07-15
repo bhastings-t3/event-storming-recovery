@@ -49,16 +49,42 @@ node tools/generate-views.js <out>/model/flows.json <out>/model \      # emit fl
 
 ## How it works
 
-```
-                 ┌─ scout: UI entry points ─────────┐
-                 ├─ scout: automations/background ───┤
-  inventory ─────┼─ scout: API / auth / protocol ────┼──► flow-candidate list  ─► TRIAGE (human)
-  (5 parallel)   ├─ scout: external integrations ────┤    + shared-id glossary
-                 └─ scout: data layer / aggregates ──┘
-                                                             │
-   pilot trace ─► fix schema ─► trace fleet (waves) ─────────┘   each agent writes <flow>.json + notes
-                                     │
-                    merge-flows.js  ─┴─►  flows.json (canonical)  ──►  generate-views.js  ──►  explorer.html + flows.dot
+```mermaid
+flowchart TB
+    subgraph scouts["① Inventory · 5 parallel scouts"]
+        direction LR
+        S1[UI entry<br/>points]
+        S2[Automations /<br/>background]
+        S3[API / auth /<br/>protocol]
+        S4[External<br/>integrations]
+        S5[Data layer /<br/>aggregates]
+        S1 ~~~ S2 ~~~ S3 ~~~ S4 ~~~ S5
+    end
+
+    inv["📋 Flow-candidate list<br/>+ shared-id glossary"]
+    triage{{"② Triage · human checkpoint"}}
+    pilot["③ Pilot trace → fix the schema"]
+    fleet["Trace fleet, in waves<br/><i>each agent writes its own flow.json + notes</i>"]
+    merge["④ merge-flows.js · merge + validate"]
+    canon[("flows.json<br/><b>canonical model</b>")]
+    gen["⑤ generate-views.js"]
+    explorer["🖥️ explorer.html<br/><i>interactive, source-linked</i>"]
+    dot["🕸️ flows.dot<br/><i>Graphviz</i>"]
+
+    scouts --> inv --> triage --> pilot --> fleet --> merge --> canon --> gen
+    gen --> explorer
+    gen --> dot
+
+    classDef scout fill:#eef2ff,stroke:#8894c8,color:#26305c;
+    classDef human fill:#7EB6FF,stroke:#2262b8,color:#0b2e5c;
+    classDef canon fill:#FFE94D,stroke:#b8a000,color:#4d4200;
+    classDef output fill:#A8E6A3,stroke:#3d8c38,color:#1e4d1b;
+    classDef step fill:#f6f5f2,stroke:#b9b6ad,color:#2b2a27;
+    class S1,S2,S3,S4,S5 scout;
+    class triage human;
+    class canon canon;
+    class explorer,dot output;
+    class inv,pilot,fleet,merge,gen step;
 ```
 
 - **`flows.json`** is the single source of truth; the explorer and DOT are generated from it.

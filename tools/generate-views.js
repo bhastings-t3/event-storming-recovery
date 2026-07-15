@@ -391,34 +391,36 @@ function layoutFlow(f, lane) {
     '</defs>';
   lane.prepend(svg);
 
-  // labels ride on the SOURCE end of their own wire (not the crowded gap midpoint), so it's
-  // always clear which line a verb belongs to. Dedupe a fan-out (one source, same verb) to one
-  // label; stagger a source's distinct verbs so they don't stack.
-  const labeled = new Set(), srcCount = {};
-  const putLabel = (verb, a) => {
-    if (!verb || labeled.has(a.x + '|' + a.cy + '|' + verb)) return;
-    labeled.add(a.x + '|' + a.cy + '|' + verb);
-    const c = (srcCount[a.x + '|' + a.cy] = (srcCount[a.x + '|' + a.cy] || 0) + 1) - 1;
-    lane.append(el('div', { class: 'edge-verb', style: 'left:' + (a.x + a.w + 15) + 'px;top:' + (a.cy + c * 16) + 'px' }, verb));
-  };
+  // give every causal wire its own exit/entry PORT so fan-out and convergence don't overlap;
+  // then each label rides on the target end of its own distinct wire -> never ambiguous.
+  const isDashed = e => READ_VERBS.has(e.verb) || e.verb === 'enforces' || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to)) || isInv(nodeById.get(e.to));
+  const solidEdges = (f.edges || []).filter(e => box[e.from] && box[e.to] && !isDashed(e));
+  const outE = {}, inE = {};
+  for (const e of solidEdges) { (outE[e.from] ||= []).push(e); (inE[e.to] ||= []).push(e); }
+  for (const k in outE) outE[k].sort((x, y) => box[x.to].cy - box[y.to].cy);   // top target -> top port (no crossings)
+  for (const k in inE) inE[k].sort((x, y) => box[x.from].cy - box[y.from].cy);
+  const portY = (b, arr, e) => b.y + b.h * (arr.indexOf(e) + 1) / (arr.length + 1);
+
   for (const e of (f.edges || [])) {
     const a = box[e.from], b = box[e.to]; if (!a || !b) continue;
-    // dashed + unlabeled for anything attached rather than in the causal flow:
-    // read-model connections (can be read anywhere) and invariant "enforces" links.
-    const dashed = READ_VERBS.has(e.verb) || e.verb === 'enforces' || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to)) || isInv(nodeById.get(e.to));
-    if (dashed) {
+    if (isDashed(e)) {
+      // read-model / enforces links: dotted curves, no label (attached, not in the flow)
       const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
       svg.append(makePath(curveD(p1, p2), true));
+      continue;
+    }
+    const ay = portY(a, outE[e.from], e), by = portY(b, inE[e.to], e), ax = a.x + a.w, bx = b.x;
+    if (bx >= ax + 12) {
+      // right-angle route between this edge's own ports; label on the target-side segment
+      const midX = Math.round((ax + bx) / 2);
+      const d = Math.abs(ay - by) < 2 ? 'M' + ax + ',' + ay + ' H' + bx : 'M' + ax + ',' + ay + ' H' + midX + ' V' + by + ' H' + bx;
+      svg.append(makePath(d, false));
+      if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + (bx - 38) + 'px;top:' + by + 'px' }, e.verb));
     } else {
-      // causal flow uses right-angle (Manhattan) routing, left-to-right
-      const d = orthD(a, b);
-      if (d) { svg.append(makePath(d, false)); putLabel(e.verb, a); }
-      else {
-        // backward / non-rightward causal edge (e.g. a loop-back): curve it, label at midpoint
-        const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
-        svg.append(makePath(curveD(p1, p2), false));
-        if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, e.verb));
-      }
+      // backward / non-rightward causal edge (loop-back): curve it, label at midpoint
+      const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
+      svg.append(makePath(curveD(p1, p2), false));
+      if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, e.verb));
     }
   }
 
@@ -463,14 +465,6 @@ function curveD(p1, p2) {
   const dx = p2.x - p1.x, dy = p2.y - p1.y;
   if (Math.abs(dx) >= Math.abs(dy)) { const k = Math.max(22, Math.abs(dx) * 0.4), s = Math.sign(dx) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + s * k) + ',' + p1.y + ' ' + (p2.x - s * k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y; }
   const k = Math.max(18, Math.abs(dy) * 0.4), s = Math.sign(dy) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + (p1.y + s * k) + ' ' + p2.x + ',' + (p2.y - s * k) + ' ' + p2.x + ',' + p2.y;
-}
-// right-angle (Manhattan) route from source's right edge to target's left edge; null if target isn't cleanly to the right
-function orthD(a, b) {
-  const x1 = a.x + a.w, y1 = a.cy, x2 = b.x, y2 = b.cy;
-  if (x2 < x1 + 12) return null;
-  if (Math.abs(y1 - y2) < 2) return 'M' + x1 + ',' + y1 + ' H' + x2;
-  const midX = Math.round((x1 + x2) / 2);
-  return 'M' + x1 + ',' + y1 + ' H' + midX + ' V' + y2 + ' H' + x2;
 }
 
 function selectFlow(id) {

@@ -44,7 +44,7 @@ deep traces, which collapse into pattern exemplars, what's excluded. Coverage ti
 ## Phase 3 — Deep-trace (a pilot, then waves)
 
 Write the shared **trace briefing** (`03-trace-briefing.md`, filled with `{REPO_ROOT}`,
-`{EXCLUDE}`, the shared-id glossary, and the path to `schema/flows-schema.md` + a conformant
+`{EXCLUDE}`, the shared-id glossary, and the path to `docs/flows-schema.md` + a conformant
 example) to `{SCRATCH}/trace-briefing.md`.
 
 1. **Run ONE pilot trace first.** Pick a meaty write flow. When it returns, read its
@@ -62,7 +62,7 @@ tell it to **verify, not trust** — the best findings are the contradictions.
 
 ## Phase 4 — Merge & consistency
 
-`node tools/merge-flows.js <tracesDir> <out>/model/flows.json` — merges shared nodes,
+`node src/merge-flows.js <tracesDir> <out>/model/flows.json` — merges shared nodes,
 accumulates per-flow tactical `usages`, and validates (all ids resolve, aggregates never issue
 commands, invariants attach to aggregates). Then run a **consistency pass**: look for the same
 concept modeled under different ids (ubiquitous-language drift), unresolved `supersededBy`, and
@@ -72,7 +72,7 @@ walkable.
 
 ## Phase 5 — Generate & verify
 
-`node tools/generate-views.js <out>/model/flows.json <out>/model --repo-root {REPO_ROOT} --title "<Project> Event Storming"`
+`node src/generate-views.js <out>/model/flows.json <out>/model --repo-root {REPO_ROOT} --title "<Project> Event Storming"`
 emits `flows.dot` and the self-contained `explorer.html`. **Open the explorer in a browser and
 verify** it renders (sidebar lists flows, a flow renders a sticky lane, clicking a sticky opens
 the tactical panel, hotspot cards show). Write the deliverable README. Leave committing to the user.

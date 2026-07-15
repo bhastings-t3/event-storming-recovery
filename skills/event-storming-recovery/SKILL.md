@@ -22,10 +22,13 @@ You are the **orchestrator**. You do not read the whole codebase yourself; you d
 sub-agents and keep the durable artifacts. This keeps your context clean — file-reading happens
 inside sub-agents, and you keep only their structured returns.
 
-All paths below are **relative to the repo root** (this skill ships inside the
-`event-storming-recovery` repo, whose `prompts/`, `schema/`, `tools/`, and `examples/` dirs are
-the skill's resources). Install by cloning the repo and pointing your skills path at it, or copy
-the repo alongside this `SKILL.md`.
+This skill ships inside the `event-storming-recovery` repo (a Claude Code plugin), whose
+`prompts/`, `src/`, `docs/`, and `examples/` dirs are its resources. When installed as a plugin,
+reference those bundled files as **`${CLAUDE_PLUGIN_ROOT}/<path>`** (e.g.
+`${CLAUDE_PLUGIN_ROOT}/prompts/00-orchestrator.md`, `${CLAUDE_PLUGIN_ROOT}/src/merge-flows.js`);
+that variable resolves to the plugin's install directory. The paths below are written
+repo-root-relative for readability — prefix them with `${CLAUDE_PLUGIN_ROOT}/` when reading the
+files at runtime.
 
 ## The process (five phases)
 
@@ -38,15 +41,15 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 2. **Triage** (`prompts/02-triage.md`) — put the flow list to the human; agree which flows get
    individual traces vs. pattern exemplars; agree coverage depth and delivery.
 3. **Deep-trace** — write the shared briefing (`prompts/03-trace-briefing.md`, filled with repo
-   root, excludes, the glossary, and a link to `schema/flows-schema.md`). **Run one pilot trace,
+   root, excludes, the glossary, and a link to `docs/flows-schema.md`). **Run one pilot trace,
    read its "schema friction", fix the schema/briefing**, then run the rest in waves (~7
    concurrent). Each trace agent verifies **reachability** (catches dead/superseded flows), traces
    end to end, and **writes its own `<flow-id>.json` + `.notes.md`** — never route large JSON back
    through your context.
-4. **Merge & check** — `node tools/merge-flows.js <tracesDir> <out>/model/flows.json` merges shared
+4. **Merge & check** — `node src/merge-flows.js <tracesDir> <out>/model/flows.json` merges shared
    nodes and validates. Do a consistency pass for ubiquitous-language drift; don't force-merge
    legitimate altitude variations.
-5. **Generate & verify** — `node tools/generate-views.js <out>/model/flows.json <out>/model
+5. **Generate & verify** — `node src/generate-views.js <out>/model/flows.json <out>/model
    --repo-root <abs> --title "<Project> Event Storming"` emits `flows.dot` + `explorer.html`.
    Open the explorer and verify it renders. Write the README. Leave committing to the user.
 
@@ -64,7 +67,7 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 ## What's in this skill
 
 - `prompts/` — the orchestrator playbook, the five scout templates, the triage step, the trace briefing.
-- `schema/flows-schema.md` — the node/edge/flow contract every trace conforms to.
-- `tools/merge-flows.js`, `tools/generate-views.js` — merge+validate, and render DOT+explorer.
+- `docs/flows-schema.md` — the node/edge/flow contract every trace conforms to.
+- `src/merge-flows.js`, `src/generate-views.js` — merge+validate, and render DOT+explorer.
 - `examples/toy-shop/` — a tiny synthetic model you can build in seconds to see the output shape:
-  `node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json && node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"`
+  `node src/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json && node src/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"`

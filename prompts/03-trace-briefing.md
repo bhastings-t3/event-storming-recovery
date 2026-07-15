@@ -13,7 +13,7 @@ and events are RECOVERED, so mark `inferred: true`.
 EXCLUDE from all searches: `{EXCLUDE}`.
 
 ## Required reading
-1. `schema/flows-schema.md` — the output schema. Follow it exactly.
+1. `docs/flows-schema.md` — the output schema. Follow it exactly.
 2. `{EXAMPLE_PATH}` — a conformant reference trace from the pilot. Match its shape and depth.
 
 ## Method

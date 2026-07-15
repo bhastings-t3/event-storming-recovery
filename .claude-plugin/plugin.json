@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "event-storming-recovery",
+  "description": "Recover a strategic Event Storming model from an existing codebase and render it as a navigable, source-linked flow explorer. Orchestrates parallel scout + deep-trace sub-agents into a validated flows.json plus an interactive explorer.html and a Graphviz DOT.",
+  "version": "0.1.0",
+  "author": { "name": "Blake Hastings" },
+  "repository": "https://github.com/bhastings-t3/event-storming-recovery",
+  "license": "MIT",
+  "keywords": ["event-storming", "ddd", "reverse-engineering", "architecture", "code-comprehension"]
+}

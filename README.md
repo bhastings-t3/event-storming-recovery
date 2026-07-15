@@ -17,8 +17,8 @@ one **deep-trace** agent per flow reads the code end-to-end, and the results mer
 ## See the output in 30 seconds
 
 ```sh
-node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json
-node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"
+node src/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json
+node src/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"
 # then open examples/toy-shop/model/explorer.html in a browser
 ```
 
@@ -34,7 +34,17 @@ verbs between stickies. Click any sticky for its tactical explanation and a `vsc
 This is an **agent-orchestrated** process (a coding agent — e.g. Claude Code — drives it; the
 deterministic parts are the schema, the merge/validate, and the render). Two ways to start:
 
-- **As a skill:** install `skills/event-storming-recovery/` and invoke it; it drives all five phases.
+- **As a Claude Code plugin** (recommended) — install it, then invoke the `event-storming-recovery`
+  skill and it drives all five phases:
+
+  ```
+  /plugin marketplace add bhastings-t3/event-storming-recovery
+  /plugin install event-storming-recovery@event-storming-recovery
+  ```
+  (or from a shell: `claude plugin marketplace add bhastings-t3/event-storming-recovery` then
+  `claude plugin install event-storming-recovery@event-storming-recovery`). The repo is both the
+  marketplace and the plugin; the skill and its bundled prompts/tools install together.
+
 - **By hand / any agent:** follow `prompts/00-orchestrator.md`. It tells the orchestrator how to
   spawn the scouts (`prompts/01-scouts.md`), triage with you (`prompts/02-triage.md`), brief the
   trace agents (`prompts/03-trace-briefing.md`), then merge and render.
@@ -42,8 +52,8 @@ deterministic parts are the schema, the merge/validate, and the render). Two way
 Then the deterministic pipeline:
 
 ```sh
-node tools/merge-flows.js  <tracesDir> <out>/model/flows.json          # merge many trace slices + validate
-node tools/generate-views.js <out>/model/flows.json <out>/model \      # emit flows.dot + explorer.html
+node src/merge-flows.js  <tracesDir> <out>/model/flows.json          # merge many trace slices + validate
+node src/generate-views.js <out>/model/flows.json <out>/model \      # emit flows.dot + explorer.html
     --repo-root "/abs/path/to/your/checkout" --title "<Project> Event Storming"
 ```
 
@@ -93,18 +103,20 @@ flowchart TB
 - **Reachability checks** during tracing catch **dead and superseded** flows — often where the most
   interesting recovered intent lives (why was this replaced? what does the successor do differently?).
 
-See [`METHOD.md`](METHOD.md) for the full methodology and the reasoning behind each phase.
+See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning behind each phase.
 
 ## Repo layout
 
 | path | what |
 |---|---|
-| `prompts/` | the orchestrator playbook + scout / triage / trace-briefing templates (the method, encoded) |
-| `schema/flows-schema.md` | the node / edge / flow contract every trace conforms to |
-| `tools/merge-flows.js` | merge per-flow traces into one `flows.json`, validate structural rules |
-| `tools/generate-views.js` | render `flows.json` → `flows.dot` + self-contained `explorer.html` |
-| `skills/event-storming-recovery/` | the process packaged as a runnable Claude Code skill |
+| `src/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + explorer) |
+| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing templates |
+| `docs/` | `METHOD.md` (the methodology and its reasoning) and `flows-schema.md` (the node/edge/flow contract) |
+| `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo) |
+| `tests/` | smoke tests (`node --test`) covering merge, generate, and the validator |
 | `examples/toy-shop/` | a tiny synthetic model so the pipeline runs out of the box |
+| `skills/event-storming-recovery/` | the skill loaded when installed as a Claude Code plugin |
+| `.claude-plugin/` | marketplace + plugin manifests that make this repo installable as a plugin |
 
 ## Limits (read before trusting it)
 
@@ -119,7 +131,7 @@ verdicts. Use it to get oriented fast and to drive the conversations that need a
 ## Iterating
 
 Everything is regenerable from the per-flow `traces/*.json`. To extend a map, add a new trace
-(follow `schema/flows-schema.md`, reuse the shared node ids so it joins the existing flows) and
+(follow `docs/flows-schema.md`, reuse the shared node ids so it joins the existing flows) and
 re-run the two commands. To improve the *method*, edit the prompts in `prompts/` and the schema —
 the pilot-trace-then-fix loop in phase 3 is designed to surface schema gaps cheaply.
 

@@ -5,11 +5,12 @@
   "license": "MIT",
   "type": "commonjs",
   "bin": {
-    "es-merge": "tools/merge-flows.js",
-    "es-generate": "tools/generate-views.js"
+    "es-merge": "src/merge-flows.js",
+    "es-generate": "src/generate-views.js"
   },
   "scripts": {
-    "demo": "node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json && node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title \"Toy Shop Event Storming\""
+    "demo": "node scripts/build-example.mjs",
+    "test": "node --test"
   },
   "keywords": ["event-storming", "ddd", "domain-driven-design", "reverse-engineering", "architecture", "code-comprehension"]
 }

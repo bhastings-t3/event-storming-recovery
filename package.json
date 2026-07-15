@@ -1,0 +1,15 @@
+{
+  "name": "event-storming-recovery",
+  "version": "0.1.0",
+  "description": "Recover a strategic Event Storming model from an existing codebase and render it as a navigable, source-linked flow explorer.",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "es-merge": "tools/merge-flows.js",
+    "es-generate": "tools/generate-views.js"
+  },
+  "scripts": {
+    "demo": "node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json && node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title \"Toy Shop Event Storming\""
+  },
+  "keywords": ["event-storming", "ddd", "domain-driven-design", "reverse-engineering", "architecture", "code-comprehension"]
+}

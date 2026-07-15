@@ -1,0 +1,174 @@
+{
+  "nodes": [
+    {
+      "id": "actor-customer",
+      "type": "actor",
+      "label": "Customer",
+      "inferred": true,
+      "description": "A shopper who has added items to their cart and checks out."
+    },
+    {
+      "id": "rm-cart",
+      "type": "readModel",
+      "label": "Cart summary",
+      "inferred": true,
+      "description": "The line items, quantities, and running total the customer reviews before checkout.",
+      "tactical": {
+        "explanation": "CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.",
+        "anchors": [{ "path": "src/web/CartPage.tsx", "line": 42, "symbol": "CartPage", "note": "cart review surface" }]
+      }
+    },
+    {
+      "id": "cmd-place-order",
+      "type": "command",
+      "label": "PlaceOrder",
+      "inferred": false,
+      "description": "Customer submits the cart as an order.",
+      "tactical": {
+        "explanation": "Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.",
+        "anchors": [
+          { "path": "src/web/CartPage.tsx", "line": 88, "symbol": "onCheckout", "note": "UI call site" },
+          { "path": "src/services/OrderService.ts", "line": 31, "symbol": "placeOrder", "note": "orchestrator entry" }
+        ]
+      }
+    },
+    {
+      "id": "agg-order",
+      "type": "aggregate",
+      "label": "Order",
+      "inferred": true,
+      "description": "A customer order: header plus line items, with status and total. Emits an event when placed.",
+      "tactical": {
+        "explanation": "OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 31, "symbol": "placeOrder" }]
+      }
+    },
+    {
+      "id": "inv-stock-available",
+      "type": "invariant",
+      "label": "Every line must have stock available",
+      "inferred": true,
+      "description": "An order is rejected if any line item's requested quantity exceeds on-hand stock.",
+      "tactical": {
+        "explanation": "placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) < qty, before any write.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 40, "symbol": "placeOrder", "note": "stock guard" }]
+      }
+    },
+    {
+      "id": "inv-payment-authorized",
+      "type": "invariant",
+      "label": "Payment must authorize before the order is created",
+      "inferred": true,
+      "description": "The order is only written after the payment gateway authorizes the charge.",
+      "tactical": {
+        "explanation": "placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 52, "symbol": "placeOrder", "note": "auth gate" }]
+      }
+    },
+    {
+      "id": "evt-order-placed",
+      "type": "event",
+      "label": "OrderPlaced",
+      "inferred": true,
+      "description": "A new order now exists in status Placed with an authorized payment.",
+      "tactical": {
+        "explanation": "The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 61, "symbol": "placeOrder", "note": "commit + return" }]
+      }
+    },
+    {
+      "id": "ext-payments",
+      "type": "externalSystem",
+      "label": "Payment gateway",
+      "inferred": false,
+      "description": "Third-party payment processor. Authorizes and captures card charges over HTTPS.",
+      "tactical": {
+        "explanation": "PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.",
+        "anchors": [{ "path": "src/services/PaymentGateway.ts", "line": 12, "symbol": "authorize" }]
+      }
+    },
+    {
+      "id": "pol-reserve-stock",
+      "type": "policy",
+      "label": "Whenever an order is placed, reserve its stock",
+      "inferred": true,
+      "synchronous": true,
+      "description": "Placing an order immediately decrements on-hand stock for each line so the same unit can't be sold twice.",
+      "tactical": {
+        "explanation": "Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 63, "symbol": "placeOrder", "note": "post-commit reserve" }]
+      }
+    },
+    {
+      "id": "cmd-reserve-stock",
+      "type": "command",
+      "label": "ReserveStock",
+      "inferred": true,
+      "description": "Decrement on-hand stock for each ordered line.",
+      "tactical": {
+        "explanation": "InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).",
+        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 20, "symbol": "reserve" }]
+      }
+    },
+    {
+      "id": "agg-inventory",
+      "type": "aggregate",
+      "label": "Inventory",
+      "inferred": true,
+      "description": "On-hand stock per SKU. Decremented when an order reserves stock.",
+      "tactical": {
+        "explanation": "inventory table keyed by sku; reserve() is the only write path in this flow.",
+        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 20, "symbol": "reserve" }]
+      }
+    },
+    {
+      "id": "evt-stock-reserved",
+      "type": "event",
+      "label": "StockReserved",
+      "inferred": true,
+      "description": "On-hand stock has been decremented for the order's lines.",
+      "tactical": {
+        "explanation": "Aftermath of the inventory update; nothing subscribes downstream in this toy model.",
+        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 26, "symbol": "reserve" }]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "place-order",
+      "name": "Customer places an order",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "The customer reviews their cart and checks out. The order is created only after stock is confirmed and the payment gateway authorizes the charge; on success, stock is reserved in a separate step whose failure does not roll back the order.",
+      "trigger": "Checkout button on the cart page",
+      "steps": ["actor-customer", "rm-cart", "cmd-place-order", "agg-order", "evt-order-placed", "ext-payments", "pol-reserve-stock", "cmd-reserve-stock", "agg-inventory", "evt-stock-reserved"],
+      "edges": [
+        { "from": "rm-cart", "to": "actor-customer", "verb": "read by" },
+        { "from": "actor-customer", "to": "cmd-place-order", "verb": "issues" },
+        { "from": "cmd-place-order", "to": "agg-order", "verb": "handled by" },
+        { "from": "agg-order", "to": "inv-stock-available", "verb": "enforces" },
+        { "from": "agg-order", "to": "inv-payment-authorized", "verb": "enforces" },
+        { "from": "cmd-place-order", "to": "ext-payments", "verb": "calls" },
+        { "from": "agg-order", "to": "evt-order-placed", "verb": "emits" },
+        { "from": "evt-order-placed", "to": "pol-reserve-stock", "verb": "triggers" },
+        { "from": "pol-reserve-stock", "to": "cmd-reserve-stock", "verb": "issues" },
+        { "from": "cmd-reserve-stock", "to": "agg-inventory", "verb": "handled by" },
+        { "from": "agg-inventory", "to": "evt-stock-reserved", "verb": "emits" }
+      ],
+      "hotspots": ["hot-reserve-not-atomic"],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-reserve-not-atomic",
+      "label": "Stock reservation is not atomic with order creation",
+      "description": "Reservation runs after the order transaction commits, in a separate store, and its failure is only logged. An order can exist for stock that was never decremented, so the same unit can be oversold. Human question: should reserve() share the order transaction, or should a failed reservation cancel/flag the order?",
+      "tactical": {
+        "explanation": "OrderService.placeOrder commits the order at line 61, then calls InventoryService.reserve at line 63 outside any transaction; reserve swallows failures (InventoryService.ts:31).",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 63, "symbol": "placeOrder" }]
+      }
+    }
+  ]
+}

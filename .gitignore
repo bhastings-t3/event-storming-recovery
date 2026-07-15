@@ -1,0 +1,5 @@
+# build artifacts from the local static-serve verify step
+**/serve.js
+.playwright-cli/
+node_modules/
+*.log

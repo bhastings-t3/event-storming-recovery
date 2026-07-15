@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Toy Shop Event Storming</title>
+<title>Event Storming Explorer</title>
 <style>
   /* shadcn-style neutral-dark token system (vanilla CSS, no framework) */
   :root {
@@ -69,9 +69,9 @@
   }
   #lane-wrap.grabbing { cursor: grabbing; }
   #lane { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
-  #zoomctl { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 20; }
-  #zoomctl button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); user-select: none; }
-  #zoomctl button:hover { background: var(--line); }
+  .zoomctl { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 20; }
+  .zoomctl button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); user-select: none; }
+  .zoomctl button:hover { background: var(--line); }
   svg.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
   .sticky {
     position: absolute; width: 176px; min-height: 92px; border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
@@ -89,9 +89,9 @@
   /* hover-focus: dim everything except the hovered node's neighborhood + its duplicates */
   .sticky, .inv, .edge-verb { transition: opacity .13s; }
   svg.edges path { transition: opacity .13s; }
-  #lane.focusing .sticky.lo, #lane.focusing .inv.lo { opacity: .12; }
-  #lane.focusing .edge-verb.lo { opacity: .06; }
-  #lane.focusing svg.edges path.lo { opacity: .08; }
+  .focusing .sticky.lo, .focusing .inv.lo { opacity: .12; }
+  .focusing .edge-verb.lo { opacity: .06; }
+  .focusing svg.edges path.lo { opacity: .08; }
   .inv { position: absolute; width: 150px; border-radius: 7px; padding: 7px 10px; font-size: 10.5px; cursor: pointer; line-height: 1.35; transition: transform .1s; overflow-wrap: anywhere; z-index: 1; }
   .inv:hover { transform: translateY(-2px); z-index: 3; }
   .edge-verb { position: absolute; font-size: 9px; color: var(--muted); background: var(--bg); padding: 0 4px; border-radius: 3px; pointer-events: none; letter-spacing: .02em; white-space: nowrap; z-index: 2; transform: translate(-50%, -50%); }
@@ -133,19 +133,6 @@
   .anchor { display: block; font: 11px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; color: #7db2f5; text-decoration: none; word-break: break-all; margin-bottom: 2px; }
   .anchor:hover { text-decoration: underline; color: #a5cbf9; }
   .anchor .note { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
-  /* "appears in" flow rows: each flow is a card whose colored count-dots preview its composition */
-  .flowrow { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
-  .flowrow:hover { background: var(--accent); border-color: var(--ring); }
-  .flowrow .fr-name { font-size: 12.5px; font-weight: 600; color: var(--dim); line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .flowrow:hover .fr-name { color: #fff; }
-  .flowrow .fr-dots { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-  .cdot { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; border: 1px solid rgba(255,255,255,.14); }
-  /* aggregate <-> invariant cross-reference rows: a small colored sticky-chip + label, navigates on click */
-  .relrow { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 11px; margin-bottom: 7px; background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
-  .relrow:hover { background: var(--accent); border-color: var(--ring); }
-  .relrow .rdot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.35); }
-  .relrow .rlabel { font-size: 12.5px; color: var(--dim); line-height: 1.35; overflow-wrap: anywhere; }
-  .relrow:hover .rlabel { color: #fff; }
   #closedetail { float: right; border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--muted); padding: 3px 6px; border-radius: 6px; line-height: 1; }
   #closedetail:hover { background: var(--accent); color: var(--fg); }
   #legend { padding: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
@@ -185,29 +172,43 @@
   .gcard .gmeta { margin-top: auto; padding-top: 9px; font-size: 10px; font-weight: 600; opacity: .72; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .gcard .gdead { background: rgba(0,0,0,.2); border-radius: 99px; padding: 1px 8px; text-transform: uppercase; letter-spacing: .04em; }
   .gempty { grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 22px 2px; }
+  /* overview: the whole model at once — every flow rendered inside its own bounded-context box */
+  #overview { flex: 1; min-width: 0; display: none; flex-direction: column; }
+  #overview.show { display: flex; }
+  #ov-wrap { flex: 1; overflow: hidden; position: relative; cursor: grab; background-image: radial-gradient(circle, #1b1b22 1px, transparent 1.4px); background-size: 22px 22px; background-position: -1px -1px; }
+  #ov-wrap.grabbing { cursor: grabbing; }
+  #ov-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+  .context-box { position: absolute; border: 1.5px dashed #40404d; border-radius: 16px; padding: 15px 18px 18px; background: rgba(255,255,255,.016); }
+  .context-box.dead { border-color: #33333d; opacity: .62; }
+  .ctx-title { font-size: 13px; font-weight: 650; color: var(--dim); margin-bottom: 12px; display: flex; align-items: center; gap: 9px; letter-spacing: -.01em; cursor: pointer; width: max-content; max-width: 100%; }
+  .ctx-title:hover { color: #fff; text-decoration: underline; }
+  .ctx-kind { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 2px 8px; text-decoration: none; }
+  .ctx-lane { position: relative; }
 </style>
 </head>
 <body>
 <div id="tabbar">
   <button id="tab-flows" class="tab active">Flows</button>
   <button id="tab-gallery" class="tab">Gallery</button>
+  <button id="tab-overview" class="tab">Overview</button>
 </div>
 <div id="shell">
 <aside id="sidebar">
-  <header><h1>Toy Shop Event Storming</h1><div class="sub">strategic flows recovered from the tactical codebase</div></header>
+  <header><h1>Event Storming Explorer</h1><div class="sub">strategic flows recovered from the tactical codebase</div></header>
   <input id="search" placeholder="Filter flows..." type="search">
   <nav id="flowlist"></nav>
   <div id="legend"></div>
 </aside>
 <div id="main">
   <div id="flowheader"></div>
-  <div id="lane-wrap"><div id="lane"></div><div id="zoomctl"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">&minus;</button><button id="zfit" title="Fit to view">&#10530;</button></div></div>
+  <div id="lane-wrap"><div id="lane"></div><div id="zoomctl" class="zoomctl"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">&minus;</button><button id="zfit" title="Fit to view">&#10530;</button></div></div>
   <div id="findings" style="display:none">
     <div id="hotspots"></div>
     <div id="instances"></div>
   </div>
 </div>
 <section id="gallery"></section>
+<section id="overview"><div id="ov-wrap"><div id="ov-canvas"></div><div id="ov-zoomctl" class="zoomctl"><button id="ov-zin" title="Zoom in">+</button><button id="ov-zout" title="Zoom out">&minus;</button><button id="ov-zfit" title="Fit to view">&#10530;</button></div></div></section>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
 </div>
 <script>
@@ -274,7 +275,9 @@ const svgNS = 'http://www.w3.org/2000/svg';
 
 const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9f43', '#4d96ff', '#ff6ec7', '#c0eb75', '#f78fb3', '#5ed0e0', '#e0a458'];
 
-function layoutFlow(f, lane) {
+// Render a single flow's board into the given lane element (sizing it), returning its {w,h}. No
+// pan/zoom here, so the same engine drives both the single-flow board and each Overview box.
+function renderFlowInto(f, lane) {
   lane.innerHTML = '';
   lane.style.position = 'relative';
   const flowIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
@@ -448,18 +451,63 @@ function layoutFlow(f, lane) {
     }
   }
 
+  return { w: maxR + PAD, h: maxB + PAD };
+}
+
+// Single-flow board: render into #lane, then attach pan/zoom and fit to view.
+function layoutFlow(f, lane) {
+  const dim = renderFlowInto(f, lane);
   const wrap = document.getElementById('lane-wrap');
   const pz = setupPanZoom(wrap, lane);
   // double rAF so the board's flex height has settled before we compute the fit scale
-  requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(maxR + PAD, maxB + PAD)));
+  requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(dim.w, dim.h)));
+}
+
+// Overview: render EVERY flow into its own bounded-context box and shelf-pack the boxes onto one
+// pannable/zoomable canvas. Duplicates across flows are expected — each box is self-contained.
+let overviewBuilt = false;
+function renderOverview() {
+  if (overviewBuilt) return;
+  const canvas = document.getElementById('ov-canvas');
+  canvas.innerHTML = '';
+  const boxes = [];
+  for (const f of MODEL.flows) {
+    const dead = f.status && f.status !== 'live';
+    const boxEl = el('div', { class: 'context-box' + (dead ? ' dead' : '') });
+    const title = el('div', { class: 'ctx-title', title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name);
+    if (dead) title.append(el('span', { class: 'badge ' + f.status }, f.status.toUpperCase() + (f.supersededBy ? ' → ' + f.supersededBy : '')));
+    else if (f.kind) title.append(el('span', { class: 'ctx-kind' }, f.kind));
+    const laneEl = el('div', { class: 'ctx-lane' });
+    boxEl.append(title, laneEl);
+    canvas.append(boxEl);
+    renderFlowInto(f, laneEl);          // sizes laneEl; box grows to fit
+    boxes.push({ boxEl });
+  }
+  // shelf-pack: place boxes left-to-right, wrapping to a new row past the target width
+  const GAPX = 64, GAPY = 60, PAD = 48;
+  const dims = boxes.map(b => ({ boxEl: b.boxEl, w: b.boxEl.offsetWidth, h: b.boxEl.offsetHeight }));
+  const widest = Math.max(0, ...dims.map(d => d.w));
+  const rowLimit = Math.max(1700, widest);
+  let x = PAD, y = PAD, rowH = 0, canvasW = PAD;
+  for (const d of dims) {
+    if (x > PAD && x + d.w > rowLimit) { x = PAD; y += rowH + GAPY; rowH = 0; }
+    d.boxEl.style.left = x + 'px'; d.boxEl.style.top = y + 'px';
+    x += d.w + GAPX; rowH = Math.max(rowH, d.h); canvasW = Math.max(canvasW, x);
+  }
+  const W = canvasW - GAPX + PAD, H = y + rowH + PAD;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  overviewBuilt = true;
+  const wrap = document.getElementById('ov-wrap');
+  const pz = setupPanZoom(wrap, canvas, { zin: 'ov-zin', zout: 'ov-zout', zfit: 'ov-zfit' });
+  requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(W, H)));
 }
 
 // One pan/zoom controller for the board: wheel zooms toward the cursor, left-drag on the
 // background pans, buttons zoom/fit. Attached to the persistent #lane-wrap once; later renders
 // just swap in the new #lane and re-fit.
-let PZ = null;
-function setupPanZoom(wrap, lane) {
-  if (PZ) { PZ.lane = lane; return PZ; }
+function setupPanZoom(wrap, lane, ids) {
+  if (wrap.__pz) { wrap.__pz.lane = lane; return wrap.__pz; }
+  ids = ids || { zin: 'zin', zout: 'zout', zfit: 'zfit' };
   const st = { wrap, lane, scale: 1, tx: 0, ty: 0, cw: 0, ch: 0 };
   const MIN = 0.12, MAX = 2.6;
   const apply = () => { st.lane.style.transform = 'translate(' + st.tx + 'px,' + st.ty + 'px) scale(' + st.scale + ')'; };
@@ -482,7 +530,7 @@ function setupPanZoom(wrap, lane) {
   }, { passive: false });
   let panning = false, sx = 0, sy = 0, ox = 0, oy = 0;
   wrap.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.sticky, .inv, .dupdot, #zoomctl')) return;
+    if (e.button !== 0 || e.target.closest('.sticky, .inv, .dupdot, .zoomctl, .ctx-title')) return;
     panning = true; sx = e.clientX; sy = e.clientY; ox = st.tx; oy = st.ty;
     wrap.classList.add('grabbing'); wrap.setPointerCapture(e.pointerId);
   });
@@ -491,10 +539,10 @@ function setupPanZoom(wrap, lane) {
   wrap.addEventListener('pointerup', endPan);
   wrap.addEventListener('pointercancel', endPan);
   const btn = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
-  btn('zin', () => st.zoomAt(1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
-  btn('zout', () => st.zoomAt(1 / 1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
-  btn('zfit', () => st.fit(st.cw, st.ch));
-  PZ = st; return st;
+  btn(ids.zin, () => st.zoomAt(1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  btn(ids.zout, () => st.zoomAt(1 / 1.25, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  btn(ids.zfit, () => st.fit(st.cw, st.ch));
+  wrap.__pz = st; return st;
 }
 
 function placeCard(o, lane, x, y, dupColor) {
@@ -621,13 +669,15 @@ function renderGallery() {
 }
 function setMode(m) {
   currentMode = m;
-  const flowsOn = m === 'flows';
-  document.getElementById('tab-flows').classList.toggle('active', flowsOn);
-  document.getElementById('tab-gallery').classList.toggle('active', !flowsOn);
-  document.getElementById('sidebar').style.display = flowsOn ? '' : 'none';
-  document.getElementById('main').style.display = flowsOn ? '' : 'none';
-  document.getElementById('gallery').classList.toggle('show', !flowsOn);
-  if (!flowsOn) renderGallery();
+  document.getElementById('tab-flows').classList.toggle('active', m === 'flows');
+  document.getElementById('tab-gallery').classList.toggle('active', m === 'gallery');
+  document.getElementById('tab-overview').classList.toggle('active', m === 'overview');
+  document.getElementById('sidebar').style.display = m === 'flows' ? '' : 'none';
+  document.getElementById('main').style.display = m === 'flows' ? '' : 'none';
+  document.getElementById('gallery').classList.toggle('show', m === 'gallery');
+  document.getElementById('overview').classList.toggle('show', m === 'overview');
+  if (m === 'gallery') renderGallery();
+  else if (m === 'overview') renderOverview();
 }
 
 function renderFlow() {
@@ -674,7 +724,8 @@ function renderFlow() {
 
 function openDetail(id) {
   selectedId = id;
-  if (currentMode === 'gallery') renderGrid(); else renderFlow();
+  if (currentMode === 'gallery') renderGrid();
+  else if (currentMode === 'flows') renderFlow();
   const n = nodeById.get(id); if (!n) return;
   const p = PALETTE[n.type] || PALETTE.invariant;
   const d = document.getElementById('detail'); d.classList.add('open');
@@ -689,33 +740,6 @@ function openDetail(id) {
   if (n.synchronous) chips.append(el('span', { class: 'chip' }, 'synchronous inline reaction'));
   inner.append(chips);
   inner.append(el('div', { class: 'desc' }, n.description || ''));
-
-  // aggregate <-> invariant cross-reference. The "enforces" relationship lives on flow edges
-  // (aggregate --enforces--> invariant); surface the full set here regardless of the flow you
-  // came in from, so an aggregate lists every invariant it guards and an invariant lists every
-  // aggregate it guards. Each entry navigates to that node's detail.
-  const relatedEnforces = (fromType, toType) => {
-    const ids = new Set();
-    for (const f of MODEL.flows) for (const e of (f.edges || [])) {
-      const s = nodeById.get(e.from), t = nodeById.get(e.to);
-      if (!s || !t) continue;
-      if (n.type === 'aggregate' && e.from === id && t.type === toType) ids.add(t.id);
-      if (n.type === 'invariant' && e.to === id && s.type === fromType) ids.add(s.id);
-    }
-    return [...ids].map(i => nodeById.get(i)).filter(Boolean);
-  };
-  let related = [], relHeading = '';
-  if (n.type === 'aggregate') { related = relatedEnforces('aggregate', 'invariant'); relHeading = 'Enforces ' + related.length + ' invariant' + (related.length > 1 ? 's' : ''); }
-  else if (n.type === 'invariant') { related = relatedEnforces('aggregate', 'invariant'); relHeading = 'Enforced by ' + related.length + ' aggregate' + (related.length > 1 ? 's' : ''); }
-  if (related.length) {
-    inner.append(el('h4', {}, relHeading));
-    for (const r of related) {
-      const rp = PALETTE[r.type] || PALETTE.invariant;
-      inner.append(el('div', { class: 'relrow', title: (PALETTE[r.type] || {}).name + ' — ' + r.label, onclick: () => openDetail(r.id) },
-        el('div', { class: 'rdot', style: 'background:' + rp.fill + ';border-color:' + rp.edge }),
-        el('div', { class: 'rlabel' }, r.label)));
-    }
-  }
 
   const usages = (n.usages && n.usages.length) ? n.usages : (n.tactical ? [{ flow: '', explanation: n.tactical.explanation, anchors: n.tactical.anchors }] : []);
   if (usages.length) {
@@ -732,31 +756,11 @@ function openDetail(id) {
       inner.append(box);
     }
   }
-  // flows this node appears in — each rendered as a row whose colored count-dots preview the
-  // flow's makeup (one dot per sticky type present, the number = how many of that type), so you
-  // can eyeball a flow's size and shape before jumping in.
+  // flows this node appears in
   const inFlows = MODEL.flows.filter(f => (f.steps || []).includes(id) || (f.edges || []).some(e => e.from === id || e.to === id));
   if (inFlows.length) {
     inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flow' + (inFlows.length > 1 ? 's' : '')));
-    for (const f of inFlows) {
-      const fIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
-      const counts = {};
-      for (const fid of fIds) { const fn = nodeById.get(fid); if (fn) counts[fn.type] = (counts[fn.type] || 0) + 1; }
-      const total = Object.values(counts).reduce((s, c) => s + c, 0);
-      const dead = f.status && f.status !== 'live';
-      const row = el('div', { class: 'flowrow', title: f.name + ' — ' + total + ' stickies', onclick: () => selectFlow(f.id) });
-      const name = el('div', { class: 'fr-name' }, f.name);
-      if (dead) name.append(el('span', { class: 'badge ' + f.status }, f.status.toUpperCase()));
-      row.append(name);
-      const dots = el('div', { class: 'fr-dots' });
-      for (const t of Object.keys(PALETTE)) {
-        if (t === 'hotspot' || !counts[t]) continue;
-        const p = PALETTE[t];
-        dots.append(el('div', { class: 'cdot', style: 'background:' + p.fill + ';color:' + p.text, title: counts[t] + ' × ' + p.name }, String(counts[t])));
-      }
-      row.append(dots);
-      inner.append(row);
-    }
+    for (const f of inFlows) inner.append(el('a', { class: 'anchor', href: '#', onclick: (ev) => { ev.preventDefault(); selectFlow(f.id); } }, f.name));
   }
 }
 
@@ -786,6 +790,7 @@ function closeDetail() { document.getElementById('detail').classList.remove('ope
 document.getElementById('search').addEventListener('input', e => renderSidebar(e.target.value.toLowerCase()));
 document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
 document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
+document.getElementById('tab-overview').addEventListener('click', () => setMode('overview'));
 
 renderSidebar('');
 if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);

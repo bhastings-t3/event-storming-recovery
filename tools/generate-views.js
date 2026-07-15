@@ -218,6 +218,13 @@ const html = `<!DOCTYPE html>
   .anchor { display: block; font: 11px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; color: #7db2f5; text-decoration: none; word-break: break-all; margin-bottom: 2px; }
   .anchor:hover { text-decoration: underline; color: #a5cbf9; }
   .anchor .note { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
+  /* "appears in" flow rows: each flow is a card whose colored count-dots preview its composition */
+  .flowrow { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
+  .flowrow:hover { background: var(--accent); border-color: var(--ring); }
+  .flowrow .fr-name { font-size: 12.5px; font-weight: 600; color: var(--dim); line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .flowrow:hover .fr-name { color: #fff; }
+  .flowrow .fr-dots { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .cdot { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; border: 1px solid rgba(255,255,255,.14); }
   #closedetail { float: right; border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--muted); padding: 3px 6px; border-radius: 6px; line-height: 1; }
   #closedetail:hover { background: var(--accent); color: var(--fg); }
   #legend { padding: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
@@ -385,10 +392,10 @@ function layoutFlow(f, lane) {
   const drawn = [];
   for (const e of (f.edges || [])) {
     const nf = nodeById.get(e.from), nt = nodeById.get(e.to); if (!nf || !nt) continue;
-    if (isRM(nf) || isRM(nt)) {                              // read model: one copy per reference, beside its partner
+    if (isRM(nf) || isRM(nt)) {                              // read model: one copy per reference, ABOVE-LEFT of its consumer
       const rmId = isRM(nf) ? e.from : e.to, spId = isRM(nf) ? e.to : e.from, anchor = primary[spId]; if (!anchor) continue;
       const rmInst = mk(nodeById.get(rmId), anchor.rank, 'rm', anchor.iid);
-      drawn.push({ from: (e.from === rmId ? rmInst : anchor).iid, to: (e.to === rmId ? rmInst : anchor).iid, verb: e.verb, dashed: true });
+      drawn.push({ from: rmInst.iid, to: anchor.iid, verb: e.verb, dashed: true, rm: true }); // arrow leaves the read model, enters the consumer's left side
     } else if (isInv(nt)) {                                  // invariant below its aggregate
       const anchor = primary[e.from]; if (!anchor) continue;
       const invInst = mk(nodeById.get(e.to), anchor.rank, 'inv', anchor.iid);
@@ -433,19 +440,21 @@ function layoutFlow(f, lane) {
   // satellites sit in bands strictly ABOVE (read models) / BELOW (invariants) the spine, packed by
   // x-interval so duplicates never overlap each other or a spine card. Dotted connectors reach them.
   const GAP = 26;
-  const packBand = (list, above) => {
+  const packBand = (list, above, xOf) => {
     if (!list.length) return;
-    for (const o of list) { cardByIid[o.iid] = placeCard(o, lane, box[o.anchorIid].cx - 88, 0, dupColor[o.id]); measure(o); }
+    for (const o of list) { cardByIid[o.iid] = placeCard(o, lane, 0, 0, dupColor[o.id]); measure(o); }
     list.sort((a, b) => box[a.anchorIid].cx - box[b.anchorIid].cx);
     const rows = [];
-    for (const o of list) { const b = box[o.iid], x = box[o.anchorIid].cx - b.w / 2; let r = 0; while (rows[r] && rows[r].some(iv => x < iv[1] + 18 && x + b.w > iv[0] - 18)) r++; (rows[r] ||= []).push([x, x + b.w]); o._row = r; o._x = x; }
+    for (const o of list) { const b = box[o.iid], x = xOf(box[o.anchorIid], b.w); let r = 0; while (rows[r] && rows[r].some(iv => x < iv[1] + 18 && x + b.w > iv[0] - 18)) r++; (rows[r] ||= []).push([x, x + b.w]); o._row = r; o._x = x; }
     const rowH = rows.map((_, r) => Math.max(...list.filter(o => o._row === r).map(o => box[o.iid].h)));
     const rowTop = [];
     for (let r = 0; r < rows.length; r++) rowTop[r] = above ? (r === 0 ? spineTop - GAP - rowH[0] : rowTop[r - 1] - GAP - rowH[r]) : (r === 0 ? spineBottom + GAP : rowTop[r - 1] + rowH[r - 1] + GAP);
     for (const o of list) { const e = cardByIid[o.iid], b = box[o.iid]; e.style.left = o._x + 'px'; e.style.top = rowTop[o._row] + 'px'; b.x = o._x; b.y = rowTop[o._row]; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; }
   };
-  packBand(insts.filter(o => o.kind === 'rm'), true);
-  packBand(insts.filter(o => o.kind === 'inv'), false);
+  // read models sit ABOVE and to the LEFT of their consumer (dotted arrow enters the consumer's left
+  // side); invariants sit centered BELOW their aggregate.
+  packBand(insts.filter(o => o.kind === 'rm'), true, (ab, w) => ab.x - w - 18);
+  packBand(insts.filter(o => o.kind === 'inv'), false, (ab, w) => ab.cx - w / 2);
 
   // shift everything into positive space with padding; size the canvas
   const PAD = 40;
@@ -468,8 +477,16 @@ function layoutFlow(f, lane) {
   const edgeEls = [];
   for (const d of drawn) {
     const a = box[d.from], b = box[d.to]; if (!a || !b) continue;
-    const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
-    const path = makePath(curveD(p1, p2), d.dashed); svg.append(path);
+    let p1, p2, dStr;
+    if (d.rm) {                                   // read model -> enters the consumer's LEFT edge
+      p1 = borderPoint(a, b.cx, b.cy);
+      p2 = { x: b.x, y: Math.max(b.y + 12, Math.min(b.y + b.h - 12, a.cy)) };
+      dStr = curveInto(p1, p2);
+    } else {
+      p1 = borderPoint(a, b.cx, b.cy); p2 = borderPoint(b, a.cx, a.cy);
+      dStr = curveD(p1, p2);
+    }
+    const path = makePath(dStr, d.dashed); svg.append(path);
     let labelEl = null;
     if (d.verb && !d.dashed) { labelEl = el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, d.verb); lane.append(labelEl); }
     edgeEls.push({ path, labelEl, from: d.from, to: d.to });
@@ -585,6 +602,12 @@ function curveD(p1, p2) {
   if (Math.abs(dx) >= Math.abs(dy)) { const k = Math.max(22, Math.abs(dx) * 0.4), s = Math.sign(dx) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + s * k) + ',' + p1.y + ' ' + (p2.x - s * k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y; }
   const k = Math.max(18, Math.abs(dy) * 0.4), s = Math.sign(dy) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + (p1.y + s * k) + ' ' + p2.x + ',' + (p2.y - s * k) + ' ' + p2.x + ',' + p2.y;
 }
+// p2 sits on a card's LEFT edge; leave p1 going down, then arrive horizontally into p2 from the left.
+function curveInto(p1, p2) {
+  const k = Math.max(28, Math.abs(p2.x - p1.x) * 0.45);
+  const c1y = p1.y + (p2.y >= p1.y ? 1 : -1) * Math.max(14, Math.min(40, Math.abs(p2.y - p1.y) * 0.5));
+  return 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + c1y + ' ' + (p2.x - k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y;
+}
 
 function selectFlow(id) {
   setMode('flows');                       // jumping to a flow (e.g. from a gallery card) shows the board
@@ -613,9 +636,7 @@ function buildGallery() {
   search.addEventListener('input', e => { galleryState.q = e.target.value.toLowerCase(); renderGrid(); });
   head.append(search);
   const chips = el('div', { class: 'type-chips' });
-  const allChip = el('div', { class: 'tchip tchip-all on', id: 'chip-all' }, 'All',
-    (() => { const s = el('span', {}); return s; })());
-  allChip.textContent = 'All';
+  const allChip = el('div', { class: 'tchip tchip-all on', id: 'chip-all' }, 'All');
   allChip.addEventListener('click', () => { galleryTypes.forEach(t => galleryState.active.add(t)); syncChips(); renderGrid(); });
   chips.append(allChip);
   for (const t of galleryTypes) {
@@ -719,7 +740,7 @@ function renderFlow() {
 
 function openDetail(id) {
   selectedId = id;
-  renderFlow();
+  if (currentMode === 'gallery') renderGrid(); else renderFlow();
   const n = nodeById.get(id); if (!n) return;
   const p = PALETTE[n.type] || PALETTE.invariant;
   const d = document.getElementById('detail'); d.classList.add('open');
@@ -750,11 +771,31 @@ function openDetail(id) {
       inner.append(box);
     }
   }
-  // flows this node appears in
+  // flows this node appears in — each rendered as a row whose colored count-dots preview the
+  // flow's makeup (one dot per sticky type present, the number = how many of that type), so you
+  // can eyeball a flow's size and shape before jumping in.
   const inFlows = MODEL.flows.filter(f => (f.steps || []).includes(id) || (f.edges || []).some(e => e.from === id || e.to === id));
-  if (inFlows.length > 1) {
-    inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flows'));
-    for (const f of inFlows) inner.append(el('a', { class: 'anchor', href: '#', onclick: (ev) => { ev.preventDefault(); selectFlow(f.id); } }, f.name));
+  if (inFlows.length) {
+    inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flow' + (inFlows.length > 1 ? 's' : '')));
+    for (const f of inFlows) {
+      const fIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
+      const counts = {};
+      for (const fid of fIds) { const fn = nodeById.get(fid); if (fn) counts[fn.type] = (counts[fn.type] || 0) + 1; }
+      const total = Object.values(counts).reduce((s, c) => s + c, 0);
+      const dead = f.status && f.status !== 'live';
+      const row = el('div', { class: 'flowrow', title: f.name + ' — ' + total + ' stickies', onclick: () => selectFlow(f.id) });
+      const name = el('div', { class: 'fr-name' }, f.name);
+      if (dead) name.append(el('span', { class: 'badge ' + f.status }, f.status.toUpperCase()));
+      row.append(name);
+      const dots = el('div', { class: 'fr-dots' });
+      for (const t of Object.keys(PALETTE)) {
+        if (t === 'hotspot' || !counts[t]) continue;
+        const p = PALETTE[t];
+        dots.append(el('div', { class: 'cdot', style: 'background:' + p.fill + ';color:' + p.text, title: counts[t] + ' × ' + p.name }, String(counts[t])));
+      }
+      row.append(dots);
+      inner.append(row);
+    }
   }
 }
 
@@ -780,11 +821,14 @@ function openHotspot(id) {
   }
 }
 
-function closeDetail() { document.getElementById('detail').classList.remove('open'); selectedId = null; }
+function closeDetail() { document.getElementById('detail').classList.remove('open'); selectedId = null; if (currentMode === 'gallery') renderGrid(); }
 document.getElementById('search').addEventListener('input', e => renderSidebar(e.target.value.toLowerCase()));
+document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
+document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
 
 renderSidebar('');
 if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);
+else setMode('flows');
 </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Toy Shop Event Storming</title>
+<title>Event Storming Explorer</title>
 <style>
   /* shadcn-style neutral-dark token system (vanilla CSS, no framework) */
   :root {
@@ -17,7 +17,7 @@
   html, body { height: 100%; }
   body {
     margin: 0; font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: var(--bg); color: var(--fg); height: 100vh; display: flex; overflow: hidden;
+    background: var(--bg); color: var(--fg); height: 100vh; display: flex; flex-direction: column; overflow: hidden;
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   }
   /* sidebar */
@@ -133,6 +133,13 @@
   .anchor { display: block; font: 11px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; color: #7db2f5; text-decoration: none; word-break: break-all; margin-bottom: 2px; }
   .anchor:hover { text-decoration: underline; color: #a5cbf9; }
   .anchor .note { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
+  /* "appears in" flow rows: each flow is a card whose colored count-dots preview its composition */
+  .flowrow { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
+  .flowrow:hover { background: var(--accent); border-color: var(--ring); }
+  .flowrow .fr-name { font-size: 12.5px; font-weight: 600; color: var(--dim); line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .flowrow:hover .fr-name { color: #fff; }
+  .flowrow .fr-dots { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .cdot { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; border: 1px solid rgba(255,255,255,.14); }
   #closedetail { float: right; border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--muted); padding: 3px 6px; border-radius: 6px; line-height: 1; }
   #closedetail:hover { background: var(--accent); color: var(--fg); }
   #legend { padding: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
@@ -142,11 +149,46 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #2c2c34; border-radius: 6px; border: 2px solid var(--panel); }
   ::-webkit-scrollbar-thumb:hover { background: #3a3a45; }
+  /* top tab bar: Flows board vs. Gallery of every sticky */
+  #tabbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .tab { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 15px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background .1s, color .1s; }
+  .tab:hover { background: var(--accent); color: var(--dim); }
+  .tab.active { background: var(--accent-2); color: #fff; border-color: var(--line); }
+  #shell { flex: 1; min-height: 0; display: flex; }
+  /* gallery: a wall of every sticky in the model, filtered by type chips + search */
+  #gallery { flex: 1; min-width: 0; display: none; flex-direction: column; }
+  #gallery.show { display: flex; }
+  .gallery-head { padding: 16px 24px 13px; border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+  .gallery-head h2 { margin: 0 0 11px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .gallery-head h2 .count { font-size: 11px; font-weight: 700; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 2px 9px; letter-spacing: 0; }
+  .gallery-search { padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; font-size: 13px; width: 100%; max-width: 420px; background: var(--input); color: var(--fg); outline: none; transition: border-color .12s, box-shadow .12s; }
+  .gallery-search::placeholder { color: var(--muted); }
+  .gallery-search:focus { border-color: var(--ring); box-shadow: 0 0 0 3px rgba(120,120,140,.16); }
+  .type-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .tchip { font-size: 10px; font-weight: 700; letter-spacing: .03em; padding: 4px 11px; border-radius: 99px; cursor: pointer; border: 1px solid transparent; user-select: none; text-transform: uppercase; opacity: .38; transition: opacity .1s, box-shadow .1s; }
+  .tchip:hover { opacity: .75; }
+  .tchip.on { opacity: 1; }
+  .tchip-all { background: var(--accent-2); color: var(--dim); border-color: var(--line); }
+  .gallery-grid { flex: 1; overflow-y: auto; padding: 18px 24px 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; align-content: start; }
+  .gcard { border-radius: var(--radius); padding: 12px 14px; cursor: pointer; border: 1px solid rgba(0,0,0,.28); box-shadow: var(--shadow); position: relative; min-height: 104px; display: flex; flex-direction: column; transition: transform .1s, box-shadow .1s; }
+  .gcard:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+  .gcard.selected { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .gcard .gtype { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 5px; }
+  .gcard .glabel { font-size: 13px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+  .gcard .gdesc { font-size: 11px; line-height: 1.45; margin-top: 6px; opacity: .82; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .gcard .gmeta { margin-top: auto; padding-top: 9px; font-size: 10px; font-weight: 600; opacity: .72; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .gcard .gdead { background: rgba(0,0,0,.2); border-radius: 99px; padding: 1px 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .gempty { grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 22px 2px; }
 </style>
 </head>
 <body>
+<div id="tabbar">
+  <button id="tab-flows" class="tab active">Flows</button>
+  <button id="tab-gallery" class="tab">Gallery</button>
+</div>
+<div id="shell">
 <aside id="sidebar">
-  <header><h1>Toy Shop Event Storming</h1><div class="sub">strategic flows recovered from the tactical codebase</div></header>
+  <header><h1>Event Storming Explorer</h1><div class="sub">strategic flows recovered from the tactical codebase</div></header>
   <input id="search" placeholder="Filter flows..." type="search">
   <nav id="flowlist"></nav>
   <div id="legend"></div>
@@ -159,14 +201,21 @@
     <div id="instances"></div>
   </div>
 </div>
+<section id="gallery"></section>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
+</div>
 <script>
 const MODEL = {"version":1,"meta":{"generatedFrom":["express-checkout.json","place-order.json"],"counts":{"flows":2,"nodes":13,"hotspots":2,"byType":{"actor":1,"command":3,"aggregate":2,"event":2,"readModel":1,"invariant":2,"externalSystem":1,"policy":1}},"deadFlows":[{"id":"express-checkout","status":"dead","supersededBy":"place-order","name":"Customer checks out in one tap (retired)"}],"sharedGlossary":[{"id":"actor-customer","type":"actor","label":"Customer","description":"A shopper who has added items to their cart and checks out.","flowCount":2,"flows":["express-checkout","place-order"]},{"id":"agg-order","type":"aggregate","label":"Order","description":"A customer order: header plus line items, with status and total. Emits an event when placed.","flowCount":2,"flows":["express-checkout","place-order"]},{"id":"evt-order-placed","type":"event","label":"OrderPlaced","description":"An order existed in status Placed — but possibly for out-of-stock items in this retired path.","flowCount":2,"flows":["express-checkout","place-order"]}]},"nodes":[{"id":"actor-customer","type":"actor","label":"Customer","inferred":true,"description":"A shopper who has added items to their cart and checks out.","usages":[]},{"id":"cmd-express-checkout","type":"command","label":"ExpressCheckout","inferred":false,"description":"One-tap checkout that skipped the cart review and stock check, charging a saved card immediately.","tactical":{"explanation":"ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout","note":"orphaned — no caller since a1b2c3d"}]},"usages":[{"flow":"express-checkout","explanation":"ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout","note":"orphaned — no caller since a1b2c3d"}]}]},{"id":"agg-order","type":"aggregate","label":"Order","inferred":true,"description":"A customer order: header plus line items, with status and total. Emits an event when placed.","tactical":{"explanation":"OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.","anchors":[{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder"}]},"usages":[{"flow":"express-checkout","explanation":"expressCheckout inserted the order without the stock invariant the standard placeOrder enforces — the reason it was retired.","anchors":[{"path":"src/services/OrderService.ts","line":96,"symbol":"expressCheckout"}]},{"flow":"place-order","explanation":"OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.","anchors":[{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder"}]}]},{"id":"evt-order-placed","type":"event","label":"OrderPlaced","inferred":true,"description":"An order existed in status Placed — but possibly for out-of-stock items in this retired path.","tactical":{"explanation":"The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.","anchors":[{"path":"src/services/OrderService.ts","line":61,"symbol":"placeOrder","note":"commit + return"}]},"usages":[{"flow":"express-checkout","explanation":"Same event as the live flow; here reached without the stock guard.","anchors":[{"path":"src/services/OrderService.ts","line":99,"symbol":"expressCheckout"}]},{"flow":"place-order","explanation":"The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.","anchors":[{"path":"src/services/OrderService.ts","line":61,"symbol":"placeOrder","note":"commit + return"}]}]},{"id":"rm-cart","type":"readModel","label":"Cart summary","inferred":true,"description":"The line items, quantities, and running total the customer reviews before checkout.","tactical":{"explanation":"CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.","anchors":[{"path":"src/web/CartPage.tsx","line":42,"symbol":"CartPage","note":"cart review surface"}]},"usages":[{"flow":"place-order","explanation":"CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.","anchors":[{"path":"src/web/CartPage.tsx","line":42,"symbol":"CartPage","note":"cart review surface"}]}]},{"id":"cmd-place-order","type":"command","label":"PlaceOrder","inferred":false,"description":"Customer submits the cart as an order.","tactical":{"explanation":"Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.","anchors":[{"path":"src/web/CartPage.tsx","line":88,"symbol":"onCheckout","note":"UI call site"},{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder","note":"orchestrator entry"}]},"usages":[{"flow":"place-order","explanation":"Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.","anchors":[{"path":"src/web/CartPage.tsx","line":88,"symbol":"onCheckout","note":"UI call site"},{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder","note":"orchestrator entry"}]}]},{"id":"inv-stock-available","type":"invariant","label":"Every line must have stock available","inferred":true,"description":"An order is rejected if any line item's requested quantity exceeds on-hand stock.","tactical":{"explanation":"placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) \u003c qty, before any write.","anchors":[{"path":"src/services/OrderService.ts","line":40,"symbol":"placeOrder","note":"stock guard"}]},"usages":[{"flow":"place-order","explanation":"placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) \u003c qty, before any write.","anchors":[{"path":"src/services/OrderService.ts","line":40,"symbol":"placeOrder","note":"stock guard"}]}]},{"id":"inv-payment-authorized","type":"invariant","label":"Payment must authorize before the order is created","inferred":true,"description":"The order is only written after the payment gateway authorizes the charge.","tactical":{"explanation":"placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.","anchors":[{"path":"src/services/OrderService.ts","line":52,"symbol":"placeOrder","note":"auth gate"}]},"usages":[{"flow":"place-order","explanation":"placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.","anchors":[{"path":"src/services/OrderService.ts","line":52,"symbol":"placeOrder","note":"auth gate"}]}]},{"id":"ext-payments","type":"externalSystem","label":"Payment gateway","inferred":false,"description":"Third-party payment processor. Authorizes and captures card charges over HTTPS.","tactical":{"explanation":"PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.","anchors":[{"path":"src/services/PaymentGateway.ts","line":12,"symbol":"authorize"}]},"usages":[{"flow":"place-order","explanation":"PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.","anchors":[{"path":"src/services/PaymentGateway.ts","line":12,"symbol":"authorize"}]}]},{"id":"pol-reserve-stock","type":"policy","label":"Whenever an order is placed, reserve its stock","inferred":true,"synchronous":true,"description":"Placing an order immediately decrements on-hand stock for each line so the same unit can't be sold twice.","tactical":{"explanation":"Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder","note":"post-commit reserve"}]},"usages":[{"flow":"place-order","explanation":"Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder","note":"post-commit reserve"}]}]},{"id":"cmd-reserve-stock","type":"command","label":"ReserveStock","inferred":true,"description":"Decrement on-hand stock for each ordered line.","tactical":{"explanation":"InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]}]},{"id":"agg-inventory","type":"aggregate","label":"Inventory","inferred":true,"description":"On-hand stock per SKU. Decremented when an order reserves stock.","tactical":{"explanation":"inventory table keyed by sku; reserve() is the only write path in this flow.","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"inventory table keyed by sku; reserve() is the only write path in this flow.","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]}]},{"id":"evt-stock-reserved","type":"event","label":"StockReserved","inferred":true,"description":"On-hand stock has been decremented for the order's lines.","tactical":{"explanation":"Aftermath of the inventory update; nothing subscribes downstream in this toy model.","anchors":[{"path":"src/services/InventoryService.ts","line":26,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"Aftermath of the inventory update; nothing subscribes downstream in this toy model.","anchors":[{"path":"src/services/InventoryService.ts","line":26,"symbol":"reserve"}]}]}],"flows":[{"id":"express-checkout","name":"Customer checks out in one tap (retired)","tier":1,"kind":"write","status":"dead","supersededBy":"place-order","summary":"A one-tap express checkout that charged a saved card and created the order without a stock check. It oversold too often and its button was removed in commit a1b2c3d; the standard place-order flow (with a stock invariant) is the replacement. The service method still compiles but has no caller.","trigger":"Express-checkout button on the cart page (removed in commit a1b2c3d — currently unreachable)","steps":["actor-customer","cmd-express-checkout","agg-order","evt-order-placed"],"edges":[{"from":"actor-customer","to":"cmd-express-checkout","verb":"issues"},{"from":"cmd-express-checkout","to":"agg-order","verb":"handled by"},{"from":"agg-order","to":"evt-order-placed","verb":"emits"}],"hotspots":["hot-express-dead-code"],"instances":[]},{"id":"place-order","name":"Customer places an order","tier":1,"kind":"write","status":"live","summary":"The customer reviews their cart and checks out. The order is created only after stock is confirmed and the payment gateway authorizes the charge; on success, stock is reserved in a separate step whose failure does not roll back the order.","trigger":"Checkout button on the cart page","steps":["actor-customer","rm-cart","cmd-place-order","agg-order","evt-order-placed","ext-payments","pol-reserve-stock","cmd-reserve-stock","agg-inventory","evt-stock-reserved"],"edges":[{"from":"rm-cart","to":"actor-customer","verb":"read by"},{"from":"actor-customer","to":"cmd-place-order","verb":"issues"},{"from":"cmd-place-order","to":"agg-order","verb":"handled by"},{"from":"agg-order","to":"inv-stock-available","verb":"enforces"},{"from":"agg-order","to":"inv-payment-authorized","verb":"enforces"},{"from":"cmd-place-order","to":"ext-payments","verb":"calls"},{"from":"agg-order","to":"evt-order-placed","verb":"emits"},{"from":"evt-order-placed","to":"pol-reserve-stock","verb":"triggers"},{"from":"pol-reserve-stock","to":"cmd-reserve-stock","verb":"issues"},{"from":"cmd-reserve-stock","to":"agg-inventory","verb":"handled by"},{"from":"agg-inventory","to":"evt-stock-reserved","verb":"emits"}],"hotspots":["hot-reserve-not-atomic"],"instances":[]}],"hotspots":[{"id":"hot-express-dead-code","label":"Retired express-checkout code still ships","description":"expressCheckout is unreachable since commit a1b2c3d but still compiled and tested. Human question: delete it, or is express checkout planned to return with a stock guard?","tactical":{"explanation":"No caller of OrderService.expressCheckout anywhere in the tree; git show a1b2c3d removed the button.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout"}]}},{"id":"hot-reserve-not-atomic","label":"Stock reservation is not atomic with order creation","description":"Reservation runs after the order transaction commits, in a separate store, and its failure is only logged. An order can exist for stock that was never decremented, so the same unit can be oversold. Human question: should reserve() share the order transaction, or should a failed reservation cancel/flag the order?","tactical":{"explanation":"OrderService.placeOrder commits the order at line 61, then calls InventoryService.reserve at line 63 outside any transaction; reserve swallows failures (InventoryService.ts:31).","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder"}]}}]};
 const REPO_ROOT = ".";
 const PALETTE = {"event":{"fill":"#E9A23B","edge":"#a56a14","text":"#4a2c02","name":"Domain Event"},"command":{"fill":"#6BA3E8","edge":"#2f68b0","text":"#123252","name":"Command"},"actor":{"fill":"#D2A63A","edge":"#98741a","text":"#432f03","name":"Actor"},"aggregate":{"fill":"#E3D68A","edge":"#a89a4a","text":"#4c4212","name":"Aggregate"},"policy":{"fill":"#BF9BE0","edge":"#8058b0","text":"#3a2160","name":"Policy"},"readModel":{"fill":"#6FC993","edge":"#358a5a","text":"#124a2c","name":"Read Model"},"externalSystem":{"fill":"#E68DAF","edge":"#b05378","text":"#59213b","name":"External System"},"invariant":{"fill":"#26262e","edge":"#42424e","text":"#b7b7c2","name":"Invariant"},"hotspot":{"fill":"#E5645E","edge":"#a83530","text":"#4c110e","name":"Hotspot"}};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
-let currentFlow = null, selectedId = null;
+let currentFlow = null, selectedId = null, currentMode = 'flows';
+
+// types present in the model, in palette order (drives the gallery filter chips + sort)
+const galleryTypes = Object.keys(PALETTE).filter(t => t !== 'hotspot' && MODEL.nodes.some(n => n.type === t));
+const galleryState = { q: '', active: new Set(galleryTypes) };
+let galleryBuilt = false;
 
 function el(tag, attrs, ...children) {
   const e = document.createElement(tag);
@@ -258,10 +307,10 @@ function layoutFlow(f, lane) {
   const drawn = [];
   for (const e of (f.edges || [])) {
     const nf = nodeById.get(e.from), nt = nodeById.get(e.to); if (!nf || !nt) continue;
-    if (isRM(nf) || isRM(nt)) {                              // read model: one copy per reference, beside its partner
+    if (isRM(nf) || isRM(nt)) {                              // read model: one copy per reference, ABOVE-LEFT of its consumer
       const rmId = isRM(nf) ? e.from : e.to, spId = isRM(nf) ? e.to : e.from, anchor = primary[spId]; if (!anchor) continue;
       const rmInst = mk(nodeById.get(rmId), anchor.rank, 'rm', anchor.iid);
-      drawn.push({ from: (e.from === rmId ? rmInst : anchor).iid, to: (e.to === rmId ? rmInst : anchor).iid, verb: e.verb, dashed: true });
+      drawn.push({ from: rmInst.iid, to: anchor.iid, verb: e.verb, dashed: true, rm: true }); // arrow leaves the read model, enters the consumer's left side
     } else if (isInv(nt)) {                                  // invariant below its aggregate
       const anchor = primary[e.from]; if (!anchor) continue;
       const invInst = mk(nodeById.get(e.to), anchor.rank, 'inv', anchor.iid);
@@ -306,19 +355,21 @@ function layoutFlow(f, lane) {
   // satellites sit in bands strictly ABOVE (read models) / BELOW (invariants) the spine, packed by
   // x-interval so duplicates never overlap each other or a spine card. Dotted connectors reach them.
   const GAP = 26;
-  const packBand = (list, above) => {
+  const packBand = (list, above, xOf) => {
     if (!list.length) return;
-    for (const o of list) { cardByIid[o.iid] = placeCard(o, lane, box[o.anchorIid].cx - 88, 0, dupColor[o.id]); measure(o); }
+    for (const o of list) { cardByIid[o.iid] = placeCard(o, lane, 0, 0, dupColor[o.id]); measure(o); }
     list.sort((a, b) => box[a.anchorIid].cx - box[b.anchorIid].cx);
     const rows = [];
-    for (const o of list) { const b = box[o.iid], x = box[o.anchorIid].cx - b.w / 2; let r = 0; while (rows[r] && rows[r].some(iv => x < iv[1] + 18 && x + b.w > iv[0] - 18)) r++; (rows[r] ||= []).push([x, x + b.w]); o._row = r; o._x = x; }
+    for (const o of list) { const b = box[o.iid], x = xOf(box[o.anchorIid], b.w); let r = 0; while (rows[r] && rows[r].some(iv => x < iv[1] + 18 && x + b.w > iv[0] - 18)) r++; (rows[r] ||= []).push([x, x + b.w]); o._row = r; o._x = x; }
     const rowH = rows.map((_, r) => Math.max(...list.filter(o => o._row === r).map(o => box[o.iid].h)));
     const rowTop = [];
     for (let r = 0; r < rows.length; r++) rowTop[r] = above ? (r === 0 ? spineTop - GAP - rowH[0] : rowTop[r - 1] - GAP - rowH[r]) : (r === 0 ? spineBottom + GAP : rowTop[r - 1] + rowH[r - 1] + GAP);
     for (const o of list) { const e = cardByIid[o.iid], b = box[o.iid]; e.style.left = o._x + 'px'; e.style.top = rowTop[o._row] + 'px'; b.x = o._x; b.y = rowTop[o._row]; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; }
   };
-  packBand(insts.filter(o => o.kind === 'rm'), true);
-  packBand(insts.filter(o => o.kind === 'inv'), false);
+  // read models sit ABOVE and to the LEFT of their consumer (dotted arrow enters the consumer's left
+  // side); invariants sit centered BELOW their aggregate.
+  packBand(insts.filter(o => o.kind === 'rm'), true, (ab, w) => ab.x - w - 18);
+  packBand(insts.filter(o => o.kind === 'inv'), false, (ab, w) => ab.cx - w / 2);
 
   // shift everything into positive space with padding; size the canvas
   const PAD = 40;
@@ -341,8 +392,16 @@ function layoutFlow(f, lane) {
   const edgeEls = [];
   for (const d of drawn) {
     const a = box[d.from], b = box[d.to]; if (!a || !b) continue;
-    const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
-    const path = makePath(curveD(p1, p2), d.dashed); svg.append(path);
+    let p1, p2, dStr;
+    if (d.rm) {                                   // read model -> enters the consumer's LEFT edge
+      p1 = borderPoint(a, b.cx, b.cy);
+      p2 = { x: b.x, y: Math.max(b.y + 12, Math.min(b.y + b.h - 12, a.cy)) };
+      dStr = curveInto(p1, p2);
+    } else {
+      p1 = borderPoint(a, b.cx, b.cy); p2 = borderPoint(b, a.cx, a.cy);
+      dStr = curveD(p1, p2);
+    }
+    const path = makePath(dStr, d.dashed); svg.append(path);
     let labelEl = null;
     if (d.verb && !d.dashed) { labelEl = el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, d.verb); lane.append(labelEl); }
     edgeEls.push({ path, labelEl, from: d.from, to: d.to });
@@ -458,13 +517,98 @@ function curveD(p1, p2) {
   if (Math.abs(dx) >= Math.abs(dy)) { const k = Math.max(22, Math.abs(dx) * 0.4), s = Math.sign(dx) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + s * k) + ',' + p1.y + ' ' + (p2.x - s * k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y; }
   const k = Math.max(18, Math.abs(dy) * 0.4), s = Math.sign(dy) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + (p1.y + s * k) + ' ' + p2.x + ',' + (p2.y - s * k) + ' ' + p2.x + ',' + p2.y;
 }
+// p2 sits on a card's LEFT edge; leave p1 going down, then arrive horizontally into p2 from the left.
+function curveInto(p1, p2) {
+  const k = Math.max(28, Math.abs(p2.x - p1.x) * 0.45);
+  const c1y = p1.y + (p2.y >= p1.y ? 1 : -1) * Math.max(14, Math.min(40, Math.abs(p2.y - p1.y) * 0.5));
+  return 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + c1y + ' ' + (p2.x - k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y;
+}
 
 function selectFlow(id) {
+  setMode('flows');                       // jumping to a flow (e.g. from a gallery card) shows the board
   currentFlow = MODEL.flows.find(f => f.id === id);
   selectedId = null;
   renderSidebar((document.getElementById('search').value || '').toLowerCase());
   renderFlow();
   closeDetail();
+}
+
+// ---- Gallery: every sticky in the model, filtered by type chips + text search ----
+function nodeFlows(id) {
+  return MODEL.flows.filter(f => (f.steps || []).includes(id) || (f.edges || []).some(e => e.from === id || e.to === id));
+}
+function syncChips() {
+  galleryTypes.forEach(t => { const c = document.querySelector('.tchip[data-type="' + t + '"]'); if (c) c.classList.toggle('on', galleryState.active.has(t)); });
+  const all = document.getElementById('chip-all');
+  if (all) all.classList.toggle('on', galleryTypes.every(t => galleryState.active.has(t)));
+}
+function buildGallery() {
+  const g = document.getElementById('gallery');
+  g.innerHTML = '';
+  const head = el('div', { class: 'gallery-head' });
+  head.append(el('h2', {}, 'All stickies', el('span', { class: 'count', id: 'gcount' }, '')));
+  const search = el('input', { class: 'gallery-search', id: 'gsearch', type: 'search', placeholder: 'Search stickies by name or description...' });
+  search.addEventListener('input', e => { galleryState.q = e.target.value.toLowerCase(); renderGrid(); });
+  head.append(search);
+  const chips = el('div', { class: 'type-chips' });
+  const allChip = el('div', { class: 'tchip tchip-all on', id: 'chip-all' }, 'All');
+  allChip.addEventListener('click', () => { galleryTypes.forEach(t => galleryState.active.add(t)); syncChips(); renderGrid(); });
+  chips.append(allChip);
+  for (const t of galleryTypes) {
+    const p = PALETTE[t];
+    const c = el('div', { class: 'tchip on', 'data-type': t, style: 'background:' + p.fill + ';color:' + p.text }, p.name);
+    c.addEventListener('click', () => {
+      if (galleryState.active.has(t)) galleryState.active.delete(t); else galleryState.active.add(t);
+      syncChips(); renderGrid();
+    });
+    chips.append(c);
+  }
+  head.append(chips);
+  g.append(head);
+  g.append(el('div', { class: 'gallery-grid', id: 'ggrid' }));
+  galleryBuilt = true;
+}
+function renderGrid() {
+  const grid = document.getElementById('ggrid'); if (!grid) return;
+  grid.innerHTML = '';
+  const q = galleryState.q;
+  const nodes = MODEL.nodes
+    .filter(n => galleryState.active.has(n.type))
+    .filter(n => !q || (n.label + ' ' + (n.description || '') + ' ' + (PALETTE[n.type] ? PALETTE[n.type].name : '')).toLowerCase().includes(q))
+    .sort((a, b) => (galleryTypes.indexOf(a.type) - galleryTypes.indexOf(b.type)) || String(a.label).localeCompare(String(b.label)));
+  document.getElementById('gcount').textContent = nodes.length + ' of ' + MODEL.nodes.length;
+  if (!nodes.length) { grid.append(el('div', { class: 'gempty' }, 'No stickies match the current filters.')); return; }
+  for (const n of nodes) {
+    const p = PALETTE[n.type] || PALETTE.invariant;
+    const flows = nodeFlows(n.id);
+    const allDead = flows.length > 0 && flows.every(f => f.status && f.status !== 'live');
+    const card = el('div', {
+      class: 'gcard' + (selectedId === n.id ? ' selected' : ''),
+      style: 'background:' + p.fill + ';border-color:' + p.edge + ';color:' + p.text,
+      onclick: () => openDetail(n.id)
+    }, el('div', { class: 'gtype' }, p.name), el('div', { class: 'glabel' }, n.label));
+    if (n.description) card.append(el('div', { class: 'gdesc' }, n.description));
+    const meta = el('div', { class: 'gmeta' });
+    meta.append(el('span', {}, flows.length ? ('in ' + flows.length + ' flow' + (flows.length > 1 ? 's' : '')) : 'not in any flow'));
+    if (allDead) meta.append(el('span', { class: 'gdead' }, 'retired'));
+    card.append(meta);
+    grid.append(card);
+  }
+}
+function renderGallery() {
+  if (!galleryBuilt) buildGallery();
+  syncChips();
+  renderGrid();
+}
+function setMode(m) {
+  currentMode = m;
+  const flowsOn = m === 'flows';
+  document.getElementById('tab-flows').classList.toggle('active', flowsOn);
+  document.getElementById('tab-gallery').classList.toggle('active', !flowsOn);
+  document.getElementById('sidebar').style.display = flowsOn ? '' : 'none';
+  document.getElementById('main').style.display = flowsOn ? '' : 'none';
+  document.getElementById('gallery').classList.toggle('show', !flowsOn);
+  if (!flowsOn) renderGallery();
 }
 
 function renderFlow() {
@@ -511,7 +655,7 @@ function renderFlow() {
 
 function openDetail(id) {
   selectedId = id;
-  renderFlow();
+  if (currentMode === 'gallery') renderGrid(); else renderFlow();
   const n = nodeById.get(id); if (!n) return;
   const p = PALETTE[n.type] || PALETTE.invariant;
   const d = document.getElementById('detail'); d.classList.add('open');
@@ -542,11 +686,31 @@ function openDetail(id) {
       inner.append(box);
     }
   }
-  // flows this node appears in
+  // flows this node appears in — each rendered as a row whose colored count-dots preview the
+  // flow's makeup (one dot per sticky type present, the number = how many of that type), so you
+  // can eyeball a flow's size and shape before jumping in.
   const inFlows = MODEL.flows.filter(f => (f.steps || []).includes(id) || (f.edges || []).some(e => e.from === id || e.to === id));
-  if (inFlows.length > 1) {
-    inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flows'));
-    for (const f of inFlows) inner.append(el('a', { class: 'anchor', href: '#', onclick: (ev) => { ev.preventDefault(); selectFlow(f.id); } }, f.name));
+  if (inFlows.length) {
+    inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flow' + (inFlows.length > 1 ? 's' : '')));
+    for (const f of inFlows) {
+      const fIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
+      const counts = {};
+      for (const fid of fIds) { const fn = nodeById.get(fid); if (fn) counts[fn.type] = (counts[fn.type] || 0) + 1; }
+      const total = Object.values(counts).reduce((s, c) => s + c, 0);
+      const dead = f.status && f.status !== 'live';
+      const row = el('div', { class: 'flowrow', title: f.name + ' — ' + total + ' stickies', onclick: () => selectFlow(f.id) });
+      const name = el('div', { class: 'fr-name' }, f.name);
+      if (dead) name.append(el('span', { class: 'badge ' + f.status }, f.status.toUpperCase()));
+      row.append(name);
+      const dots = el('div', { class: 'fr-dots' });
+      for (const t of Object.keys(PALETTE)) {
+        if (t === 'hotspot' || !counts[t]) continue;
+        const p = PALETTE[t];
+        dots.append(el('div', { class: 'cdot', style: 'background:' + p.fill + ';color:' + p.text, title: counts[t] + ' × ' + p.name }, String(counts[t])));
+      }
+      row.append(dots);
+      inner.append(row);
+    }
   }
 }
 
@@ -572,11 +736,14 @@ function openHotspot(id) {
   }
 }
 
-function closeDetail() { document.getElementById('detail').classList.remove('open'); selectedId = null; }
+function closeDetail() { document.getElementById('detail').classList.remove('open'); selectedId = null; if (currentMode === 'gallery') renderGrid(); }
 document.getElementById('search').addEventListener('input', e => renderSidebar(e.target.value.toLowerCase()));
+document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
+document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
 
 renderSidebar('');
 if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);
+else setMode('flows');
 </script>
 </body>
 </html>

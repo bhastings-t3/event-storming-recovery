@@ -225,6 +225,12 @@ const html = `<!DOCTYPE html>
   .flowrow:hover .fr-name { color: #fff; }
   .flowrow .fr-dots { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
   .cdot { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; border: 1px solid rgba(255,255,255,.14); }
+  /* aggregate <-> invariant cross-reference rows: a small colored sticky-chip + label, navigates on click */
+  .relrow { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 11px; margin-bottom: 7px; background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
+  .relrow:hover { background: var(--accent); border-color: var(--ring); }
+  .relrow .rdot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.35); }
+  .relrow .rlabel { font-size: 12.5px; color: var(--dim); line-height: 1.35; overflow-wrap: anywhere; }
+  .relrow:hover .rlabel { color: #fff; }
   #closedetail { float: right; border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--muted); padding: 3px 6px; border-radius: 6px; line-height: 1; }
   #closedetail:hover { background: var(--accent); color: var(--fg); }
   #legend { padding: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
@@ -361,7 +367,20 @@ function layoutFlow(f, lane) {
   const isRM = n => n && n.type === 'readModel';
   const isInv = n => n && n.type === 'invariant';
   const nodesArr = [...flowIds].map(id => nodeById.get(id)).filter(Boolean);
-  const spine = nodesArr.filter(n => !isRM(n) && !isInv(n));
+  // A node that is only ever READ in this flow (reads / read by) and never sits in the causal
+  // chain is a read INPUT, not part of the spine (e.g. a command reading aggregate state). Render
+  // it like a read model - above-left of its reader, dotted arrow into the left edge - instead of
+  // stacking it in a column beside the reader.
+  const edgesByNode = {};
+  for (const e of (f.edges || [])) { (edgesByNode[e.from] ||= []).push(e); (edgesByNode[e.to] ||= []).push(e); }
+  const readSatIds = new Set();
+  for (const n of nodesArr) {
+    if (isRM(n) || isInv(n)) continue;
+    const es = edgesByNode[n.id] || [];
+    if (es.some(e => READ_VERBS.has(e.verb)) && !es.some(e => CAUSAL_VERBS.has(e.verb))) readSatIds.add(n.id);
+  }
+  const isSat = n => n && (isRM(n) || readSatIds.has(n.id));
+  const spine = nodesArr.filter(n => !isSat(n) && !isInv(n));
   const spineIds = new Set(spine.map(n => n.id));
 
   // --- rank the spine (cycle-broken longest path) ---
@@ -392,10 +411,10 @@ function layoutFlow(f, lane) {
   const drawn = [];
   for (const e of (f.edges || [])) {
     const nf = nodeById.get(e.from), nt = nodeById.get(e.to); if (!nf || !nt) continue;
-    if (isRM(nf) || isRM(nt)) {                              // read model: one copy per reference, ABOVE-LEFT of its consumer
-      const rmId = isRM(nf) ? e.from : e.to, spId = isRM(nf) ? e.to : e.from, anchor = primary[spId]; if (!anchor) continue;
-      const rmInst = mk(nodeById.get(rmId), anchor.rank, 'rm', anchor.iid);
-      drawn.push({ from: rmInst.iid, to: anchor.iid, verb: e.verb, dashed: true, rm: true }); // arrow leaves the read model, enters the consumer's left side
+    if (isSat(nf) || isSat(nt)) {                            // read input (read model, or a node only READ here): one copy per reference, ABOVE-LEFT of its reader
+      const satId = isSat(nf) ? e.from : e.to, rdrId = isSat(nf) ? e.to : e.from, anchor = primary[rdrId]; if (!anchor) continue;
+      const satInst = mk(nodeById.get(satId), anchor.rank, 'rm', anchor.iid);
+      drawn.push({ from: satInst.iid, to: anchor.iid, verb: e.verb, dashed: true, rm: true }); // arrow leaves the read input, enters the reader's left side
     } else if (isInv(nt)) {                                  // invariant below its aggregate
       const anchor = primary[e.from]; if (!anchor) continue;
       const invInst = mk(nodeById.get(e.to), anchor.rank, 'inv', anchor.iid);
@@ -755,6 +774,33 @@ function openDetail(id) {
   if (n.synchronous) chips.append(el('span', { class: 'chip' }, 'synchronous inline reaction'));
   inner.append(chips);
   inner.append(el('div', { class: 'desc' }, n.description || ''));
+
+  // aggregate <-> invariant cross-reference. The "enforces" relationship lives on flow edges
+  // (aggregate --enforces--> invariant); surface the full set here regardless of the flow you
+  // came in from, so an aggregate lists every invariant it guards and an invariant lists every
+  // aggregate it guards. Each entry navigates to that node's detail.
+  const relatedEnforces = (fromType, toType) => {
+    const ids = new Set();
+    for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+      const s = nodeById.get(e.from), t = nodeById.get(e.to);
+      if (!s || !t) continue;
+      if (n.type === 'aggregate' && e.from === id && t.type === toType) ids.add(t.id);
+      if (n.type === 'invariant' && e.to === id && s.type === fromType) ids.add(s.id);
+    }
+    return [...ids].map(i => nodeById.get(i)).filter(Boolean);
+  };
+  let related = [], relHeading = '';
+  if (n.type === 'aggregate') { related = relatedEnforces('aggregate', 'invariant'); relHeading = 'Enforces ' + related.length + ' invariant' + (related.length > 1 ? 's' : ''); }
+  else if (n.type === 'invariant') { related = relatedEnforces('aggregate', 'invariant'); relHeading = 'Enforced by ' + related.length + ' aggregate' + (related.length > 1 ? 's' : ''); }
+  if (related.length) {
+    inner.append(el('h4', {}, relHeading));
+    for (const r of related) {
+      const rp = PALETTE[r.type] || PALETTE.invariant;
+      inner.append(el('div', { class: 'relrow', title: (PALETTE[r.type] || {}).name + ' — ' + r.label, onclick: () => openDetail(r.id) },
+        el('div', { class: 'rdot', style: 'background:' + rp.fill + ';border-color:' + rp.edge }),
+        el('div', { class: 'rlabel' }, r.label)));
+    }
+  }
 
   const usages = (n.usages && n.usages.length) ? n.usages : (n.tactical ? [{ flow: '', explanation: n.tactical.explanation, anchors: n.tactical.anchors }] : []);
   if (usages.length) {

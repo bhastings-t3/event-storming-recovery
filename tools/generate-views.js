@@ -312,8 +312,9 @@ function layoutFlow(f, lane) {
   const ranks = Object.keys(byRank).map(Number).sort((a, b) => a - b);
   ranks.forEach(r => byRank[r].sort((a, b) => (stepIdx[a.id] ?? 1e9) - (stepIdx[b.id] ?? 1e9)));
 
-  // geometry: rank -> x column; lane index within rank -> y offset from centerline
-  const COLW = 234, ROWH = 128;
+  // geometry: rank -> x column; lane index within rank -> y offset from centerline.
+  // wide columns leave room for the verb labels that ride on the connectors.
+  const COLW = 320, ROWH = 150;
   const pos = {};
   for (const r of ranks) byRank[r].forEach((n, i) => { pos[n.id] = { x: r * COLW, y: (i - (byRank[r].length - 1) / 2) * ROWH }; });
   let minY = 0, maxY = 0;
@@ -369,10 +370,21 @@ function layoutFlow(f, lane) {
 
   for (const e of (f.edges || [])) {
     const a = box[e.from], b = box[e.to]; if (!a || !b) continue;
-    const dashed = READ_VERBS.has(e.verb) || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to));
-    const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
-    svg.append(bezier(p1, p2, dashed));
-    if (!dashed && e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, e.verb));
+    // dashed + unlabeled for anything attached rather than in the causal flow:
+    // read-model connections (can be read anywhere) and invariant "enforces" links.
+    const dashed = READ_VERBS.has(e.verb) || e.verb === 'enforces' || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to)) || isInv(nodeById.get(e.to));
+    let labelXY;
+    if (dashed) {
+      // read connections stay as curves ("spaghetti") since a read model can be read anywhere
+      const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
+      svg.append(makePath(curveD(p1, p2), true));
+    } else {
+      // causal flow uses right-angle (Manhattan) routing, left-to-right
+      const d = orthD(a, b);
+      if (d) { svg.append(makePath(d, false)); labelXY = { x: (a.x + a.w + b.x) / 2, y: (a.cy + b.cy) / 2 }; }
+      else { const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy); svg.append(makePath(curveD(p1, p2), false)); labelXY = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }; }
+      if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + labelXY.x + 'px;top:' + labelXY.y + 'px' }, e.verb));
+    }
   }
 
   // land looking at the spine: center the causal centerline (y = 0 pre-offset) in the board
@@ -402,16 +414,28 @@ function borderPoint(b, tx, ty) {
   const s = Math.min(dx ? (b.w / 2) / Math.abs(dx) : Infinity, dy ? (b.h / 2) / Math.abs(dy) : Infinity);
   return { x: b.cx + dx * s, y: b.cy + dy * s };
 }
-function bezier(p1, p2, dashed) {
-  const dx = p2.x - p1.x, dy = p2.y - p1.y, path = document.createElementNS(svgNS, 'path');
-  let d;
-  if (Math.abs(dx) >= Math.abs(dy)) { const k = Math.max(22, Math.abs(dx) * 0.4), s = Math.sign(dx) || 1; d = 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + s * k) + ',' + p1.y + ' ' + (p2.x - s * k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y; }
-  else { const k = Math.max(18, Math.abs(dy) * 0.4), s = Math.sign(dy) || 1; d = 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + (p1.y + s * k) + ' ' + p2.x + ',' + (p2.y - s * k) + ' ' + p2.x + ',' + p2.y; }
+function makePath(d, dashed) {
+  const path = document.createElementNS(svgNS, 'path');
   path.setAttribute('d', d); path.setAttribute('fill', 'none');
   path.setAttribute('stroke', dashed ? '#7f7f8e' : '#b7b7c2'); path.setAttribute('stroke-width', dashed ? '1.5' : '2');
+  path.setAttribute('stroke-linejoin', 'miter'); path.setAttribute('stroke-linecap', 'butt');
   if (dashed) path.setAttribute('stroke-dasharray', '4 4');
   path.setAttribute('marker-end', dashed ? 'url(#ahd)' : 'url(#ah)');
   return path;
+}
+// curved connector between two border points (used for read-model "spaghetti")
+function curveD(p1, p2) {
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  if (Math.abs(dx) >= Math.abs(dy)) { const k = Math.max(22, Math.abs(dx) * 0.4), s = Math.sign(dx) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + s * k) + ',' + p1.y + ' ' + (p2.x - s * k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y; }
+  const k = Math.max(18, Math.abs(dy) * 0.4), s = Math.sign(dy) || 1; return 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + (p1.y + s * k) + ' ' + p2.x + ',' + (p2.y - s * k) + ' ' + p2.x + ',' + p2.y;
+}
+// right-angle (Manhattan) route from source's right edge to target's left edge; null if target isn't cleanly to the right
+function orthD(a, b) {
+  const x1 = a.x + a.w, y1 = a.cy, x2 = b.x, y2 = b.cy;
+  if (x2 < x1 + 12) return null;
+  if (Math.abs(y1 - y2) < 2) return 'M' + x1 + ',' + y1 + ' H' + x2;
+  const midX = Math.round((x1 + x2) / 2);
+  return 'M' + x1 + ',' + y1 + ' H' + midX + ' V' + y2 + ' H' + x2;
 }
 
 function selectFlow(id) {

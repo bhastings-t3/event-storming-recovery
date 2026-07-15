@@ -273,8 +273,8 @@ function layoutFlow(f, lane) {
     }
   }
 
-  // --- positions ---
-  const COLW = 300, ROWH = 150;
+  // --- spine positions: x by rank, y by predecessor barycenter ---
+  const COLW = 300, ROWH = 152;
   const spineInsts = insts.filter(o => o.kind === 'spine');
   const byRank = {}; spineInsts.forEach(o => (byRank[o.rank] ||= []).push(o));
   const ranks = Object.keys(byRank).map(Number).sort((a, b) => a - b);
@@ -287,22 +287,42 @@ function layoutFlow(f, lane) {
     col.sort((a, b) => a._pref - b._pref);
     col.forEach((o, i) => { yOf[o.iid] = (i - (col.length - 1) / 2) * ROWH; o.x = r * COLW; o.y = yOf[o.iid]; });
   }
-  const above = {}, below = {};
-  for (const o of insts) {
-    if (o.kind === 'rm') { const a = instByIid[o.anchorIid], c = (above[o.anchorIid] = (above[o.anchorIid] || 0) + 1) - 1; o.x = a.x + c * 30; o.y = a.y - ROWH * (1.02 + c * 0.06); }
-    else if (o.kind === 'inv') { const a = instByIid[o.anchorIid], c = (below[o.anchorIid] = (below[o.anchorIid] || 0) + 1) - 1; o.x = a.x; o.y = a.y + ROWH * (0.9 + c * 0.58); }
-  }
 
   // duplicated nodes get a unifying corner-dot color
   let dupI = 0; const dupColor = {};
   for (const id in instsOf) if (instsOf[id].length > 1) dupColor[id] = DUP_COLORS[dupI++ % DUP_COLORS.length];
 
-  // place cards, measure, size canvas
-  const PAD = 40, offX = PAD - Math.min(...insts.map(o => o.x)), offY = PAD - Math.min(...insts.map(o => o.y));
-  const cardByIid = {};
-  for (const o of insts) cardByIid[o.iid] = placeCard(o, lane, o.x + offX, o.y + offY, dupColor[o.id]);
-  const box = {}; let maxR = 0, maxB = 0;
-  for (const o of insts) { const e = cardByIid[o.iid], b = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight }; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[o.iid] = b; maxR = Math.max(maxR, b.x + b.w); maxB = Math.max(maxB, b.y + b.h); }
+  // place spine cards, measure them
+  const cardByIid = {}, box = {};
+  const measure = o => { const e = cardByIid[o.iid], b = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight }; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[o.iid] = b; };
+  for (const o of spineInsts) { cardByIid[o.iid] = placeCard(o, lane, o.x, o.y, dupColor[o.id]); measure(o); }
+  let spineTop = Infinity, spineBottom = -Infinity;
+  spineInsts.forEach(o => { spineTop = Math.min(spineTop, box[o.iid].y); spineBottom = Math.max(spineBottom, box[o.iid].y + box[o.iid].h); });
+
+  // satellites sit in bands strictly ABOVE (read models) / BELOW (invariants) the spine, packed by
+  // x-interval so duplicates never overlap each other or a spine card. Dotted connectors reach them.
+  const GAP = 26;
+  const packBand = (list, above) => {
+    if (!list.length) return;
+    for (const o of list) { cardByIid[o.iid] = placeCard(o, lane, box[o.anchorIid].cx - 88, 0, dupColor[o.id]); measure(o); }
+    list.sort((a, b) => box[a.anchorIid].cx - box[b.anchorIid].cx);
+    const rows = [];
+    for (const o of list) { const b = box[o.iid], x = box[o.anchorIid].cx - b.w / 2; let r = 0; while (rows[r] && rows[r].some(iv => x < iv[1] + 18 && x + b.w > iv[0] - 18)) r++; (rows[r] ||= []).push([x, x + b.w]); o._row = r; o._x = x; }
+    const rowH = rows.map((_, r) => Math.max(...list.filter(o => o._row === r).map(o => box[o.iid].h)));
+    const rowTop = [];
+    for (let r = 0; r < rows.length; r++) rowTop[r] = above ? (r === 0 ? spineTop - GAP - rowH[0] : rowTop[r - 1] - GAP - rowH[r]) : (r === 0 ? spineBottom + GAP : rowTop[r - 1] + rowH[r - 1] + GAP);
+    for (const o of list) { const e = cardByIid[o.iid], b = box[o.iid]; e.style.left = o._x + 'px'; e.style.top = rowTop[o._row] + 'px'; b.x = o._x; b.y = rowTop[o._row]; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; }
+  };
+  packBand(insts.filter(o => o.kind === 'rm'), true);
+  packBand(insts.filter(o => o.kind === 'inv'), false);
+
+  // shift everything into positive space with padding; size the canvas
+  const PAD = 40;
+  let minL = Infinity, minT = Infinity;
+  insts.forEach(o => { minL = Math.min(minL, box[o.iid].x); minT = Math.min(minT, box[o.iid].y); });
+  const sx = PAD - minL, spineCenterY = PAD - minT;
+  let maxR = 0, maxB = 0;
+  for (const o of insts) { const e = cardByIid[o.iid], b = box[o.iid]; b.x += sx; b.y += spineCenterY; b.cx += sx; b.cy += spineCenterY; e.style.left = b.x + 'px'; e.style.top = b.y + 'px'; maxR = Math.max(maxR, b.x + b.w); maxB = Math.max(maxB, b.y + b.h); }
   lane.style.width = (maxR + PAD) + 'px'; lane.style.height = (maxB + PAD) + 'px';
 
   const svg = document.createElementNS(svgNS, 'svg');

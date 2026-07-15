@@ -67,22 +67,20 @@
     background-image: radial-gradient(circle, #1b1b22 1px, transparent 1.4px);
     background-size: 22px 22px; background-position: -1px -1px;
   }
-  #lane { display: flex; align-items: flex-start; gap: 0; min-width: max-content; }
-  .step-col { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  #lane { position: relative; min-width: max-content; }
+  svg.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
   .sticky {
-    width: 162px; min-height: 98px; border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
-    border: 1px solid rgba(0,0,0,.28); box-shadow: var(--shadow); position: relative; transition: transform .1s, box-shadow .1s;
+    position: absolute; width: 176px; min-height: 92px; border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
+    border: 1px solid rgba(0,0,0,.28); box-shadow: var(--shadow); transition: transform .1s, box-shadow .1s; z-index: 1;
   }
-  .sticky:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.55); }
-  .sticky.selected { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .sticky:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.55); z-index: 3; }
+  .sticky.selected { outline: 2px solid var(--fg); outline-offset: 2px; z-index: 3; }
   .sticky .ntype { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 5px; overflow-wrap: anywhere; }
   .sticky .nlabel { font-size: 12.5px; font-weight: 650; line-height: 1.32; overflow-wrap: anywhere; }
   .sticky .flags { position: absolute; top: 7px; right: 9px; font-size: 9px; opacity: .72; font-weight: 600; }
-  .inv { width: 152px; border-radius: 7px; padding: 7px 10px; font-size: 10.5px; cursor: pointer; line-height: 1.35; transition: transform .1s; overflow-wrap: anywhere; }
-  .inv:hover { transform: translateY(-2px); }
-  .arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 56px; padding-top: 40px; }
-  .arrow .verb { font-size: 9px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; letter-spacing: .02em; }
-  .arrow svg { display: block; }
+  .inv { position: absolute; width: 150px; border-radius: 7px; padding: 7px 10px; font-size: 10.5px; cursor: pointer; line-height: 1.35; transition: transform .1s; overflow-wrap: anywhere; z-index: 1; }
+  .inv:hover { transform: translateY(-2px); z-index: 3; }
+  .edge-verb { position: absolute; font-size: 9px; color: var(--muted); background: var(--bg); padding: 0 4px; border-radius: 3px; pointer-events: none; letter-spacing: .02em; white-space: nowrap; z-index: 2; transform: translate(-50%, -50%); }
   /* findings band: distinct panel surface below the dark board, scrolls if tall */
   #findings { background: var(--panel); border-top: 1px solid var(--line); flex-shrink: 0; max-height: 42vh; overflow-y: auto; }
   #hotspots { padding: 14px 24px 18px; }
@@ -198,13 +196,129 @@ function renderSidebar(filter) {
   }
 }
 
-function invariantsFor(flow, aggId) {
-  return (flow.edges || []).filter(e => e.from === aggId && e.verb === 'enforces').map(e => nodeById.get(e.to)).filter(Boolean);
+// Edge-driven layered layout: a horizontal causal SPINE (actor -> command -> aggregate ->
+// event -> policy -> ...), parallel branches stacked vertically, read models as dotted
+// satellites ABOVE the spine, invariants BELOW their aggregate. Driven entirely by edges.
+const CAUSAL_VERBS = new Set(['issues', 'handled by', 'emits', 'triggers', 'calls', 'raises', 'returns', 'updates']);
+const READ_VERBS = new Set(['reads', 'read by']);
+const svgNS = 'http://www.w3.org/2000/svg';
+
+function layoutFlow(f, lane) {
+  lane.innerHTML = '';
+  lane.style.position = 'relative';
+  const ids = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
+  const nodes = [...ids].map(id => nodeById.get(id)).filter(Boolean);
+  const stepIdx = {}; (f.steps || []).forEach((id, i) => (stepIdx[id] = i));
+  const isRM = n => n && n.type === 'readModel';
+  const isInv = n => n && n.type === 'invariant';
+  const spine = nodes.filter(n => !isRM(n) && !isInv(n));
+  const spineIds = new Set(spine.map(n => n.id));
+
+  // rank spine nodes by longest causal path (cap iterations to tolerate cycles)
+  const spineEdges = (f.edges || []).filter(e => spineIds.has(e.from) && spineIds.has(e.to) && CAUSAL_VERBS.has(e.verb));
+  const rank = {}; spine.forEach(n => (rank[n.id] = 0));
+  for (let it = 0; it < spine.length + 2; it++) {
+    let ch = false;
+    for (const e of spineEdges) if (rank[e.to] < rank[e.from] + 1) { rank[e.to] = rank[e.from] + 1; ch = true; }
+    if (!ch) break;
+  }
+  const byRank = {};
+  spine.forEach(n => (byRank[rank[n.id]] ||= []).push(n));
+  const ranks = Object.keys(byRank).map(Number).sort((a, b) => a - b);
+  ranks.forEach(r => byRank[r].sort((a, b) => (stepIdx[a.id] ?? 1e9) - (stepIdx[b.id] ?? 1e9)));
+
+  // geometry: rank -> x column; lane index within rank -> y offset from centerline
+  const CARDW = 176, COLW = 258, ROWH = 156;
+  const pos = {};
+  for (const r of ranks) byRank[r].forEach((n, i) => { pos[n.id] = { x: r * COLW, y: (i - (byRank[r].length - 1) / 2) * ROWH }; });
+  let minY = 0, maxY = 0;
+  spine.forEach(n => { minY = Math.min(minY, pos[n.id].y); maxY = Math.max(maxY, pos[n.id].y); });
+
+  const neighborsIn = id => (f.edges || []).filter(e => e.from === id || e.to === id).map(e => (e.from === id ? e.to : e.from)).filter(x => pos[x] && spineIds.has(x));
+
+  // read models: band above the spine, x near their connected spine node(s), staggered
+  const rms = nodes.filter(isRM);
+  rms.forEach((n, i) => {
+    const nb = neighborsIn(n.id).map(x => pos[x]);
+    const x = nb.length ? nb.reduce((s, p) => s + p.x, 0) / nb.length : i * COLW;
+    pos[n.id] = { x, y: minY - ROWH * (1.25 + (i % 2) * 0.72) };
+  });
+  // invariants: band below their aggregate
+  const invAggOf = id => { const e = (f.edges || []).find(e => e.to === id && e.verb === 'enforces'); return e ? e.from : null; };
+  const invByAgg = {};
+  nodes.filter(isInv).forEach(n => { const a = invAggOf(n.id); (invByAgg[a] ||= []).push(n); });
+  for (const a in invByAgg) invByAgg[a].forEach((n, i) => { pos[n.id] = { x: (pos[a] ? pos[a].x : 0), y: maxY + ROWH * (0.95 + i * 0.62) }; });
+
+  // place all cards
+  const placed = nodes.filter(n => pos[n.id]);
+  const xs = placed.map(n => pos[n.id].x), ys = placed.map(n => pos[n.id].y);
+  const PAD = 34, offX = PAD - Math.min(...xs), offY = PAD - Math.min(...ys);
+  const cardEls = {};
+  for (const n of placed) cardEls[n.id] = placeCard(n, lane, pos[n.id].x + offX, pos[n.id].y + offY);
+
+  // measure, size the canvas
+  const box = {}; let maxR = 0, maxB = 0;
+  for (const id in cardEls) {
+    const e = cardEls[id];
+    const b = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight };
+    b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[id] = b;
+    maxR = Math.max(maxR, b.x + b.w); maxB = Math.max(maxB, b.y + b.h);
+  }
+  lane.style.width = (maxR + PAD) + 'px';
+  lane.style.height = (maxB + PAD) + 'px';
+
+  // SVG connector layer behind the cards
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'edges');
+  svg.setAttribute('width', maxR + PAD); svg.setAttribute('height', maxB + PAD);
+  svg.innerHTML =
+    '<defs>' +
+    '<marker id="ah" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#b7b7c2"/></marker>' +
+    '<marker id="ahd" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7f7f8e"/></marker>' +
+    '</defs>';
+  lane.prepend(svg);
+
+  for (const e of (f.edges || [])) {
+    const a = box[e.from], b = box[e.to]; if (!a || !b) continue;
+    const dashed = READ_VERBS.has(e.verb) || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to));
+    const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
+    svg.append(bezier(p1, p2, dashed));
+    if (!dashed && e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, e.verb));
+  }
 }
-function verbBetween(flow, a, b) {
-  const e = (flow.edges || []).find(e => (e.from === a && e.to === b) || (e.from === b && e.to === a));
-  if (!e) return { verb: '', rev: false };
-  return { verb: e.verb, rev: e.from === b };
+
+function placeCard(n, lane, x, y) {
+  const p = PALETTE[n.type] || PALETTE.invariant;
+  if (n.type === 'invariant') {
+    const c = el('div', { class: 'inv', style: 'left:' + x + 'px;top:' + y + 'px;background:' + p.fill + ';border:1px dashed ' + p.edge + ';color:' + p.text, onclick: () => openDetail(n.id) }, '⚖ ' + n.label);
+    lane.append(c); return c;
+  }
+  const c = el('div', { class: 'sticky' + (selectedId === n.id ? ' selected' : ''), style: 'left:' + x + 'px;top:' + y + 'px;background:' + p.fill + ';border-color:' + p.edge + ';color:' + p.text, onclick: () => openDetail(n.id) },
+    el('div', { class: 'ntype' }, p.name), el('div', { class: 'nlabel' }, n.label));
+  const flags = [];
+  if (n.ownedBy) flags.push('⛓ ' + n.ownedBy.replace(/^ext-/, ''));
+  if (n.synchronous) flags.push('inline');
+  if (flags.length) c.append(el('div', { class: 'flags' }, flags.join(' · ')));
+  lane.append(c); return c;
+}
+
+// point on a box's border in the direction of (tx,ty)
+function borderPoint(b, tx, ty) {
+  const dx = tx - b.cx, dy = ty - b.cy;
+  if (!dx && !dy) return { x: b.cx, y: b.cy };
+  const s = Math.min(dx ? (b.w / 2) / Math.abs(dx) : Infinity, dy ? (b.h / 2) / Math.abs(dy) : Infinity);
+  return { x: b.cx + dx * s, y: b.cy + dy * s };
+}
+function bezier(p1, p2, dashed) {
+  const dx = p2.x - p1.x, dy = p2.y - p1.y, path = document.createElementNS(svgNS, 'path');
+  let d;
+  if (Math.abs(dx) >= Math.abs(dy)) { const k = Math.max(22, Math.abs(dx) * 0.4), s = Math.sign(dx) || 1; d = 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + s * k) + ',' + p1.y + ' ' + (p2.x - s * k) + ',' + p2.y + ' ' + p2.x + ',' + p2.y; }
+  else { const k = Math.max(18, Math.abs(dy) * 0.4), s = Math.sign(dy) || 1; d = 'M' + p1.x + ',' + p1.y + ' C' + p1.x + ',' + (p1.y + s * k) + ' ' + p2.x + ',' + (p2.y - s * k) + ' ' + p2.x + ',' + p2.y; }
+  path.setAttribute('d', d); path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', dashed ? '#7f7f8e' : '#b7b7c2'); path.setAttribute('stroke-width', dashed ? '1.5' : '2');
+  if (dashed) path.setAttribute('stroke-dasharray', '4 4');
+  path.setAttribute('marker-end', dashed ? 'url(#ahd)' : 'url(#ah)');
+  return path;
 }
 
 function selectFlow(id) {
@@ -226,43 +340,7 @@ function renderFlow() {
   hdr.append(el('div', { class: 'summary' }, f.summary || ''));
   if (f.trigger) hdr.append(el('div', { class: 'trigger' }, el('b', {}, 'Trigger: '), f.trigger));
 
-  const lane = document.getElementById('lane');
-  lane.innerHTML = '';
-  const steps = (f.steps || []).filter(s => nodeById.has(s));
-  steps.forEach((sid, i) => {
-    if (i > 0) {
-      const { verb, rev } = verbBetween(f, steps[i - 1], sid);
-      const arrow = el('div', { class: 'arrow' },
-        el('span', { class: 'verb' }, verb),
-        svgArrow(rev));
-      lane.append(arrow);
-    }
-    const n = nodeById.get(sid);
-    const p = PALETTE[n.type] || PALETTE.invariant;
-    const col = el('div', { class: 'step-col' });
-    const sticky = el('div', {
-      class: 'sticky' + (selectedId === sid ? ' selected' : ''),
-      style: 'background:' + p.fill + ';border-color:' + p.edge + ';color:' + p.text,
-      onclick: () => openDetail(sid)
-    },
-      el('div', { class: 'ntype' }, p.name),
-      el('div', { class: 'nlabel' }, n.label));
-    const flags = [];
-    if (n.ownedBy) flags.push('⛓ ' + n.ownedBy.replace(/^ext-/, ''));
-    if (n.synchronous) flags.push('inline');
-    if (flags.length) sticky.append(el('div', { class: 'flags' }, flags.join(' · ')));
-    col.append(sticky);
-    if (n.type === 'aggregate') {
-      for (const inv of invariantsFor(f, sid)) {
-        col.append(el('div', {
-          class: 'inv',
-          style: 'background:' + PALETTE.invariant.fill + ';border:1px dashed ' + PALETTE.invariant.edge + ';color:' + PALETTE.invariant.text,
-          onclick: () => openDetail(inv.id)
-        }, '⚖ ' + inv.label));
-      }
-    }
-    lane.append(col);
-  });
+  layoutFlow(f, document.getElementById('lane'));
 
   const hs = document.getElementById('hotspots');
   hs.innerHTML = '';
@@ -292,15 +370,6 @@ function renderFlow() {
   document.getElementById('findings').style.display = (spots.length || (f.instances || []).length) ? '' : 'none';
 }
 
-function svgArrow(rev) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '54'); svg.setAttribute('height', '16');
-  const c = '#b7b7c2';
-  svg.innerHTML = rev
-    ? '<line x1="54" y1="8" x2="14" y2="8" stroke="' + c + '" stroke-width="2.25"/><polygon points="14,2 2,8 14,14" fill="' + c + '"/>'
-    : '<line x1="0" y1="8" x2="40" y2="8" stroke="' + c + '" stroke-width="2.25"/><polygon points="40,2 52,8 40,14" fill="' + c + '"/>';
-  return svg;
-}
 
 function openDetail(id) {
   selectedId = id;

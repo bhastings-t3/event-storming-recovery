@@ -218,6 +218,13 @@ const html = `<!DOCTYPE html>
   .anchor { display: block; font: 11px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; color: #7db2f5; text-decoration: none; word-break: break-all; margin-bottom: 2px; }
   .anchor:hover { text-decoration: underline; color: #a5cbf9; }
   .anchor .note { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
+  /* "appears in" flow rows: each flow is a card whose colored count-dots preview its composition */
+  .flowrow { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
+  .flowrow:hover { background: var(--accent); border-color: var(--ring); }
+  .flowrow .fr-name { font-size: 12.5px; font-weight: 600; color: var(--dim); line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .flowrow:hover .fr-name { color: #fff; }
+  .flowrow .fr-dots { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .cdot { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; border: 1px solid rgba(255,255,255,.14); }
   #closedetail { float: right; border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--muted); padding: 3px 6px; border-radius: 6px; line-height: 1; }
   #closedetail:hover { background: var(--accent); color: var(--fg); }
   #legend { padding: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
@@ -841,11 +848,31 @@ function openDetail(id) {
       inner.append(box);
     }
   }
-  // flows this node appears in
+  // flows this node appears in — each rendered as a row whose colored count-dots preview the
+  // flow's makeup (one dot per sticky type present, the number = how many of that type), so you
+  // can eyeball a flow's size and shape before jumping in.
   const inFlows = MODEL.flows.filter(f => (f.steps || []).includes(id) || (f.edges || []).some(e => e.from === id || e.to === id));
   if (inFlows.length) {
     inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flow' + (inFlows.length > 1 ? 's' : '')));
-    for (const f of inFlows) inner.append(el('a', { class: 'anchor', href: '#', onclick: (ev) => { ev.preventDefault(); selectFlow(f.id); } }, f.name));
+    for (const f of inFlows) {
+      const fIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
+      const counts = {};
+      for (const fid of fIds) { const fn = nodeById.get(fid); if (fn) counts[fn.type] = (counts[fn.type] || 0) + 1; }
+      const total = Object.values(counts).reduce((s, c) => s + c, 0);
+      const dead = f.status && f.status !== 'live';
+      const row = el('div', { class: 'flowrow', title: f.name + ' — ' + total + ' stickies', onclick: () => selectFlow(f.id) });
+      const name = el('div', { class: 'fr-name' }, f.name);
+      if (dead) name.append(el('span', { class: 'badge ' + f.status }, f.status.toUpperCase()));
+      row.append(name);
+      const dots = el('div', { class: 'fr-dots' });
+      for (const t of Object.keys(PALETTE)) {
+        if (t === 'hotspot' || !counts[t]) continue;
+        const p = PALETTE[t];
+        dots.append(el('div', { class: 'cdot', style: 'background:' + p.fill + ';color:' + p.text, title: counts[t] + ' × ' + p.name }, String(counts[t])));
+      }
+      row.append(dots);
+      inner.append(row);
+    }
   }
 }
 

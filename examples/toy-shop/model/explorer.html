@@ -306,22 +306,34 @@ function layoutFlow(f, lane) {
     '</defs>';
   lane.prepend(svg);
 
+  // labels ride on the SOURCE end of their own wire (not the crowded gap midpoint), so it's
+  // always clear which line a verb belongs to. Dedupe a fan-out (one source, same verb) to one
+  // label; stagger a source's distinct verbs so they don't stack.
+  const labeled = new Set(), srcCount = {};
+  const putLabel = (verb, a) => {
+    if (!verb || labeled.has(a.x + '|' + a.cy + '|' + verb)) return;
+    labeled.add(a.x + '|' + a.cy + '|' + verb);
+    const c = (srcCount[a.x + '|' + a.cy] = (srcCount[a.x + '|' + a.cy] || 0) + 1) - 1;
+    lane.append(el('div', { class: 'edge-verb', style: 'left:' + (a.x + a.w + 15) + 'px;top:' + (a.cy + c * 16) + 'px' }, verb));
+  };
   for (const e of (f.edges || [])) {
     const a = box[e.from], b = box[e.to]; if (!a || !b) continue;
     // dashed + unlabeled for anything attached rather than in the causal flow:
     // read-model connections (can be read anywhere) and invariant "enforces" links.
     const dashed = READ_VERBS.has(e.verb) || e.verb === 'enforces' || isRM(nodeById.get(e.from)) || isRM(nodeById.get(e.to)) || isInv(nodeById.get(e.to));
-    let labelXY;
     if (dashed) {
-      // read connections stay as curves ("spaghetti") since a read model can be read anywhere
       const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
       svg.append(makePath(curveD(p1, p2), true));
     } else {
       // causal flow uses right-angle (Manhattan) routing, left-to-right
       const d = orthD(a, b);
-      if (d) { svg.append(makePath(d, false)); labelXY = { x: (a.x + a.w + b.x) / 2, y: (a.cy + b.cy) / 2 }; }
-      else { const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy); svg.append(makePath(curveD(p1, p2), false)); labelXY = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }; }
-      if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + labelXY.x + 'px;top:' + labelXY.y + 'px' }, e.verb));
+      if (d) { svg.append(makePath(d, false)); putLabel(e.verb, a); }
+      else {
+        // backward / non-rightward causal edge (e.g. a loop-back): curve it, label at midpoint
+        const p1 = borderPoint(a, b.cx, b.cy), p2 = borderPoint(b, a.cx, a.cy);
+        svg.append(makePath(curveD(p1, p2), false));
+        if (e.verb) lane.append(el('div', { class: 'edge-verb', style: 'left:' + ((p1.x + p2.x) / 2) + 'px;top:' + ((p1.y + p2.y) / 2) + 'px' }, e.verb));
+      }
     }
   }
 

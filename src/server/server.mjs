@@ -1,16 +1,23 @@
 /**
  * The `es-view` local server: one node:http process, one port, serving
- *   - GET /api/model    the resolved model + provenance (source, repoRoot)
- *   - GET /api/health   liveness
+ *   - GET  /api/model            the resolved model + provenance (source, repoRoot)
+ *   - GET  /api/health           liveness
+ *   - GET/POST/DELETE /api/selection   the current selection (what the human last clicked)
+ *   - GET/POST/DELETE /api/context     the curated context bundle
+ *   - GET  /api/source?path&line&ctx   real code behind an anchor
+ *   - POST /mcp                  MCP endpoint (mounted by the caller via mcpHandler)
  *   - the built SPA (static files from distDir), with SPA fallback to index.html
  *
- * Phase 2 adds /api/source and the /mcp endpoint to this same server so the web
- * UI and any connected Claude session share one in-memory state.
+ * The web UI and the MCP server share one in-memory `state`, so a click in the browser is
+ * visible to a connected Claude session.
  */
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildIndexes } from '../lib/selectors.mjs';
+import { buildNodeContext, buildBundleContext } from './context.mjs';
+import { readSource } from './source.mjs';
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -32,8 +39,16 @@ function sendJson(res, status, body) {
   res.end(payload);
 }
 
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (c) => { data += c; if (data.length > 2_000_000) req.destroy(); });
+    req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}); } catch { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
 function serveStatic(res, distDir, urlPath) {
-  // Resolve within distDir; reject traversal. Unknown paths fall back to index.html (SPA routing).
   const rel = decodeURIComponent(urlPath.split('?')[0]).replace(/^\/+/, '');
   let filePath = path.resolve(distDir, rel);
   if (!filePath.startsWith(path.resolve(distDir))) { res.writeHead(403).end('Forbidden'); return; }
@@ -52,46 +67,94 @@ function serveStatic(res, distDir, urlPath) {
 
 /**
  * @param {object} opts
- * @param {{ model, source, sourcePath, repoRoot, warnings }} opts.resolved - result of resolveModel()
- * @param {string} opts.distDir - directory of built SPA assets
+ * @param {{ model, source, sourcePath, repoRoot, warnings }} opts.resolved
+ * @param {string} opts.distDir
+ * @param {ReturnType<import('./state.mjs').createState>} opts.state
+ * @param {(req,res)=>Promise<boolean>} [opts.mcpHandler]  handles POST/GET/DELETE /mcp; returns true if it took the request
  * @returns {http.Server}
  */
-export function createServer({ resolved, distDir }) {
-  return http.createServer((req, res) => {
-    const url = req.url || '/';
+export function createServer({ resolved, distDir, state, mcpHandler }) {
+  const services = { model: resolved.model, indexes: buildIndexes(resolved.model), repoRoot: resolved.repoRoot };
 
-    if (url === '/api/health') return sendJson(res, 200, { ok: true });
+  return http.createServer(async (req, res) => {
+    const method = req.method || 'GET';
+    const url = new URL(req.url || '/', 'http://localhost');
+    const p = url.pathname;
 
-    if (url.split('?')[0] === '/api/model') {
+    // ---- MCP (delegated to the mounted handler) ----
+    if (p === '/mcp' && mcpHandler) {
+      const handled = await mcpHandler(req, res);
+      if (handled) return;
+    }
+
+    // ---- API ----
+    if (p === '/api/health') return sendJson(res, 200, { ok: true });
+
+    if (p === '/api/model') {
       return sendJson(res, 200, {
         model: resolved.model,
-        meta: {
-          source: resolved.source,
-          sourcePath: resolved.sourcePath,
-          repoRoot: resolved.repoRoot,
-          warnings: resolved.warnings || [],
-        },
+        meta: { source: resolved.source, sourcePath: resolved.sourcePath, repoRoot: resolved.repoRoot, warnings: resolved.warnings || [] },
       });
     }
 
-    if (url.startsWith('/api/')) return sendJson(res, 404, { error: 'unknown endpoint' });
+    if (p === '/api/selection') {
+      if (method === 'GET') {
+        const sel = state.getSelection();
+        return sendJson(res, 200, { selection: sel ? buildNodeContext(services, sel.nodeId) : null });
+      }
+      if (method === 'POST') {
+        const body = await readJsonBody(req);
+        const nodeId = body && body.nodeId;
+        if (nodeId && !services.indexes.nodeById.has(nodeId)) return sendJson(res, 404, { error: `unknown node '${nodeId}'` });
+        state.setSelection(nodeId || null);
+        return sendJson(res, 200, { selection: nodeId ? buildNodeContext(services, nodeId) : null });
+      }
+      if (method === 'DELETE') { state.clearSelection(); return sendJson(res, 200, { ok: true }); }
+    }
 
-    return serveStatic(res, distDir, url);
+    if (p === '/api/context') {
+      if (method === 'GET') {
+        const ids = state.getBundle();
+        return sendJson(res, 200, { ids, nodes: buildBundleContext(services, ids, { includeSource: false }) });
+      }
+      if (method === 'POST') {
+        const body = await readJsonBody(req);
+        const nodeId = body && body.nodeId;
+        if (!nodeId || !services.indexes.nodeById.has(nodeId)) return sendJson(res, 404, { error: `unknown node '${nodeId}'` });
+        return sendJson(res, 200, { ids: state.addToBundle(nodeId) });
+      }
+      if (method === 'DELETE') {
+        const body = await readJsonBody(req);
+        if (body && body.nodeId) return sendJson(res, 200, { ids: state.removeFromBundle(body.nodeId) });
+        state.clearBundle();
+        return sendJson(res, 200, { ids: [] });
+      }
+    }
+
+    if (p === '/api/source' && method === 'GET') {
+      const relPath = url.searchParams.get('path');
+      const line = Number(url.searchParams.get('line')) || undefined;
+      const ctx = Number(url.searchParams.get('ctx')) || undefined;
+      if (!relPath) return sendJson(res, 400, { error: 'path required' });
+      return sendJson(res, 200, readSource(resolved.repoRoot, relPath, line, ctx));
+    }
+
+    if (p.startsWith('/api/') || p === '/mcp') return sendJson(res, 404, { error: 'unknown endpoint' });
+
+    return serveStatic(res, distDir, req.url || '/');
   });
 }
 
-/**
- * Listen on the first free port at/after `port`. Resolves with { server, url, port }.
- */
-export function startServer({ resolved, distDir, host = '127.0.0.1', port = 5178 }) {
-  const server = createServer({ resolved, distDir });
+/** Listen on the first free port at/after `port`. Resolves with { server, url, port }. */
+export function startServer({ resolved, distDir, state, mcpHandler, host = '127.0.0.1', port = 5178 }) {
+  const server = createServer({ resolved, distDir, state, mcpHandler });
   return new Promise((resolve, reject) => {
-    const tryListen = (p, attemptsLeft) => {
+    const tryListen = (pnum, attemptsLeft) => {
       server.once('error', (err) => {
-        if (err.code === 'EADDRINUSE' && attemptsLeft > 0) { tryListen(p + 1, attemptsLeft - 1); }
+        if (err.code === 'EADDRINUSE' && attemptsLeft > 0) { tryListen(pnum + 1, attemptsLeft - 1); }
         else reject(err);
       });
-      server.listen(p, host, () => resolve({ server, url: `http://${host}:${p}`, port: p }));
+      server.listen(pnum, host, () => resolve({ server, url: `http://${host}:${pnum}`, port: pnum }));
     };
     tryListen(port, 20);
   });

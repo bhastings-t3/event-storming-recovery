@@ -19,6 +19,7 @@
 import path from 'node:path';
 import { resolveModel } from '../src/server/resolve-model.mjs';
 import { startServer, packageRoot } from '../src/server/server.mjs';
+import { createState } from '../src/server/state.mjs';
 import { openBrowser } from '../src/server/open.mjs';
 
 function parseArgs(argv) {
@@ -84,7 +85,8 @@ async function main() {
   }
 
   const distDir = path.join(packageRoot, 'dist', 'web');
-  const { url } = await startServer({ resolved, distDir, host: opts.host, port: opts.port });
+  const state = createState();
+  const { url } = await startServer({ resolved, distDir, state, host: opts.host, port: opts.port });
 
   const c = resolved.model.meta && resolved.model.meta.counts;
   // show a repo-relative path when the model lives at/under cwd, else the absolute path

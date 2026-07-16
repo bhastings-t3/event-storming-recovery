@@ -30,7 +30,8 @@ if (!tracesDir || !outFile) {
   if (model) {
     fs.writeFileSync(outFile, JSON.stringify(model, null, 2));
     console.log(`merged ${files.length} trace files -> ${outFile}`);
-    console.log(`nodes: ${model.nodes.length}, flows: ${model.flows.length}, hotspots: ${model.hotspots.length}`);
+    const unresolvedTerms = (model.meta && model.meta.counts && model.meta.counts.unresolvedTerms) || 0;
+    console.log(`nodes: ${model.nodes.length}, flows: ${model.flows.length}, hotspots: ${model.hotspots.length}, terms: ${(model.terms || []).length}${unresolvedTerms ? ` (${unresolvedTerms} need input)` : ''}`);
   }
   if (warnings.length) { console.log(`\nWARNINGS (${warnings.length}):`); warnings.forEach(w => console.log('  - ' + w)); }
   if (errors.length) { console.log(`\nERRORS (${errors.length}):`); errors.forEach(e => console.log('  - ' + e)); process.exit(1); }

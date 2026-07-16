@@ -69,7 +69,7 @@ This is an **agent-orchestrated** process (a coding agent — e.g. Claude Code �
 deterministic parts are the schema, the merge/validate, and the render). Two ways to start:
 
 - **As a Claude Code plugin** (recommended) — install it, then invoke the `event-storming-recovery`
-  skill and it drives all five phases:
+  skill and it drives all six phases:
 
   ```
   /plugin marketplace add bhastings-t3/event-storming-recovery
@@ -81,7 +81,11 @@ deterministic parts are the schema, the merge/validate, and the render). Two way
 
 - **By hand / any agent:** follow `prompts/00-orchestrator.md`. It tells the orchestrator how to
   spawn the scouts (`prompts/01-scouts.md`), triage with you (`prompts/02-triage.md`), brief the
-  trace agents (`prompts/03-trace-briefing.md`), then merge and render.
+  trace agents (`prompts/03-trace-briefing.md`), mine the ubiquitous language
+  (`prompts/04-glossary-mining.md`), then merge and render. Every one of those sub-agents inherits
+  the recursion protocol (`prompts/recursive-exploration.md`): when an agent hits a high-signal
+  pathway it spawns its own sub-agents to chase it, so the exploration adapts its depth to the
+  code instead of running as a flat fan-out.
 
 Then the deterministic pipeline:
 
@@ -111,11 +115,12 @@ flowchart TB
     fleet["Trace fleet, in waves<br/><i>each agent writes its own flow.json + notes</i>"]
     merge["④ merge-flows.js · merge + validate"]
     canon[("flows.json<br/><b>canonical model</b>")]
-    gen["⑤ generate-views.js"]
+    glossary["⑤ glossary-mining wave<br/><i>curated terms + flags, re-merged</i>"]
+    gen["⑥ generate-views.js"]
     explorer["🖥️ explorer.html<br/><i>interactive, source-linked</i>"]
     dot["🕸️ flows.dot<br/><i>Graphviz</i>"]
 
-    scouts --> inv --> triage --> pilot --> fleet --> merge --> canon --> gen
+    scouts --> inv --> triage --> pilot --> fleet --> merge --> canon --> glossary --> gen
     gen --> explorer
     gen --> dot
 
@@ -128,7 +133,7 @@ flowchart TB
     class triage human;
     class canon canon;
     class explorer,dot output;
-    class inv,pilot,fleet,merge,gen step;
+    class inv,pilot,fleet,merge,glossary,gen step;
 ```
 
 - **`flows.json`** is the single source of truth; the explorer and DOT are generated from it.
@@ -136,6 +141,10 @@ flowchart TB
   every flow that touches it), so the flows join into one navigable map instead of 30 islands.
 - **Reachability checks** during tracing catch **dead and superseded** flows — often where the most
   interesting recovered intent lives (why was this replaced? what does the successor do differently?).
+- **A curated ubiquitous language** (Phase 5) mines the domain vocabulary and jargon into
+  `flows.json`'s top-level `terms` and renders it in the explorer's **Glossary** tab. Terms the
+  mining can't fully resolve are **flagged** with the question a human should answer — same contract
+  as hotspots — so the glossary marks its own gaps instead of hiding them.
 
 See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning behind each phase.
 
@@ -144,7 +153,7 @@ See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning beh
 | path | what |
 |---|---|
 | `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + explorer) |
-| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing templates |
+| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining templates + the shared recursive-exploration protocol |
 | `docs/` | `METHOD.md` (the methodology and its reasoning) and `flows-schema.md` (the node/edge/flow contract) |
 | `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo) |
 | `tests/` | smoke tests (`node --test`) covering merge, generate, and the validator |

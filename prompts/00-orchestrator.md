@@ -15,9 +15,39 @@ Placeholders to fill in before you start:
 Load the `event-storming-modeling` skill (or the equivalent reference) first if available;
 it defines the sticky vocabulary and the grammar the whole method depends on.
 
+**Every sub-agent you dispatch inherits the recursion protocol in `prompts/recursive-exploration.md`.**
+Scouts, trace agents, and glossary miners are not flat leaves: when one hits a high-signal
+pathway (a hub, a contradiction, an unfamiliar subsystem, a model-forking branch) it spawns its
+own sub-agents to chase it, and those may recurse further. Include the protocol (or a pointer to
+it) in every briefing you write, alongside the shared-id glossary. The budget is aggressive on
+depth and fan-out but strict on the return contract: every agent in the tree writes its artifacts
+to files and reports conclusions plus anchors, never dumps, so your context stays clean no matter
+how deep the tree goes.
+
+## Agent types & model tiering (applies to every spawn)
+
+Recursion is the spine of this method, not a fallback — so **every agent you spawn must be able to
+spawn its own children.** That is a function of the agent type, not the prompt:
+
+- **Spawn scouts, trace agents, and glossary miners as `general-purpose` (or `claude`).** These
+  carry the `Agent` tool, so they can recurse per `prompts/recursive-exploration.md`.
+- **Never spawn a recursion-capable role as `Explore` or `Plan`.** Those types are defined as "all
+  tools except `Agent`", so they are forced leaves — they physically cannot spawn children, which
+  silently collapses the method back to a flat fan-out. ("Read-only scout" describes the *behavior*
+  you brief — inventory, don't mutate — not the `Explore` type.)
+- The harness caps nesting at **depth 5** (main conversation = 0), which leaves your first-wave
+  agents ~4 further levels; convergence, not the cap, should be the real brake.
+
+**Model tiering — default to Opus.** Anything that calls tools (reads code, greps, traces, mines,
+and the orchestrator itself) runs on **Opus**: a weaker model on a tool-heavy task flails, reads
+more, and burns more tokens than it saves. Only step **down to Haiku** for a genuinely simple,
+tool-light step whose whole job is to summarize or condense text. Do not put the tracing/scouting
+fan-out on a small fast model — that is a false economy.
+
 ## Phase 1 — Inventory (parallel scouts)
 
-Spawn the five scouts in `01-scouts.md` **concurrently**, each read-only, each told `{EXCLUDE}`.
+Spawn the five scouts in `01-scouts.md` **concurrently** (as `general-purpose`/`claude` so they can
+recurse — see agent types above), each briefed read-only, each told `{EXCLUDE}`.
 They enumerate every entry point so nothing is missing from the map:
 1. UI entry points  2. Automations/background  3. API/auth/protocol  4. External integrations
 5. Data layer & implied aggregates.
@@ -50,11 +80,13 @@ example) to `{SCRATCH}/trace-briefing.md`.
 1. **Run ONE pilot trace first.** Pick a meaty write flow. When it returns, read its
    "schema friction" section and fix the schema/briefing before spending on the rest. (This
    single step repeatedly pays for itself.)
-2. **Then run the rest in waves** (~7 concurrent). Each agent: reads the briefing, verifies
-   **reachability** (this is how dead/superseded flows get caught — chase `git log`/`git show`
-   when a caller is missing), traces end to end, and **writes two files itself** to the traces
+2. **Then run the rest in waves** (~7 concurrent). Each agent is a **recursion root**, not a leaf
+   (`prompts/recursive-exploration.md`): it reads the briefing, verifies **reachability** (this is
+   how dead/superseded flows get caught — chase `git log`/`git show` when a caller is missing),
+   traces the main spine itself, **spawns its own sub-agents to chase high-signal side-branches**
+   (hubs, contradictions, unfamiliar subsystems), and **writes two files itself** to the traces
    dir: `<flow-id>.json` and `<flow-id>.notes.md`. Its chat reply is a short summary only —
-   never route large JSON back through your context.
+   never route large JSON (its own or its subtree's) back through your context.
 3. As waves land, re-run the merge to keep validating incrementally.
 
 Give each trace agent enough of a hint to start (entry point, suspected services/tables) but
@@ -70,15 +102,33 @@ label conflicts on shared ids. Do NOT force-merge legitimate altitude variations
 pattern node vs a specialized inline node in another flow) — each flow must stay independently
 walkable.
 
-## Phase 5 — Generate & verify
+## Phase 5 — Ubiquitous Language mining
+
+With the merged model in hand, mine the **curated domain vocabulary** — the nouns and jargon a
+newcomer needs defined (`REVBUILD`, Budget Stage, Turnkey, GPW, PIM, SKU, …), which the behavioral
+stickies never capture on their own. Write the mining briefing (`04-glossary-mining.md`, filled with
+`{REPO_ROOT}`, `{EXCLUDE}`, the merged `flows.json` path, the *Term* schema, and `{TRACES_DIR}`) and
+dispatch a **wave of ~5-7 agents**, each owning a slice (a bounded area / aggregate cluster). Run
+**one pilot mine first**, read its schema-friction, then the rest. Each agent seeds terms from the
+model's node descriptions, reads code only to resolve/anchor the unclear jargon, **flags** whatever
+stays uncertain with a specific `openQuestion` (the hotspot contract), and **writes its own
+`<area>.glossary.json` + `.notes.md`** into `{TRACES_DIR}`. Then **re-run the merge** — it folds the
+`terms` in, validates them (dangling `relatedNodes`, flagged-without-question), and counts them.
+
+## Phase 6 — Generate & verify
 
 `node tools/generate-views.js <out>/model/flows.json <out>/model --repo-root {REPO_ROOT} --title "<Project> Event Storming"`
 emits `flows.dot` and the self-contained `explorer.html`. **Open the explorer in a browser and
 verify** it renders (sidebar lists flows, a flow renders a sticky lane, clicking a sticky opens
-the tactical panel, hotspot cards show). Write the deliverable README. Leave committing to the user.
+the tactical panel, hotspot cards show, and the **Glossary** tab lists the curated terms with
+flagged ones marked). Write the deliverable README. Leave committing to the user.
 
 ## Principles
 - **Never read the whole codebase in your own context.** Delegate; keep conclusions, not file dumps.
+- **Recursion is the spine, and the return contract is fixed.** Sub-agents recurse aggressively into
+  high-signal pathways (`prompts/recursive-exploration.md`) — this is the default traversal, which is
+  why every role is spawned as a spawn-capable type on Opus. The whole tree still writes artifacts to
+  files and returns only conclusions + anchors, so depth never reaches your context.
 - **Persist every sub-agent return immediately** — assume your context can be summarized at any point.
 - **A code-derived model is a scaffold, not a workshop wall.** It is always-true and a great
   conversation starter, but it does not capture timeline order, bounded contexts, swimlanes, or

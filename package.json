@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "commonjs",
   "bin": {
+    "event-storming-recovery": "bin/es-view.mjs",
     "es-view": "bin/es-view.mjs",
     "es-merge": "tools/merge-flows.js",
     "es-generate": "tools/generate-views.js"
@@ -29,7 +30,7 @@
     "preview": "npm run build && node bin/es-view.mjs",
     "demo": "node scripts/build-example.mjs",
     "test": "node --test",
-    "prepublishOnly": "npm run build"
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

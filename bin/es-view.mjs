@@ -87,10 +87,14 @@ async function main() {
   const { url } = await startServer({ resolved, distDir, host: opts.host, port: opts.port });
 
   const c = resolved.model.meta && resolved.model.meta.counts;
+  // show a repo-relative path when the model lives at/under cwd, else the absolute path
+  // (a bundled-example fallback would otherwise print a long climbing ../../.. chain)
+  const rel = path.relative(cwd, resolved.sourcePath);
+  const from = (rel && !rel.startsWith('..')) ? rel : resolved.sourcePath;
   console.log(`\n  Event Storming explorer`);
   console.log(`  ${url}`);
   console.log(`\n  model:     ${SOURCE_LABEL[resolved.source] || resolved.source}`);
-  console.log(`  from:      ${path.relative(cwd, resolved.sourcePath) || resolved.sourcePath}`);
+  console.log(`  from:      ${from}`);
   console.log(`  repo-root: ${resolved.repoRoot}`);
   if (c) console.log(`  contents:  ${c.flows} flows, ${c.nodes} nodes, ${c.hotspots} hotspots`);
   for (const w of resolved.warnings || []) console.log(`  ! ${w}`);

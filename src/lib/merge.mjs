@@ -13,6 +13,8 @@ import path from 'node:path';
 export const NODE_TYPES = new Set(['actor', 'command', 'aggregate', 'event', 'policy', 'readModel', 'externalSystem', 'invariant']);
 export const EDGE_VERBS = new Set(['issues', 'handled by', 'emits', 'triggers', 'updates', 'read by', 'reads', 'raises', 'enforces', 'calls', 'returns']);
 const ANCHOR_REQUIRED = new Set(['command', 'aggregate', 'event', 'policy', 'readModel', 'invariant']);
+const TERM_STATUS = new Set(['resolved', 'partial', 'unresolved']);
+const TERM_CATEGORIES = new Set(['concept', 'jargon', 'acronym', 'role', 'system', 'state', 'metric']);
 
 /**
  * Merge already-parsed trace documents into a canonical model.
@@ -26,6 +28,7 @@ export function mergeTraceDocs(sources) {
   const nodes = new Map();     // id -> merged node
   const flows = new Map();     // id -> flow
   const hotspots = new Map();  // id -> hotspot
+  const terms = new Map();     // id -> ubiquitous-language term (authored by the glossary-mining phase)
 
   for (const { doc, name } of sources) {
     const flowIds = (doc.flows || []).map(f => f.id).join(',') || name.replace(/\.json$/, '');
@@ -65,6 +68,12 @@ export function mergeTraceDocs(sources) {
       if (hotspots.has(h.id)) { warnings.push(`duplicate hotspot id ${h.id} (${name}) - keeping first`); continue; }
       hotspots.set(h.id, h);
     }
+
+    for (const t of doc.terms || []) {
+      if (!t.id || !t.term) { errors.push(`${name}: term missing id/term: ${JSON.stringify(t).slice(0, 80)}`); continue; }
+      if (terms.has(t.id)) { warnings.push(`duplicate term id ${t.id} (${name}) - keeping first`); continue; }
+      terms.set(t.id, t);
+    }
   }
 
   // Cross-reference validation
@@ -90,6 +99,17 @@ export function mergeTraceDocs(sources) {
     }
   }
 
+  // Ubiquitous-language term validation. A term is either resolved (has a definition) or flagged
+  // with the specific question a human should answer - the same contract hotspots use.
+  for (const [tid, t] of terms) {
+    const status = t.status || 'resolved';
+    if (!TERM_STATUS.has(status)) errors.push(`term ${tid}: unknown status '${status}'`);
+    if (t.category && !TERM_CATEGORIES.has(t.category)) warnings.push(`term ${tid}: nonstandard category '${t.category}'`);
+    if (status === 'resolved' && !(t.definition || '').trim()) errors.push(`term ${tid}: resolved term has no definition (flag it partial/unresolved with an openQuestion instead)`);
+    if (status !== 'resolved' && !(t.openQuestion || '').trim()) errors.push(`term ${tid}: status '${status}' requires an openQuestion (what a human should answer)`);
+    for (const nid of t.relatedNodes || []) if (!nodes.has(nid)) errors.push(`term ${tid}: relatedNodes '${nid}' not in nodes`);
+  }
+
   // Orphan check: nodes referenced by no flow
   const referenced = new Set();
   for (const [, f] of flows) {
@@ -112,18 +132,21 @@ export function mergeTraceDocs(sources) {
   const deadFlows = [...flows.values()].filter(f => f.status && f.status !== 'live').map(f => ({ id: f.id, status: f.status, supersededBy: f.supersededBy || null, name: f.name }));
   const typeCounts = {};
   for (const n of nodes.values()) typeCounts[n.type] = (typeCounts[n.type] || 0) + 1;
+  const termList = [...terms.values()].sort((a, b) => String(a.term).localeCompare(String(b.term), undefined, { sensitivity: 'base' }));
+  const unresolvedTerms = termList.filter(t => (t.status || 'resolved') !== 'resolved').length;
 
   const model = {
     version: 1,
     meta: {
       generatedFrom: sources.map(s => s.name),
-      counts: { flows: flows.size, nodes: nodes.size, hotspots: hotspots.size, byType: typeCounts },
+      counts: { flows: flows.size, nodes: nodes.size, hotspots: hotspots.size, terms: termList.length, unresolvedTerms, byType: typeCounts },
       deadFlows,
       sharedGlossary: glossary,
     },
     nodes: [...nodes.values()].map(n => { const { _src, ...rest } = n; return rest; }),
     flows: [...flows.values()].map(f => { const { _sourceFile, ...rest } = f; return rest; }),
     hotspots: [...hotspots.values()],
+    terms: termList,
   };
 
   return { model, errors, warnings };

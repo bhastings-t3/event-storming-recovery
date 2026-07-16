@@ -20,6 +20,7 @@ import path from 'node:path';
 import { resolveModel } from '../src/server/resolve-model.mjs';
 import { startServer, buildServices, packageRoot } from '../src/server/server.mjs';
 import { createState } from '../src/server/state.mjs';
+import { createCommentStore } from '../src/server/comments.mjs';
 import { createMcpHandler } from '../src/server/mcp.mjs';
 import { openBrowser } from '../src/server/open.mjs';
 
@@ -87,7 +88,10 @@ async function main() {
 
   const distDir = path.join(packageRoot, 'dist', 'web');
   const state = createState();
-  const services = buildServices(resolved);
+  // human comments persist to a sidecar next to the model (survives model regeneration)
+  const commentsPath = path.join(path.dirname(resolved.sourcePath), 'comments.json');
+  const comments = createCommentStore(commentsPath);
+  const services = buildServices(resolved, comments);
   const mcpHandler = createMcpHandler(services, state);
   const { url } = await startServer({ resolved, distDir, state, services, mcpHandler, host: opts.host, port: opts.port });
 

@@ -42,7 +42,16 @@ export function buildNodeContext(services, nodeId, { includeSource = true } = {}
     related: rel ? { heading: rel.heading, nodes: rel.related.map((r) => ({ id: r.id, type: r.type, label: r.label })) } : null,
     usages: usages.map((u) => ({ flow: u.flow || null, explanation: u.explanation || '' })),
     anchors,
+    comments: services.comments ? services.comments.get('node', n.id) : [],
   };
+}
+
+/** Render human comments as a markdown block (shared by node/flow/hotspot renderers). */
+function renderComments(comments) {
+  if (!comments || !comments.length) return '';
+  const lines = ['\n**Comments (human notes):**'];
+  for (const c of comments) lines.push(`- ${c.text}${c.at ? `  _(${String(c.at).slice(0, 10)})_` : ''}`);
+  return lines.join('\n');
 }
 
 /** Render one node context as readable markdown (for MCP text results and clipboard export). */
@@ -77,6 +86,8 @@ export function renderNodeContextMarkdown(ctx) {
       }
     }
   }
+  const cm = renderComments(ctx.comments);
+  if (cm) out.push(cm);
   return out.join('\n');
 }
 
@@ -112,6 +123,7 @@ export function buildFlowContext(services, flowId, { includeSource = true } = {}
     summary: f.summary || '', trigger: f.trigger || '', supersededBy: f.supersededBy || null,
     edges, hotspots, nodes,
     mermaid: flowMermaid(services, f),   // a colored flowchart so the model "sees" the graph
+    comments: services.comments ? services.comments.get('flow', f.id) : [],
   };
 }
 
@@ -150,7 +162,10 @@ export function buildHotspotContext(services, hotspotId, { includeSource = true 
     if (includeSource) entry.source = readSource(services.repoRoot, a.path, a.line);
     return entry;
   });
-  return { id: h.id, label: h.label, description: h.description || '', explanation: (h.tactical && h.tactical.explanation) || '', anchors };
+  return {
+    id: h.id, label: h.label, description: h.description || '', explanation: (h.tactical && h.tactical.explanation) || '', anchors,
+    comments: services.comments ? services.comments.get('hotspot', h.id) : [],
+  };
 }
 
 export function renderHotspotMarkdown(hc) {
@@ -163,6 +178,8 @@ export function renderHotspotMarkdown(hc) {
     out.push(`\n\`${loc}\`${a.note ? ' — ' + a.note : ''}`);
     if (a.source && a.source.exists) out.push('```\n' + a.source.code + '\n```');
   }
+  const cm = renderComments(hc.comments);
+  if (cm) out.push(cm);
   return out.join('\n');
 }
 
@@ -173,6 +190,8 @@ export function renderFlowMarkdown(fc) {
   out.push(`# Flow: ${fc.name}${fc.status !== 'live' ? ` [${fc.status}${fc.supersededBy ? ' → ' + fc.supersededBy : ''}]` : ''}`);
   if (fc.summary) out.push(fc.summary);
   if (fc.trigger) out.push(`**Trigger:** ${fc.trigger}`);
+  const fcc = renderComments(fc.comments);
+  if (fcc) out.push(fcc);
   if (fc.edges.length) {
     out.push('\n**Flow:**');
     for (const e of fc.edges) out.push(`- ${e.fromLabel} —${e.verb}→ ${e.toLabel}`);

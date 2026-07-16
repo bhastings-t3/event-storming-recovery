@@ -81,9 +81,9 @@ function serveStatic(res, distDir, urlPath) {
   fs.createReadStream(filePath).pipe(res);
 }
 
-/** Build the read-only services bundle (model + indexes + repoRoot) shared by the API and MCP. */
-export function buildServices(resolved) {
-  return { model: resolved.model, indexes: buildIndexes(resolved.model), repoRoot: resolved.repoRoot };
+/** Build the services bundle (model + indexes + repoRoot + comment store) shared by the API and MCP. */
+export function buildServices(resolved, comments = null) {
+  return { model: resolved.model, indexes: buildIndexes(resolved.model), repoRoot: resolved.repoRoot, comments };
 }
 
 /**
@@ -152,6 +152,31 @@ export function createServer({ resolved, distDir, state, services = buildService
         if (body && body.id) return sendJson(res, 200, { items: state.removeFromBundle(body.type || 'node', body.id) });
         state.clearBundle();
         return sendJson(res, 200, { items: [] });
+      }
+    }
+
+    // Human comments on items (node / flow / hotspot), persisted to the comments.json sidecar.
+    if (p === '/api/comments') {
+      const store = services.comments;
+      if (!store) return sendJson(res, 200, { comments: [] });
+      if (method === 'GET') {
+        const type = url.searchParams.get('type');
+        const id = url.searchParams.get('id');
+        return sendJson(res, 200, { comments: (type && id) ? store.get(type, id) : store.all() });
+      }
+      const body = await readJsonBody(req);
+      const type = (body && body.type) || 'node';
+      const id = body && body.id;
+      if (!id || !itemExists(services, type, id)) return sendJson(res, 404, { error: `unknown ${type} '${id}'` });
+      if (method === 'POST') {
+        const text = (body && body.text || '').trim();
+        if (!text) return sendJson(res, 400, { error: 'empty comment' });
+        store.add(type, id, text);
+        return sendJson(res, 200, { comments: store.get(type, id) });
+      }
+      if (method === 'DELETE') {
+        if (!body.commentId) return sendJson(res, 400, { error: 'commentId required' });
+        return sendJson(res, 200, { comments: store.remove(type, id, body.commentId) });
       }
     }
 

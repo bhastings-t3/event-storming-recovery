@@ -31,6 +31,13 @@ test('merge validates the toy-shop traces and emits the expected model', () => {
     const dead = m.flows.find((f) => f.status === 'dead');
     assert.ok(dead, 'a dead flow exists');
     assert.ok(m.flows.some((f) => f.id === dead.supersededBy), 'supersededBy resolves');
+
+    // the ubiquitous-language terms are merged, counted, and a flagged term carries its open question
+    assert.ok(Array.isArray(m.terms) && m.terms.length >= 1, 'terms array is populated');
+    assert.equal(m.meta.counts.terms, m.terms.length, 'meta.counts.terms matches');
+    const flagged = m.terms.find((t) => (t.status || 'resolved') !== 'resolved');
+    assert.ok(flagged && flagged.openQuestion, 'a flagged term states what a human should answer');
+    assert.equal(m.meta.counts.unresolvedTerms, m.terms.filter((t) => (t.status || 'resolved') !== 'resolved').length, 'unresolved count matches');
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
@@ -50,6 +57,32 @@ test('generate-views emits a self-contained explorer and a valid DOT', () => {
 
     const dot = readFileSync(join(out, 'flows.dot'), 'utf8');
     assert.match(dot, /digraph event_storming/, 'dot header present');
+
+    // the curated glossary terms (incl. a flagged one + its open question) are embedded for the Glossary tab
+    assert.match(html, /Backorder/, 'a glossary term is embedded');
+    assert.match(html, /openQuestion/, 'a flagged term carries its open question into the explorer');
+    assert.match(html, /tab-glossary/, 'the Glossary tab is present');
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test('merge REJECTS an invalid glossary term (dangling relatedNodes / unflagged gap)', () => {
+  const out = mkdtempSync(join(tmpdir(), 'es-'));
+  const traces = join(out, 'traces');
+  mkdirSync(traces);
+  // a term pointing at a non-existent node, and an unresolved term with no open question - both invalid
+  writeFileSync(join(traces, 'terms.glossary.json'), JSON.stringify({
+    terms: [
+      { id: 'term-x', term: 'X', definition: 'd', relatedNodes: ['does-not-exist'] },
+      { id: 'term-y', term: 'Y', status: 'unresolved' }
+    ]
+  }));
+  try {
+    assert.throws(
+      () => execFileSync('node', [merge, traces, join(out, 'flows.json')], { stdio: 'pipe' }),
+      'merge should exit non-zero on a dangling relatedNodes ref and an unresolved term missing its openQuestion'
+    );
   } finally {
     rmSync(out, { recursive: true, force: true });
   }

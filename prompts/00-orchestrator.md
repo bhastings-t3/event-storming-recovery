@@ -70,12 +70,26 @@ label conflicts on shared ids. Do NOT force-merge legitimate altitude variations
 pattern node vs a specialized inline node in another flow) — each flow must stay independently
 walkable.
 
-## Phase 5 — Generate & verify
+## Phase 5 — Ubiquitous Language mining
+
+With the merged model in hand, mine the **curated domain vocabulary** — the nouns and jargon a
+newcomer needs defined (`REVBUILD`, Budget Stage, Turnkey, GPW, PIM, SKU, …), which the behavioral
+stickies never capture on their own. Write the mining briefing (`04-glossary-mining.md`, filled with
+`{REPO_ROOT}`, `{EXCLUDE}`, the merged `flows.json` path, the *Term* schema, and `{TRACES_DIR}`) and
+dispatch a **wave of ~5-7 agents**, each owning a slice (a bounded area / aggregate cluster). Run
+**one pilot mine first**, read its schema-friction, then the rest. Each agent seeds terms from the
+model's node descriptions, reads code only to resolve/anchor the unclear jargon, **flags** whatever
+stays uncertain with a specific `openQuestion` (the hotspot contract), and **writes its own
+`<area>.glossary.json` + `.notes.md`** into `{TRACES_DIR}`. Then **re-run the merge** — it folds the
+`terms` in, validates them (dangling `relatedNodes`, flagged-without-question), and counts them.
+
+## Phase 6 — Generate & verify
 
 `node tools/generate-views.js <out>/model/flows.json <out>/model --repo-root {REPO_ROOT} --title "<Project> Event Storming"`
 emits `flows.dot` and the self-contained `explorer.html`. **Open the explorer in a browser and
 verify** it renders (sidebar lists flows, a flow renders a sticky lane, clicking a sticky opens
-the tactical panel, hotspot cards show). Write the deliverable README. Leave committing to the user.
+the tactical panel, hotspot cards show, and the **Glossary** tab lists the curated terms with
+flagged ones marked). Write the deliverable README. Leave committing to the user.
 
 ## Principles
 - **Never read the whole codebase in your own context.** Delegate; keep conclusions, not file dumps.

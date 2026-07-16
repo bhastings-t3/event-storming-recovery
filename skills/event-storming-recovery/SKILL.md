@@ -30,7 +30,7 @@ that variable resolves to the plugin's install directory. The paths below are wr
 repo-root-relative for readability — prefix them with `${CLAUDE_PLUGIN_ROOT}/` when reading the
 files at runtime.
 
-## The process (five phases)
+## The process (six phases)
 
 Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 
@@ -49,9 +49,16 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 4. **Merge & check** — `node tools/merge-flows.js <tracesDir> <out>/model/flows.json` merges shared
    nodes and validates. Do a consistency pass for ubiquitous-language drift; don't force-merge
    legitimate altitude variations.
-5. **Generate & verify** — `node tools/generate-views.js <out>/model/flows.json <out>/model
+5. **Ubiquitous Language mining** — write the mining briefing (`prompts/04-glossary-mining.md`) and
+   dispatch a wave (~5-7), each owning a model slice. They **seed** domain terms from the node
+   descriptions, read code only to resolve/anchor the unclear jargon (REVBUILD, Budget Stage, GPW,
+   SKU…), **flag** what stays uncertain with an `openQuestion` (the hotspot contract), and **write
+   their own `<area>.glossary.json` + `.notes.md`** into the traces dir. Re-run the merge to fold
+   the `terms` in and validate them.
+6. **Generate & verify** — `node tools/generate-views.js <out>/model/flows.json <out>/model
    --repo-root <abs> --title "<Project> Event Storming"` emits `flows.dot` + `explorer.html`.
-   Open the explorer and verify it renders. Write the README. Leave committing to the user.
+   Open the explorer and verify it renders (incl. the **Glossary** tab of curated terms, flagged
+   ones marked). Write the README. Leave committing to the user.
 
 ## Guardrails
 
@@ -66,8 +73,9 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 
 ## What's in this skill
 
-- `prompts/` — the orchestrator playbook, the five scout templates, the triage step, the trace briefing.
-- `docs/flows-schema.md` — the node/edge/flow contract every trace conforms to.
+- `prompts/` — the orchestrator playbook, the five scout templates, the triage step, the trace
+  briefing, and the glossary-mining briefing.
+- `docs/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
 - `tools/merge-flows.js`, `tools/generate-views.js` — merge+validate, and render DOT+explorer.
 - `examples/toy-shop/` — a tiny synthetic model you can build in seconds to see the output shape:
   `node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json && node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"`

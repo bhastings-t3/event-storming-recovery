@@ -96,6 +96,34 @@ Rules:
 Hotspots are the payoff of a code-derived model: they name the questions only a human who
 knows the business can answer. Prefer a sharp question over a vague worry, and anchor it.
 
+## Term (ubiquitous language)
+Terms live in a **top-level `terms` array** (alongside `nodes`/`flows`/`hotspots`) and are authored
+by the **glossary-mining phase** (Phase 5), not the trace agents. They are the curated domain
+vocabulary a newcomer needs defined — nouns and jargon — NOT one entry per sticky.
+```json
+{
+  "id": "term-revbuild",              // globally unique, prefix "term-"
+  "term": "REVBUILD",                 // the word/phrase as the domain uses it
+  "category": "state",                // concept | jargon | acronym | role | system | state | metric
+  "aka": ["Budget_Stage = REVBUILD", "revenue build"],   // optional: code spellings / synonyms
+  "definition": "1-3 sentences: what the term means in the domain.",
+  "relatedNodes": ["agg-line-item"],  // optional: model node id(s) this term maps to (must exist)
+  "anchors": [ { "path": "...", "line": 12, "symbol": "..." } ],   // optional source evidence
+  "status": "resolved",               // resolved | partial | unresolved   (default: resolved)
+  "openQuestion": "..."               // REQUIRED when status != resolved: what a human should answer
+}
+```
+Rules:
+- **A term is vocabulary, not a sentence.** "A booth holds at most one turnkey package" is an
+  invariant; the term is `Turnkey`. Do not mint a term per command/event — those live in the model.
+- **Flag, don't drop.** When mining can't fully pin a term down, keep what you learned in
+  `definition`, set `status` to `partial`/`unresolved`, and write the specific `openQuestion` — the
+  same "question a human should answer" contract as a hotspot. The explorer renders flagged terms
+  with a hotspot-style treatment.
+- **Validation** (merge): `status != resolved` requires a non-empty `openQuestion`; a `resolved`
+  term requires a `definition`; every `relatedNodes` id must resolve to a known node; `category`
+  should be one of the enum.
+
 ## Conventions
 - Paths repo-relative with forward slashes, from repo root. Line = 1-based at trace time; include `symbol`.
 - Every command, aggregate, event, policy, readModel, and invariant node MUST have

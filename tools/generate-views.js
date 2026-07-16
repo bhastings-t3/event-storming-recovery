@@ -295,17 +295,28 @@ const html = `<!DOCTYPE html>
   .gl-rail span { font-size: 10px; font-weight: 700; color: var(--muted); cursor: pointer; padding: 1px 5px; border-radius: 4px; text-align: center; }
   .gl-rail span:hover { background: var(--accent-2); color: #fff; }
   .gl-letter { font-size: 20px; font-weight: 750; color: var(--fg); padding: 20px 0 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; letter-spacing: -.02em; position: sticky; top: 0; background: var(--bg); z-index: 1; }
-  .gl-entry { padding: 12px 6px 14px; border-bottom: 1px solid var(--accent); cursor: pointer; transition: background .08s; }
+  .gl-entry { padding: 12px 8px 14px 12px; border-bottom: 1px solid var(--accent); border-left: 2px solid transparent; transition: background .08s; }
   .gl-entry:hover { background: var(--accent); }
+  .gl-entry.flagged { border-left-color: rgba(229,100,94,.55); background: rgba(229,100,94,.04); }
+  .gl-entry.flagged:hover { background: rgba(229,100,94,.09); }
   .gl-term { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .gl-badge { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; flex-shrink: 0; }
   .gl-name { font-size: 15px; font-weight: 650; color: var(--fg); overflow-wrap: anywhere; }
+  .gl-flag { font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; background: rgba(229,100,94,.16); color: #eda3a0; border: 1px solid rgba(229,100,94,.4); }
+  .gl-aka { font-size: 11px; font-style: italic; color: var(--muted); }
   .gl-flows { font-size: 10.5px; font-weight: 600; color: var(--muted); }
   .gl-def { font-size: 12.5px; line-height: 1.5; color: var(--dim); margin-top: 6px; overflow-wrap: anywhere; }
-  .gl-used { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .gl-oq { font-size: 12px; line-height: 1.5; color: #b98e8c; margin-top: 7px; padding: 7px 11px; background: rgba(229,100,94,.07); border: 1px solid rgba(229,100,94,.25); border-radius: var(--radius); overflow-wrap: anywhere; }
+  .gl-oq b { color: #eda3a0; }
+  .gl-used { margin-top: 9px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .gl-nchip { font-size: 10px; font-weight: 600; color: var(--dim); background: var(--accent-2); border: 1px solid var(--line); border-radius: 99px; padding: 2px 9px; cursor: pointer; }
+  .gl-nchip:hover { color: #fff; }
   .gl-fchip { font-size: 10px; font-weight: 600; color: var(--muted); background: var(--accent-2); border: 1px solid var(--line); border-radius: 99px; padding: 2px 9px; cursor: pointer; }
   .gl-fchip:hover { color: #fff; border-color: var(--ring); }
   .gl-fchip.dead { opacity: .55; text-decoration: line-through; }
+  .gl-src { font-size: 10px; font-weight: 600; color: var(--muted); font-family: ui-monospace, monospace; text-decoration: none; padding: 2px 7px; border-radius: 99px; border: 1px dashed var(--line); }
+  .gl-src:hover { color: var(--dim); border-color: var(--ring); }
+  .gl-chip-flag { background: rgba(229,100,94,.12); color: #eda3a0; border-color: rgba(229,100,94,.4) !important; }
   .gl-empty { padding: 40px 24px; color: var(--muted); }
   #ov-wrap { flex: 1; overflow: hidden; position: relative; cursor: grab; background-image: radial-gradient(circle, #1b1b22 1px, transparent 1.4px); background-size: 22px 22px; background-position: -1px -1px; }
   #ov-wrap.grabbing { cursor: grabbing; }
@@ -358,7 +369,19 @@ let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 't
 const galleryTypes = Object.keys(PALETTE).filter(t => t !== 'hotspot' && MODEL.nodes.some(n => n.type === t));
 const galleryState = { q: '', active: new Set(galleryTypes) };
 let galleryBuilt = false;
-const glossaryState = { q: '', active: new Set(galleryTypes), sharedOnly: false };
+// The Glossary tab renders the curated ubiquitous language (MODEL.terms), authored by the
+// glossary-mining phase - NOT the raw stickies (those live in the Gallery). Terms carry a
+// category and, when the mining couldn't fully pin one down, a hotspot-style flag + openQuestion.
+const GL_CAT_ORDER = ['concept', 'jargon', 'acronym', 'role', 'system', 'state', 'metric', '(uncategorized)'];
+const GL_CAT_STYLE = {
+  concept: { fill: '#33415e', text: '#cfe0ff' }, jargon: { fill: '#41335e', text: '#e6d5ff' },
+  acronym: { fill: '#1d4750', text: '#bff0f7' }, role: { fill: '#54461c', text: '#f2e0a8' },
+  system: { fill: '#542a3d', text: '#f7c9dd' }, state: { fill: '#22462b', text: '#bff0c9' },
+  metric: { fill: '#543619', text: '#f7d9b0' }, '(uncategorized)': { fill: '#2a2a33', text: '#c9c9d4' },
+};
+const catOf = t => t.category || '(uncategorized)';
+const glossaryCats = () => { const p = new Set((MODEL.terms || []).map(catOf)); return GL_CAT_ORDER.filter(c => p.has(c)); };
+const glossaryState = { q: '', cats: new Set(glossaryCats()), flaggedOnly: false };
 let glossaryBuilt = false;
 
 function el(tag, attrs, ...children) {
@@ -837,11 +860,11 @@ function renderGallery() {
   renderGrid();
 }
 
-// ---- Glossary: the ubiquitous language as an alphabetical, readable dictionary ----
+// ---- Glossary: the ubiquitous language as an alphabetical, readable dictionary of curated terms ----
 function glSyncChips() {
-  galleryTypes.forEach(t => { const c = document.querySelector('.tchip[data-gl-type="' + t + '"]'); if (c) c.classList.toggle('on', glossaryState.active.has(t)); });
-  const all = document.getElementById('gl-chip-all'); if (all) all.classList.toggle('on', galleryTypes.every(t => glossaryState.active.has(t)));
-  const shared = document.getElementById('gl-chip-shared'); if (shared) shared.classList.toggle('on', glossaryState.sharedOnly);
+  glossaryCats().forEach(c => { const el2 = document.querySelector('.tchip[data-gl-cat="' + c + '"]'); if (el2) el2.classList.toggle('on', glossaryState.cats.has(c)); });
+  const all = document.getElementById('gl-chip-all'); if (all) all.classList.toggle('on', glossaryCats().every(c => glossaryState.cats.has(c)));
+  const flag = document.getElementById('gl-chip-flagged'); if (flag) flag.classList.toggle('on', glossaryState.flaggedOnly);
 }
 function buildGlossary() {
   const g = document.getElementById('glossary'); g.innerHTML = '';
@@ -850,20 +873,26 @@ function buildGlossary() {
   const search = el('input', { class: 'gl-search', id: 'glsearch', type: 'search', placeholder: 'Search terms and definitions...' });
   search.addEventListener('input', e => { glossaryState.q = e.target.value.toLowerCase(); renderGlossaryList(); });
   head.append(search);
-  const chips = el('div', { class: 'type-chips' });
-  const allChip = el('div', { class: 'tchip tchip-all on', id: 'gl-chip-all' }, 'All');
-  allChip.addEventListener('click', () => { galleryTypes.forEach(t => glossaryState.active.add(t)); glSyncChips(); renderGlossaryList(); });
-  chips.append(allChip);
-  for (const t of galleryTypes) {
-    const p = PALETTE[t];
-    const c = el('div', { class: 'tchip on', 'data-gl-type': t, style: 'background:' + p.fill + ';color:' + p.text }, p.name);
-    c.addEventListener('click', () => { if (glossaryState.active.has(t)) glossaryState.active.delete(t); else glossaryState.active.add(t); glSyncChips(); renderGlossaryList(); });
-    chips.append(c);
+  const cats = glossaryCats();
+  if (cats.length) {
+    const chips = el('div', { class: 'type-chips' });
+    const allChip = el('div', { class: 'tchip tchip-all on', id: 'gl-chip-all' }, 'All');
+    allChip.addEventListener('click', () => { cats.forEach(c => glossaryState.cats.add(c)); glSyncChips(); renderGlossaryList(); });
+    chips.append(allChip);
+    for (const c of cats) {
+      const s = GL_CAT_STYLE[c] || GL_CAT_STYLE['(uncategorized)'];
+      const chip = el('div', { class: 'tchip on', 'data-gl-cat': c, style: 'background:' + s.fill + ';color:' + s.text }, c);
+      chip.addEventListener('click', () => { if (glossaryState.cats.has(c)) glossaryState.cats.delete(c); else glossaryState.cats.add(c); glSyncChips(); renderGlossaryList(); });
+      chips.append(chip);
+    }
+    const unresolved = (MODEL.meta && MODEL.meta.counts && MODEL.meta.counts.unresolvedTerms) || 0;
+    if (unresolved) {
+      const flag = el('div', { class: 'tchip gl-chip-flag', id: 'gl-chip-flagged', title: 'Terms the mining could not fully resolve - each states what a human should answer' }, 'Needs input (' + unresolved + ')');
+      flag.addEventListener('click', () => { glossaryState.flaggedOnly = !glossaryState.flaggedOnly; glSyncChips(); renderGlossaryList(); });
+      chips.append(flag);
+    }
+    head.append(chips);
   }
-  const shared = el('div', { class: 'tchip tchip-all', id: 'gl-chip-shared', title: 'Only terms that appear in more than one flow (the connective vocabulary)' }, 'Shared across flows');
-  shared.addEventListener('click', () => { glossaryState.sharedOnly = !glossaryState.sharedOnly; glSyncChips(); renderGlossaryList(); });
-  chips.append(shared);
-  head.append(chips);
   g.append(head);
   const body = el('div', { class: 'gl-body' });
   body.append(el('div', { class: 'gl-list', id: 'gllist' }));
@@ -872,47 +901,65 @@ function buildGlossary() {
   glossaryBuilt = true;
 }
 const GL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('');
+function termFlows(t) {
+  const seen = new Set(), out = [];
+  for (const nid of t.relatedNodes || []) for (const f of nodeFlows(nid)) if (!seen.has(f.id)) { seen.add(f.id); out.push(f); }
+  return out;
+}
+function anchorLink(a) {
+  const url = 'vscode://file/' + REPO_ROOT + '/' + a.path + (a.line ? ':' + a.line : '');
+  return el('a', { class: 'gl-src', href: url, title: a.symbol || a.path, onclick: e => e.stopPropagation() }, (a.symbol || a.path.split('/').pop()) + (a.line ? ':' + a.line : ''));
+}
 function renderGlossaryList() {
   const list = document.getElementById('gllist'); if (!list) return;
   list.innerHTML = '';
+  const rail = document.getElementById('glrail'); if (rail) rail.innerHTML = '';
+  const all = MODEL.terms || [];
+  document.getElementById('glcount').textContent = all.length ? (all.length + ' terms') : 'not mined yet';
+  if (!all.length) {
+    list.append(el('div', { class: 'gl-empty' },
+      el('div', { style: 'font-weight:650;color:var(--fg);margin-bottom:6px' }, 'The ubiquitous language has not been mined yet.'),
+      el('div', {}, 'Run the glossary-mining phase to populate this tab with the domain vocabulary and jargon.')));
+    return;
+  }
   const q = glossaryState.q;
-  let nodes = MODEL.nodes
-    .filter(n => glossaryState.active.has(n.type))
-    .filter(n => !q || (n.label + ' ' + (n.description || '')).toLowerCase().includes(q));
-  if (glossaryState.sharedOnly) nodes = nodes.filter(n => nodeFlows(n.id).length > 1);
-  nodes.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: 'base' }));
-  document.getElementById('glcount').textContent = nodes.length + ' of ' + MODEL.nodes.length + ' terms';
-  const rail = document.getElementById('glrail'); rail.innerHTML = '';
-  if (!nodes.length) { list.append(el('div', { class: 'gl-empty' }, 'No terms match the current filters.')); return; }
-  const letterOf = n => { const c = (n.label || '').trim()[0]; return c && /[a-z]/i.test(c) ? c.toUpperCase() : '#'; };
+  const terms = all
+    .filter(t => glossaryState.cats.has(catOf(t)))
+    .filter(t => !glossaryState.flaggedOnly || (t.status || 'resolved') !== 'resolved')
+    .filter(t => !q || ((t.term || '') + ' ' + (t.aka || []).join(' ') + ' ' + (t.definition || '') + ' ' + (t.openQuestion || '')).toLowerCase().includes(q));
+  terms.sort((a, b) => String(a.term).localeCompare(String(b.term), undefined, { sensitivity: 'base' }));
+  if (!terms.length) { list.append(el('div', { class: 'gl-empty' }, 'No terms match the current filters.')); return; }
+  const letterOf = t => { const c = (t.term || '').trim()[0]; return c && /[a-z]/i.test(c) ? c.toUpperCase() : '#'; };
   const present = new Set();
   let curLetter = null;
-  for (const n of nodes) {
-    const L = letterOf(n);
+  for (const t of terms) {
+    const L = letterOf(t);
     if (L !== curLetter) { curLetter = L; present.add(L); list.append(el('div', { class: 'gl-letter', id: 'gl-L-' + L }, L)); }
-    const p = PALETTE[n.type] || PALETTE.invariant;
-    const flows = nodeFlows(n.id);
-    const entry = el('div', { class: 'gl-entry', onclick: () => openDetail(n.id) });
-    const term = el('div', { class: 'gl-term' },
-      el('span', { class: 'gl-badge', style: 'background:' + p.fill + ';color:' + p.text }, p.name),
-      el('span', { class: 'gl-name' }, n.label));
-    if (flows.length) term.append(el('span', { class: 'gl-flows' }, 'in ' + flows.length + ' flow' + (flows.length > 1 ? 's' : '')));
-    entry.append(term);
-    if (n.description) entry.append(el('div', { class: 'gl-def' }, n.description));
-    if (flows.length) {
+    const status = t.status || 'resolved', flagged = status !== 'resolved';
+    const cat = catOf(t), cs = GL_CAT_STYLE[cat] || GL_CAT_STYLE['(uncategorized)'];
+    const entry = el('div', { class: 'gl-entry' + (flagged ? ' flagged' : '') });
+    const head = el('div', { class: 'gl-term' },
+      el('span', { class: 'gl-badge', style: 'background:' + cs.fill + ';color:' + cs.text }, cat),
+      el('span', { class: 'gl-name' }, t.term));
+    if (flagged) head.append(el('span', { class: 'gl-flag' }, status === 'unresolved' ? 'needs input' : 'partial'));
+    if ((t.aka || []).length) head.append(el('span', { class: 'gl-aka' }, 'aka ' + t.aka.join(' · ')));
+    entry.append(head);
+    if (t.definition) entry.append(el('div', { class: 'gl-def' }, t.definition));
+    if (flagged && t.openQuestion) entry.append(el('div', { class: 'gl-oq' }, el('b', {}, 'Open question: '), t.openQuestion));
+    const rel = (t.relatedNodes || []).map(id => nodeById.get(id)).filter(Boolean);
+    if (rel.length || (t.anchors || []).length || termFlows(t).length) {
       const used = el('div', { class: 'gl-used' });
-      for (const f of flows) {
-        const dead = f.status && f.status !== 'live';
-        used.append(el('div', { class: 'gl-fchip' + (dead ? ' dead' : ''), title: 'Open "' + f.name + '" in the Flows board', onclick: e => { e.stopPropagation(); selectFlow(f.id); } }, f.name));
-      }
+      for (const n of rel) { const p = PALETTE[n.type] || PALETTE.invariant; used.append(el('div', { class: 'gl-nchip', style: 'border-color:' + p.edge, title: 'Open ' + p.name + ' "' + n.label + '"', onclick: () => openDetail(n.id) }, n.label)); }
+      for (const f of termFlows(t)) { const dead = f.status && f.status !== 'live'; used.append(el('div', { class: 'gl-fchip' + (dead ? ' dead' : ''), title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name)); }
+      for (const a of t.anchors || []) used.append(anchorLink(a));
       entry.append(used);
     }
     list.append(entry);
   }
-  for (const L of GL_LETTERS) {
+  if (rail) for (const L of GL_LETTERS) {
     const has = present.has(L);
     const s = el('span', has ? {} : { style: 'opacity:.22;pointer-events:none' }, L);
-    if (has) s.addEventListener('click', () => { const t = document.getElementById('gl-L-' + L); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    if (has) s.addEventListener('click', () => { const el2 = document.getElementById('gl-L-' + L); if (el2) el2.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     rail.append(s);
   }
 }

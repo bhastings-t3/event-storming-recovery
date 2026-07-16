@@ -1,6 +1,6 @@
 # The method
 
-This is the reasoning behind the five phases — why the process is shaped the way it is, so you can
+This is the reasoning behind the six phases — why the process is shaped the way it is, so you can
 adapt it rather than follow it blindly. The runnable version is `prompts/00-orchestrator.md`; this
 document explains it.
 
@@ -110,7 +110,31 @@ inline in an ordering flow are the same action at two altitudes; collapsing them
 to walk each flow as a self-contained story. Keep them distinct; the shared *aggregates* and
 *external systems* are what carry the connective tissue.
 
-## Phase 5 — Generate & verify
+## Phase 5 — Ubiquitous Language mining
+
+The behavioral model captures what the system *does*, but not the **vocabulary** it does it in. A
+newcomer opening this codebase drowns in jargon — `REVBUILD`/`ORDERBUILD`, Budget Stage, Turnkey,
+GPW, PIM, SKU, Design PO — none of which is a sticky; it lives *inside* the descriptions and the
+code. The consistency pass in Phase 4 already brushes against this (it hunts ubiquitous-language
+drift). Phase 5 promotes that into a first-class artifact: a curated **glossary** of the domain
+terms and their definitions, distinct from the 400-odd behavioral stickies.
+
+It is a wave, like the traces: a handful of agents each own a slice of the model, **seed** candidate
+terms from the node labels/descriptions (which already name most of the vocabulary), then read code
+only where a term's meaning isn't already clear — to write a precise definition and anchor it. The
+key move is the **hotspot borrowing**: a term the mining can't fully resolve is not dropped, it is
+*flagged* — it keeps what was learned and states the specific question a human should answer. A
+glossary that honestly marks its own gaps is worth more than one that hides them. The terms merge
+into the model like nodes, are validated (a flagged term must carry its question; links must
+resolve), and render in the explorer's **Glossary** tab with the flagged ones marked.
+
+Why a separate phase and not part of tracing: terms are a *cross-cutting* view. The same concept
+shows up in many flows, and its best definition often needs the whole model in view — so it is
+cheaper and more consistent to mine once, after the merge, than to have every trace agent
+re-describe the shared vocabulary. (Trace agents may jot candidate jargon into their notes to seed
+this phase; the mining consolidates it.)
+
+## Phase 6 — Generate & verify
 
 `generate-views.js` renders the canonical model to a Graphviz DOT (one cluster per flow, Event
 Storming fill colors, node URLs into source) and a **self-contained** `explorer.html` (the model is

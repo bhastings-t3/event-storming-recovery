@@ -14,6 +14,35 @@ It's a repeatable, orchestrated process: parallel **scout** agents inventory eve
 one **deep-trace** agent per flow reads the code end-to-end, and the results merge into a validated
 `flows.json` that renders to an interactive `explorer.html` and a Graphviz `flows.dot`.
 
+## Install & quick start
+
+Install the plugin — it bundles both skills, the tools, and the explorer's MCP server declaration:
+
+```
+/plugin marketplace add bhastings-t3/event-storming-recovery
+/plugin install event-storming-recovery@event-storming-recovery
+```
+(or from a shell: `claude plugin marketplace add bhastings-t3/event-storming-recovery` then
+`claude plugin install event-storming-recovery@event-storming-recovery`.)
+
+Then just tell Claude:
+
+> **use the event storming explorer**
+
+The `event-storming-explorer` skill takes it from there: if the repo has no recovered model yet, it
+**offers to build one first** (the recovery workflow); then it launches the interactive app
+(`npx event-storming-recovery view` on port 5178) and — because the plugin declares the app's MCP
+server — your Claude session can read what you click. Select a node and say *"explain the selected
+aggregate"* or *"add these two invariants and open a PR"*, and Claude works on the real files, to a PR.
+
+> **Heads-up:** the viewer runs via `npx event-storming-recovery view`, which needs the
+> `event-storming-recovery` npm package published (tracked in the repo issues). Until then it works
+> for local development via `npm link`.
+
+The rest of this README explains each half in detail: **[the interactive app + Claude
+integration](#explore-it-interactively--and-work-with-claude)**, and **[the recovery workflow that
+builds the model](#run-it-on-your-own-codebase)**.
+
 ## See the output in 30 seconds
 
 ```sh
@@ -161,14 +190,16 @@ See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning beh
 
 | path | what |
 |---|---|
-| `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + explorer) |
+| `bin/`, `src/` | the `es-view` app: the local server (`src/server/`, incl. the MCP endpoint), the React SPA explorer (`src/web/`), and shared libs (`src/lib/`). Launched by `npx event-storming-recovery view` |
+| `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + static explorer) |
 | `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining templates + the shared recursive-exploration protocol |
 | `docs/` | `METHOD.md` (the methodology and its reasoning) and `flows-schema.md` (the node/edge/flow contract) |
-| `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo) |
+| `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo, `dev.mjs` runs the app in dev) |
 | `tests/` | smoke tests (`node --test`) covering merge, generate, and the validator |
 | `examples/toy-shop/` | a tiny synthetic model so the pipeline runs out of the box |
-| `skills/event-storming-recovery/` | the skill loaded when installed as a Claude Code plugin |
-| `.claude-plugin/` | marketplace + plugin manifests that make this repo installable as a plugin |
+| `skills/event-storming-recovery/` | the **recovery** skill — orchestrates building the model |
+| `skills/event-storming-explorer/` | the **explorer** skill — launches the app + MCP bridge and drives working with Claude on the model |
+| `.claude-plugin/` | marketplace + plugin manifests (incl. the `event-storming` MCP server declaration) that make this repo installable as a plugin |
 | `.github/workflows/ci.yml` | runs the tests + example build on every push |
 
 ## Limits (read before trusting it)

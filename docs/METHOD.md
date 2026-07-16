@@ -31,6 +31,31 @@ Two rules make it robust:
   chat. Routing a 30 KB JSON back through the orchestrator's context, times 26 flows, is how you run
   out of room. The orchestrator only ever sees each agent's short summary.
 
+### Recursion is the spine, not a fallback
+
+The scouts and trace agents are not flat leaves. A single scout covering "data layer" or a single
+tracer covering "quoting" will itself hit pathways richer than its brief — a hub table touched by a
+dozen flows, a contradiction between a hint and the code, an unfamiliar subsystem. The method's
+answer is the same fractal move the orchestrator makes: **the agent spawns its own sub-agents to go
+deep on that branch and keeps only their conclusions.** `prompts/recursive-exploration.md` is the
+shared protocol every agent in the tree inherits; depth and fan-out are aggressive, the return
+contract (files out, conclusions + anchors back) is fixed, and convergence — a child that comes back
+without changing the model — is the brake. This is what lets the process go arbitrarily deep into a
+large system without any one context filling up.
+
+Two things make it real rather than aspirational, and both are easy to get wrong:
+
+- **Agent type.** Nested spawning works (verified, and documented in Claude Code since v2.1.172,
+  capped at depth 5), but only for agent types that carry the `Agent` tool. Spawn recursion-capable
+  roles as `general-purpose`/`claude`; a `read-only` scout spawned as the `Explore` type *cannot*
+  recurse (that type has no `Agent` tool), which silently flattens the whole method. "Read-only" is
+  a brief, not a type.
+- **Model tier.** Default every tool-calling agent to Opus. It is tempting to put a large fan-out of
+  tracers on a small, cheap model, but a weaker model on a tool-heavy task reads more, flails more,
+  and burns more tokens than it saves. Reserve the step down to Haiku for genuinely simple,
+  tool-light steps (summarize/condense). The economy is in fewer, sharper reads, not a cheaper
+  per-token rate.
+
 And the tree is **dynamic, not flat**. A sub-agent is not a leaf that reads its lane once and
 stops: when it hits a high-signal pathway (a hub many flows route through, a contradiction with
 its hint, an unfamiliar subsystem, a branch that forks the model) it spawns its *own* sub-agents

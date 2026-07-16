@@ -24,9 +24,30 @@ depth and fan-out but strict on the return contract: every agent in the tree wri
 to files and reports conclusions plus anchors, never dumps, so your context stays clean no matter
 how deep the tree goes.
 
+## Agent types & model tiering (applies to every spawn)
+
+Recursion is the spine of this method, not a fallback — so **every agent you spawn must be able to
+spawn its own children.** That is a function of the agent type, not the prompt:
+
+- **Spawn scouts, trace agents, and glossary miners as `general-purpose` (or `claude`).** These
+  carry the `Agent` tool, so they can recurse per `prompts/recursive-exploration.md`.
+- **Never spawn a recursion-capable role as `Explore` or `Plan`.** Those types are defined as "all
+  tools except `Agent`", so they are forced leaves — they physically cannot spawn children, which
+  silently collapses the method back to a flat fan-out. ("Read-only scout" describes the *behavior*
+  you brief — inventory, don't mutate — not the `Explore` type.)
+- The harness caps nesting at **depth 5** (main conversation = 0), which leaves your first-wave
+  agents ~4 further levels; convergence, not the cap, should be the real brake.
+
+**Model tiering — default to Opus.** Anything that calls tools (reads code, greps, traces, mines,
+and the orchestrator itself) runs on **Opus**: a weaker model on a tool-heavy task flails, reads
+more, and burns more tokens than it saves. Only step **down to Haiku** for a genuinely simple,
+tool-light step whose whole job is to summarize or condense text. Do not put the tracing/scouting
+fan-out on a small fast model — that is a false economy.
+
 ## Phase 1 — Inventory (parallel scouts)
 
-Spawn the five scouts in `01-scouts.md` **concurrently**, each read-only, each told `{EXCLUDE}`.
+Spawn the five scouts in `01-scouts.md` **concurrently** (as `general-purpose`/`claude` so they can
+recurse — see agent types above), each briefed read-only, each told `{EXCLUDE}`.
 They enumerate every entry point so nothing is missing from the map:
 1. UI entry points  2. Automations/background  3. API/auth/protocol  4. External integrations
 5. Data layer & implied aggregates.
@@ -59,11 +80,13 @@ example) to `{SCRATCH}/trace-briefing.md`.
 1. **Run ONE pilot trace first.** Pick a meaty write flow. When it returns, read its
    "schema friction" section and fix the schema/briefing before spending on the rest. (This
    single step repeatedly pays for itself.)
-2. **Then run the rest in waves** (~7 concurrent). Each agent: reads the briefing, verifies
-   **reachability** (this is how dead/superseded flows get caught — chase `git log`/`git show`
-   when a caller is missing), traces end to end, and **writes two files itself** to the traces
+2. **Then run the rest in waves** (~7 concurrent). Each agent is a **recursion root**, not a leaf
+   (`prompts/recursive-exploration.md`): it reads the briefing, verifies **reachability** (this is
+   how dead/superseded flows get caught — chase `git log`/`git show` when a caller is missing),
+   traces the main spine itself, **spawns its own sub-agents to chase high-signal side-branches**
+   (hubs, contradictions, unfamiliar subsystems), and **writes two files itself** to the traces
    dir: `<flow-id>.json` and `<flow-id>.notes.md`. Its chat reply is a short summary only —
-   never route large JSON back through your context.
+   never route large JSON (its own or its subtree's) back through your context.
 3. As waves land, re-run the merge to keep validating incrementally.
 
 Give each trace agent enough of a hint to start (entry point, suspected services/tables) but
@@ -102,9 +125,10 @@ flagged ones marked). Write the deliverable README. Leave committing to the user
 
 ## Principles
 - **Never read the whole codebase in your own context.** Delegate; keep conclusions, not file dumps.
-- **Recursion is dynamic, the return contract is fixed.** Sub-agents recurse aggressively into
-  high-signal pathways (`prompts/recursive-exploration.md`), but the whole tree still writes
-  artifacts to files and returns only conclusions + anchors. Depth never reaches your context.
+- **Recursion is the spine, and the return contract is fixed.** Sub-agents recurse aggressively into
+  high-signal pathways (`prompts/recursive-exploration.md`) — this is the default traversal, which is
+  why every role is spawned as a spawn-capable type on Opus. The whole tree still writes artifacts to
+  files and returns only conclusions + anchors, so depth never reaches your context.
 - **Persist every sub-agent return immediately** — assume your context can be summarized at any point.
 - **A code-derived model is a scaffold, not a workshop wall.** It is always-true and a great
   conversation starter, but it does not capture timeline order, bounded contexts, swimlanes, or

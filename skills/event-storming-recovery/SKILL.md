@@ -34,10 +34,10 @@ files at runtime.
 
 Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 
-1. **Inventory** — spawn the five read-only scouts in `prompts/01-scouts.md` concurrently (UI,
-   automations, API/auth, integrations, data-layer/aggregates). Persist each report. Merge into a
-   flow-candidate list and derive a **shared-id glossary** of the system's core aggregates,
-   external systems, and actor roles.
+1. **Inventory** — spawn the five scouts in `prompts/01-scouts.md` concurrently, as
+   `general-purpose`/`claude` and briefed read-only (UI, automations, API/auth, integrations,
+   data-layer/aggregates). Persist each report. Merge into a flow-candidate list and derive a
+   **shared-id glossary** of the system's core aggregates, external systems, and actor roles.
 2. **Triage** (`prompts/02-triage.md`) — put the flow list to the human; agree which flows get
    individual traces vs. pattern exemplars; agree coverage depth and delivery.
 3. **Deep-trace** — write the shared briefing (`prompts/03-trace-briefing.md`, filled with repo
@@ -63,12 +63,19 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 ## Guardrails
 
 - **Never read the whole codebase in your own context** — delegate; keep conclusions, not dumps.
-- **Every sub-agent recurses.** Scouts, trace agents, and glossary miners inherit the recursion
-  protocol (`prompts/recursive-exploration.md`): when one hits a high-signal pathway (a hub, a
-  contradiction, an unfamiliar subsystem, a model-forking branch) it spawns its own sub-agents to
-  chase it, and those may recurse further. The exploration is dynamic and aggressive on depth/
-  fan-out; the return contract stays fixed (write artifacts to files, return conclusions + anchors),
-  so the orchestrator's context stays clean no matter how deep the tree goes.
+- **Every sub-agent recurses — spawn them as spawn-capable types.** Scouts, trace agents, and
+  glossary miners inherit the recursion protocol (`prompts/recursive-exploration.md`): when one hits
+  a high-signal pathway (a hub, a contradiction, an unfamiliar subsystem, a model-forking branch) it
+  spawns its own sub-agents to chase it, and those may recurse further (harness cap: depth 5). For
+  this to work they **must** be spawned as `general-purpose`/`claude` (which carry the `Agent`
+  tool) — **not `Explore`/`Plan`**, which lack it and collapse the tree to a flat fan-out. The
+  exploration is dynamic and aggressive on depth/fan-out; the return contract stays fixed (write
+  artifacts to files, return conclusions + anchors), so the orchestrator's context stays clean no
+  matter how deep the tree goes.
+- **Default every agent to Opus.** The orchestrator and every tool-calling agent (scouts, tracers,
+  miners, and their recursive children) run on Opus — a weaker model on a tool-heavy task flails and
+  burns more than it saves. Step down to Haiku only for a genuinely simple, tool-light step whose
+  whole job is to summarize or condense text.
 - **Persist every sub-agent return immediately** — assume your context can be summarized mid-run.
 - **This is a code-derived scaffold, not a workshop wall.** It's always-true and a great
   conversation starter, but it doesn't capture timeline order, bounded contexts, swimlanes, or the

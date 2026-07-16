@@ -1,9 +1,12 @@
 # Scout templates (Phase 1)
 
-Five read-only inventory agents, run concurrently. Each is told `{EXCLUDE}` and returns a
-structured markdown report (data for the orchestrator, not prose for a human — completeness
-over polish). Each ends with a **completeness statement**: the search patterns it ran and
-whether it believes it found everything.
+Five inventory agents, run concurrently, each **briefed read-only** (inventory and report; do not
+mutate). "Read-only" is the behavior you ask for — **spawn them as `general-purpose`/`claude`, not
+as the `Explore` type**, because a scout must be able to recurse (below), and `Explore` lacks the
+`Agent` tool and cannot spawn children. Each is told `{EXCLUDE}` and returns a structured markdown
+report (data for the orchestrator, not prose for a human — completeness over polish). Each ends
+with a **completeness statement**: the search patterns it ran and whether it believes it found
+everything.
 
 Adapt the stack-specific hints in braces to the target system (the examples below lean .NET /
 Blazor / Dapper but the shape is universal). Give a scout the breadth cue: "medium" vs "very

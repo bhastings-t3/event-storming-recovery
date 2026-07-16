@@ -15,6 +15,8 @@ EXCLUDE from all searches: `{EXCLUDE}`.
 ## Required reading
 1. `docs/flows-schema.md` — the output schema. Follow it exactly.
 2. `{EXAMPLE_PATH}` — a conformant reference trace from the pilot. Match its shape and depth.
+3. `prompts/recursive-exploration.md` — the recursion protocol you operate under (appended below
+   if not readable). You are not a leaf: chase high-signal pathways by spawning your own agents.
 
 ## Method
 - Trace END TO END: trigger → validation/guards → orchestration → every state change (which
@@ -27,8 +29,10 @@ EXCLUDE from all searches: `{EXCLUDE}`.
   superseded`, with `supersededBy` when you can identify the replacement).
 - Note every INVARIANT (a check that can reject the action) as an `invariant` node attached to its
   aggregate via an `enforces` edge.
-- You may spawn read-only sub-agents for bounded side-questions (find all callers of X; where is
-  table Y written). Do the main trace reading yourself.
+- **Recurse into high-signal pathways** per `prompts/recursive-exploration.md`: when the trace
+  hits a hub, a contradiction, an unfamiliar subsystem, or a branch that forks the model, spawn
+  your own sub-agents to chase it (they may recurse further). Do the main trace spine reading
+  yourself; delegate the deep side-branches and keep their conclusions, not their file dumps.
 - Where intent is unrecoverable from code, or behavior looks accidental/risky, create a **hotspot**
   with the specific QUESTION A HUMAN SHOULD ANSWER.
 

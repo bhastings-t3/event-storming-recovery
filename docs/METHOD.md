@@ -31,6 +31,16 @@ Two rules make it robust:
   chat. Routing a 30 KB JSON back through the orchestrator's context, times 26 flows, is how you run
   out of room. The orchestrator only ever sees each agent's short summary.
 
+And the tree is **dynamic, not flat**. A sub-agent is not a leaf that reads its lane once and
+stops: when it hits a high-signal pathway (a hub many flows route through, a contradiction with
+its hint, an unfamiliar subsystem, a branch that forks the model) it spawns its *own* sub-agents
+to chase that pathway, and those may recurse again. Depth follows the signal: the method spends
+where a branch keeps changing the model and cuts branches that go quiet. Crucially this costs the
+orchestrator nothing, because every agent in the tree obeys the same return contract (write
+artifacts to files, report conclusions plus code anchors), so a four-level-deep exploration still
+lands in the orchestrator's context as a one-paragraph summary. The full protocol is
+`prompts/recursive-exploration.md`, which every scout, trace agent, and glossary miner inherits.
+
 ## Phase 1 — Inventory: five scouts, five lanes
 
 You can't trace flows you haven't found. Five scouts run in parallel, each covering one kind of

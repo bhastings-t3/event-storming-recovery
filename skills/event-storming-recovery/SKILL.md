@@ -63,6 +63,12 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 ## Guardrails
 
 - **Never read the whole codebase in your own context** — delegate; keep conclusions, not dumps.
+- **Every sub-agent recurses.** Scouts, trace agents, and glossary miners inherit the recursion
+  protocol (`prompts/recursive-exploration.md`): when one hits a high-signal pathway (a hub, a
+  contradiction, an unfamiliar subsystem, a model-forking branch) it spawns its own sub-agents to
+  chase it, and those may recurse further. The exploration is dynamic and aggressive on depth/
+  fan-out; the return contract stays fixed (write artifacts to files, return conclusions + anchors),
+  so the orchestrator's context stays clean no matter how deep the tree goes.
 - **Persist every sub-agent return immediately** — assume your context can be summarized mid-run.
 - **This is a code-derived scaffold, not a workshop wall.** It's always-true and a great
   conversation starter, but it doesn't capture timeline order, bounded contexts, swimlanes, or the
@@ -74,7 +80,8 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 ## What's in this skill
 
 - `prompts/` — the orchestrator playbook, the five scout templates, the triage step, the trace
-  briefing, and the glossary-mining briefing.
+  briefing, the glossary-mining briefing, and `recursive-exploration.md` (the shared recursion
+  protocol every sub-agent inherits).
 - `docs/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
 - `tools/merge-flows.js`, `tools/generate-views.js` — merge+validate, and render DOT+explorer.
 - `examples/toy-shop/` — a tiny synthetic model you can build in seconds to see the output shape:

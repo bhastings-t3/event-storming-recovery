@@ -15,6 +15,15 @@ Placeholders to fill in before you start:
 Load the `event-storming-modeling` skill (or the equivalent reference) first if available;
 it defines the sticky vocabulary and the grammar the whole method depends on.
 
+**Every sub-agent you dispatch inherits the recursion protocol in `prompts/recursive-exploration.md`.**
+Scouts, trace agents, and glossary miners are not flat leaves: when one hits a high-signal
+pathway (a hub, a contradiction, an unfamiliar subsystem, a model-forking branch) it spawns its
+own sub-agents to chase it, and those may recurse further. Include the protocol (or a pointer to
+it) in every briefing you write, alongside the shared-id glossary. The budget is aggressive on
+depth and fan-out but strict on the return contract: every agent in the tree writes its artifacts
+to files and reports conclusions plus anchors, never dumps, so your context stays clean no matter
+how deep the tree goes.
+
 ## Phase 1 — Inventory (parallel scouts)
 
 Spawn the five scouts in `01-scouts.md` **concurrently**, each read-only, each told `{EXCLUDE}`.
@@ -93,6 +102,9 @@ flagged ones marked). Write the deliverable README. Leave committing to the user
 
 ## Principles
 - **Never read the whole codebase in your own context.** Delegate; keep conclusions, not file dumps.
+- **Recursion is dynamic, the return contract is fixed.** Sub-agents recurse aggressively into
+  high-signal pathways (`prompts/recursive-exploration.md`), but the whole tree still writes
+  artifacts to files and returns only conclusions + anchors. Depth never reaches your context.
 - **Persist every sub-agent return immediately** — assume your context can be summarized at any point.
 - **A code-derived model is a scaffold, not a workshop wall.** It is always-true and a great
   conversation starter, but it does not capture timeline order, bounded contexts, swimlanes, or

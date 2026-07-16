@@ -48,7 +48,10 @@ deterministic parts are the schema, the merge/validate, and the render). Two way
 - **By hand / any agent:** follow `prompts/00-orchestrator.md`. It tells the orchestrator how to
   spawn the scouts (`prompts/01-scouts.md`), triage with you (`prompts/02-triage.md`), brief the
   trace agents (`prompts/03-trace-briefing.md`), mine the ubiquitous language
-  (`prompts/04-glossary-mining.md`), then merge and render.
+  (`prompts/04-glossary-mining.md`), then merge and render. Every one of those sub-agents inherits
+  the recursion protocol (`prompts/recursive-exploration.md`): when an agent hits a high-signal
+  pathway it spawns its own sub-agents to chase it, so the exploration adapts its depth to the
+  code instead of running as a flat fan-out.
 
 Then the deterministic pipeline:
 
@@ -116,7 +119,7 @@ See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning beh
 | path | what |
 |---|---|
 | `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + explorer) |
-| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining templates |
+| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining templates + the shared recursive-exploration protocol |
 | `docs/` | `METHOD.md` (the methodology and its reasoning) and `flows-schema.md` (the node/edge/flow contract) |
 | `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo) |
 | `tests/` | smoke tests (`node --test`) covering merge, generate, and the validator |

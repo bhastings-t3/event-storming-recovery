@@ -18,6 +18,9 @@ Placeholders:
 - `{SCHEMA_PATH}` → the **Term** schema. Follow it exactly.
 - `{MODEL_PATH}` → read the nodes in your `{AREA}`: their `label` and `description` already name
   most of the vocabulary. Start there, do not re-derive the model.
+- `prompts/recursive-exploration.md` → the recursion protocol you operate under. When a term
+  turns out to be a whole tangled subsystem (a status machine, an acronym that hides a process),
+  spawn a sub-agent to resolve it rather than guessing or dropping it.
 
 ## Method — model first, then targeted code
 

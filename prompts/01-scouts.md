@@ -9,6 +9,13 @@ Adapt the stack-specific hints in braces to the target system (the examples belo
 Blazor / Dapper but the shape is universal). Give a scout the breadth cue: "medium" vs "very
 thorough".
 
+Each scout operates under the recursion protocol in `prompts/recursive-exploration.md`: a scout
+is not a flat lister. When its inventory turns up a high-signal pathway (a hub touched by many
+entry points, an unfamiliar subsystem, a surprising side effect, a contradiction with what the
+manifest implies), it spawns its own read-only sub-agents to go deep on that branch and folds
+their conclusions back into its report, rather than skimming past or blowing its own context on
+it. Include the protocol (or a pointer to it) when you dispatch each scout.
+
 ---
 
 ## Scout 1 — UI / user-facing entry points

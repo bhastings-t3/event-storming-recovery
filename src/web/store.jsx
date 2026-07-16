@@ -3,6 +3,8 @@ import { PALETTE } from './palette.js';
 import { buildIndexes, galleryTypes } from './model.js';
 import { pushSelection, getContext, addContext, removeContext, clearContext } from './api.js';
 
+const sameRef = (a, type, id) => a.type === type && a.id === id;
+
 const ExplorerContext = createContext(null);
 export const useExplorer = () => useContext(ExplorerContext);
 
@@ -22,12 +24,12 @@ export function ExplorerProvider({ model, meta, children }) {
   const [filter, setFilter] = useState('');
   const [gallery, setGallery] = useState({ q: '', active: new Set(types) });
   const [glossary, setGlossary] = useState({ q: '', active: new Set(types), sharedOnly: false });
-  const [bundleIds, setBundleIds] = useState([]);
+  const [bundleItems, setBundleItems] = useState([]); // [{ type, id }]
   const [bundleOpen, setBundleOpen] = useState(false);
-  const [menu, setMenu] = useState(null); // { x, y, nodeId } | null
+  const [menu, setMenu] = useState(null); // { x, y, ref: { type, id, label } } | null
 
   // load the bundle once (the server holds it; survives a page reload within a run)
-  useEffect(() => { getContext().then((r) => setBundleIds(r.ids || [])).catch(() => {}); }, []);
+  useEffect(() => { getContext().then((r) => setBundleItems(r.items || [])).catch(() => {}); }, []);
 
   const selectFlow = useCallback((id) => {
     setMode('flows');
@@ -43,11 +45,11 @@ export function ExplorerProvider({ model, meta, children }) {
   const openHotspot = useCallback((id) => { setDetail({ kind: 'hotspot', id }); }, []);
   const closeDetail = useCallback(() => { setSelectedNodeId(null); setDetail(null); }, []);
 
-  const addToContext = useCallback((id) => { addContext(id).then((r) => setBundleIds(r.ids || [])).catch(() => {}); }, []);
-  const removeFromContext = useCallback((id) => { removeContext(id).then((r) => setBundleIds(r.ids || [])).catch(() => {}); }, []);
-  const clearBundle = useCallback(() => { clearContext().then((r) => setBundleIds(r.ids || [])).catch(() => {}); }, []);
+  const addToContext = useCallback((type, id) => { addContext(type, id).then((r) => setBundleItems(r.items || [])).catch(() => {}); }, []);
+  const removeFromContext = useCallback((type, id) => { removeContext(type, id).then((r) => setBundleItems(r.items || [])).catch(() => {}); }, []);
+  const clearBundle = useCallback(() => { clearContext().then((r) => setBundleItems(r.items || [])).catch(() => {}); }, []);
 
-  const openMenu = useCallback((x, y, nodeId) => setMenu({ x, y, nodeId }), []);
+  const openMenu = useCallback((x, y, ref) => setMenu({ x, y, ref }), []);
   const closeMenu = useCallback(() => setMenu(null), []);
 
   const value = {
@@ -61,8 +63,8 @@ export function ExplorerProvider({ model, meta, children }) {
     filter, setFilter,
     gallery, setGallery,
     glossary, setGlossary,
-    bundleIds, addToContext, removeFromContext, clearBundle,
-    isInBundle: (id) => bundleIds.includes(id),
+    bundleItems, addToContext, removeFromContext, clearBundle,
+    isInBundle: (type, id) => bundleItems.some((it) => sameRef(it, type, id)),
     bundleOpen, setBundleOpen,
     menu, openMenu, closeMenu,
     selectFlow, openDetail, openHotspot, closeDetail,

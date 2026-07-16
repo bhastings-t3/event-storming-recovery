@@ -7,7 +7,7 @@ import { renderFlowInto, setupPanZoom } from '../lib/layout.js';
 // pannable/zoomable canvas. Ported from renderOverview in generate-views.js; built imperatively
 // because the layout engine measures the DOM to size each box.
 export default function Overview() {
-  const { model, nodeById, PALETTE, selectedNodeId, openDetail, selectFlow } = useExplorer();
+  const { model, nodeById, PALETTE, selectedNodeId, openDetail, selectFlow, openMenu } = useExplorer();
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -15,12 +15,16 @@ export default function Overview() {
     const canvas = canvasRef.current, wrap = wrapRef.current;
     if (!canvas || !wrap) return;
     canvas.innerHTML = '';
-    const ctx = { nodeById, palette: PALETTE, selectedId: selectedNodeId, onOpenDetail: openDetail };
+    const ctx = {
+      nodeById, palette: PALETTE, selectedId: selectedNodeId, onOpenDetail: openDetail,
+      onContextMenu: (e, id) => openMenu(e.clientX, e.clientY, { type: 'node', id }), // a sticky adds the node; the box (below) adds the flow
+    };
     const boxes = [];
     for (const f of model.flows) {
       const dead = f.status && f.status !== 'live';
       const boxEl = el('div', { class: 'context-box' + (dead ? ' dead' : '') });
-      const title = el('div', { class: 'ctx-title', title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name);
+      const title = el('div', { class: 'ctx-title', title: 'Open "' + f.name + '" · right-click the box to add the whole flow to context', onclick: () => selectFlow(f.id) }, f.name);
+      boxEl.addEventListener('contextmenu', (e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, { type: 'flow', id: f.id }); });
       if (dead) title.append(el('span', { class: 'badge ' + f.status }, f.status.toUpperCase() + (f.supersededBy ? ' → ' + f.supersededBy : '')));
       else if (f.kind) title.append(el('span', { class: 'ctx-kind' }, f.kind));
       const laneEl = el('div', { class: 'ctx-lane' });
@@ -45,7 +49,7 @@ export default function Overview() {
     const pz = setupPanZoom(wrap, canvas, { zin: 'ov-zin', zout: 'ov-zout', zfit: 'ov-zfit' });
     const r = requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(W, H)));
     return () => cancelAnimationFrame(r);
-  }, [model, nodeById, PALETTE, selectedNodeId, openDetail, selectFlow]);
+  }, [model, nodeById, PALETTE, selectedNodeId, openDetail, selectFlow, openMenu]);
 
   return (
     <section id="overview" className="show">

@@ -5,7 +5,7 @@ import { sidebarGroups } from '../model.js';
 const KIND_COLOR = { read: '#6FC993', policy: '#BF9BE0', write: '#6BA3E8' };
 
 export default function Sidebar() {
-  const { model, PALETTE, nodeById, groupMode, setGroupMode, filter, setFilter, currentFlow, selectFlow } = useExplorer();
+  const { model, PALETTE, nodeById, groupMode, setGroupMode, filter, setFilter, currentFlow, selectFlow, openMenu } = useExplorer();
   const f = (filter || '').toLowerCase();
   const title = (model.meta && model.meta.title) || 'Event Storming Explorer';
 
@@ -43,8 +43,9 @@ export default function Sidebar() {
                     key={fl.id}
                     className={'flow-item' + (active ? ' active' : '') + (dead ? ' dim' : '')}
                     style={{ '--kind': KIND_COLOR[fl.kind] || KIND_COLOR.write }}
-                    title={fl.name + (dead ? '  [' + fl.status + (fl.supersededBy ? ' → ' + fl.supersededBy : '') + ']' : '') + '  ·  ' + (fl.kind || 'write')}
+                    title={fl.name + (dead ? '  [' + fl.status + (fl.supersededBy ? ' → ' + fl.supersededBy : '') + ']' : '') + '  ·  ' + (fl.kind || 'write') + '  ·  right-click to add flow to context'}
                     onClick={() => selectFlow(fl.id)}
+                    onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, { type: 'flow', id: fl.id }); }}
                   >
                     <div className="nm">{fl.name}</div>
                     {(dead || hs > 0) && (

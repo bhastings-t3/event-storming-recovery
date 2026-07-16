@@ -15,7 +15,7 @@ export default function Board() {
     const ctx = {
       nodeById, palette: PALETTE, selectedId: selectedNodeId,
       onOpenDetail: openDetail,
-      onContextMenu: (e, id) => openMenu(e.clientX, e.clientY, id),
+      onContextMenu: (e, id) => openMenu(e.clientX, e.clientY, { type: 'node', id }),
     };
     const dim = renderFlowInto(currentFlow, laneRef.current, ctx);
     const pz = setupPanZoom(wrapRef.current, laneRef.current);

@@ -18,14 +18,14 @@ export function pushSelection(nodeId) {
   return fetch('/api/selection', json('POST', { nodeId })).then((r) => r.json()).catch(() => null);
 }
 
-// Curated context bundle.
-export const getContext = () => fetch('/api/context').then((r) => r.json());
-export const addContext = (nodeId) => fetch('/api/context', json('POST', { nodeId })).then((r) => r.json());
-export const removeContext = (nodeId) => fetch('/api/context', json('DELETE', { nodeId })).then((r) => r.json());
+// Curated context bundle of typed refs { type: 'node' | 'flow' | 'hotspot', id }.
+export const getContext = () => fetch('/api/context').then((r) => r.json()); // { items, markdown }
+export const addContext = (type, id) => fetch('/api/context', json('POST', { type, id })).then((r) => r.json());
+export const removeContext = (type, id) => fetch('/api/context', json('DELETE', { type, id })).then((r) => r.json());
 export const clearContext = () => fetch('/api/context', json('DELETE')).then((r) => r.json());
 
-// A single node's grounded context + ready-to-paste markdown.
-export const getNode = (id) => fetch('/api/node?id=' + encodeURIComponent(id)).then((r) => r.json());
+// A single item's ready-to-paste markdown (node / flow / hotspot).
+export const getItem = (type, id) => fetch('/api/item?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id)).then((r) => r.json());
 
 // Real source behind an anchor.
 export function fetchSource(path, line, ctx) {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import { enforcesRelation, nodeUsages, anchorUrl, flowNodeIds } from '../model.js';
-import { getNode, fetchSource } from '../api.js';
+import { getItem, fetchSource } from '../api.js';
 
 // An anchor link with a lazy "view source" expander that pulls the real code from the server.
 function Anchor({ repoRoot, a }) {
@@ -29,13 +29,13 @@ function Anchor({ repoRoot, a }) {
 function DetailActions({ node }) {
   const { isInBundle, addToContext, removeFromContext } = useExplorer();
   const [copied, setCopied] = useState(false);
-  const inBundle = isInBundle(node.id);
+  const inBundle = isInBundle('node', node.id);
   const copy = async () => {
-    try { const r = await getNode(node.id); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
+    try { const r = await getItem('node', node.id); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
   };
   return (
     <div className="detail-actions">
-      <button className={inBundle ? 'da-in' : ''} onClick={() => (inBundle ? removeFromContext(node.id) : addToContext(node.id))}>
+      <button className={inBundle ? 'da-in' : ''} onClick={() => (inBundle ? removeFromContext('node', node.id) : addToContext('node', node.id))}>
         {inBundle ? 'In bundle ✓' : '+ Add to context'}
       </button>
       <button onClick={copy}>{copied ? 'Copied ✓' : '⧉ Copy for Claude'}</button>

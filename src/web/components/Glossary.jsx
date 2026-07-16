@@ -74,7 +74,7 @@ export default function Glossary() {
             const p = PALETTE[n.type] || PALETTE.invariant;
             const flows = nodeFlows(model, n.id);
             return (
-              <div className="gl-entry" key={n.id} onClick={() => openDetail(n.id)} onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, n.id); }}>
+              <div className="gl-entry" key={n.id} onClick={() => openDetail(n.id)} onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, { type: 'node', id: n.id }); }}>
                 <div className="gl-term">
                   <span className="gl-badge" style={{ background: p.fill, color: p.text }}>{p.name}</span>
                   <span className="gl-name">{n.label}</span>
@@ -86,7 +86,7 @@ export default function Glossary() {
                     {flows.map((f) => {
                       const dead = f.status && f.status !== 'live';
                       return (
-                        <div key={f.id} className={'gl-fchip' + (dead ? ' dead' : '')} title={'Open "' + f.name + '" in the Flows board'} onClick={(e) => { e.stopPropagation(); selectFlow(f.id); }}>
+                        <div key={f.id} className={'gl-fchip' + (dead ? ' dead' : '')} title={'Open "' + f.name + '" · right-click to add the flow to context'} onClick={(e) => { e.stopPropagation(); selectFlow(f.id); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openMenu(e.clientX, e.clientY, { type: 'flow', id: f.id }); }}>
                           {f.name}
                         </div>
                       );

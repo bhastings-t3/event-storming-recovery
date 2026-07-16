@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
-  buildNodeContext, buildBundleContext, buildFlowContext,
+  buildNodeContext, buildFlowContext,
   renderNodeContextMarkdown, renderBundleMarkdown, renderFlowMarkdown,
 } from './context.mjs';
 
@@ -79,13 +79,12 @@ function buildMcpServer(services, state) {
     'event-storming://selected-nodes',
     {
       title: 'Curated context bundle',
-      description: 'The set of nodes the human has added to the context bundle in the explorer (each grounded with its invariants, flows, and source anchors). @-mention this to hand Claude the whole set at once.',
+      description: 'The items the human has gathered in the explorer: nodes, whole flows (each with a Mermaid graph), and hotspots — every one grounded with its invariants, flows, and source anchors. @-mention this to hand Claude the entire set at once.',
       mimeType: 'text/markdown',
     },
-    async (uri) => {
-      const contexts = buildBundleContext(services, state.getBundle());
-      return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: renderBundleMarkdown(contexts) }] };
-    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: 'text/markdown', text: renderBundleMarkdown(services, state.getBundle()) }],
+    }),
   );
 
   return server;

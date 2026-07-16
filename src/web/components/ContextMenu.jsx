@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
 import { useExplorer } from '../store.jsx';
-import { getNode } from '../api.js';
+import { getItem } from '../api.js';
 
-// Right-click menu for a node (board sticky, gallery card, glossary entry): add/remove it from
-// the curated context bundle, or copy its grounded markdown for pasting into Claude.
+const TYPE_WORD = { node: 'node', flow: 'flow', hotspot: 'hotspot' };
+
+// Right-click menu for any addable item (board sticky = node, overview box / sidebar item /
+// glossary chip = flow, hotspot card = hotspot): add/remove it from the curated context bundle,
+// or copy its grounded markdown (a flow also carries a Mermaid graph) for pasting into Claude.
 export default function ContextMenu() {
-  const { menu, closeMenu, nodeById, isInBundle, addToContext, removeFromContext } = useExplorer();
+  const { menu, closeMenu, nodeById, hotspotById, model, isInBundle, addToContext, removeFromContext } = useExplorer();
 
   useEffect(() => {
     if (!menu) return;
@@ -17,25 +20,30 @@ export default function ContextMenu() {
   }, [menu, closeMenu]);
 
   if (!menu) return null;
-  const n = nodeById.get(menu.nodeId);
-  const inBundle = isInBundle(menu.nodeId);
+  const { type, id } = menu.ref;
+  const label = menu.ref.label
+    || (type === 'flow' ? (model.flows.find((f) => f.id === id) || {}).name
+      : type === 'hotspot' ? (hotspotById.get(id) || {}).label
+        : (nodeById.get(id) || {}).label)
+    || id;
+  const inBundle = isInBundle(type, id);
+  const word = TYPE_WORD[type] || 'item';
 
-  const copyNode = async () => {
-    try { const r = await getNode(menu.nodeId); await navigator.clipboard.writeText(r.markdown || ''); } catch { /* clipboard blocked */ }
+  const copy = async () => {
+    try { const r = await getItem(type, id); await navigator.clipboard.writeText(r.markdown || ''); } catch { /* clipboard blocked */ }
     closeMenu();
   };
 
-  // clamp to viewport so a right-edge click doesn't overflow
-  const left = Math.min(menu.x, window.innerWidth - 230);
+  const left = Math.min(menu.x, window.innerWidth - 250);
   const top = Math.min(menu.y, window.innerHeight - 110);
 
   return (
     <div className="ctxmenu" style={{ left, top }} onPointerDown={(e) => e.stopPropagation()}>
-      <div className="ctxmenu-head">{n ? n.label : menu.nodeId}</div>
-      <button onClick={() => { inBundle ? removeFromContext(menu.nodeId) : addToContext(menu.nodeId); closeMenu(); }}>
-        {inBundle ? '− Remove from context bundle' : '+ Add to context bundle'}
+      <div className="ctxmenu-head">{label}</div>
+      <button onClick={() => { inBundle ? removeFromContext(type, id) : addToContext(type, id); closeMenu(); }}>
+        {inBundle ? `− Remove ${word} from context bundle` : `+ Add ${word} to context bundle`}
       </button>
-      <button onClick={copyNode}>⧉ Copy this node for Claude</button>
+      <button onClick={copy}>⧉ Copy this {word} for Claude</button>
     </div>
   );
 }

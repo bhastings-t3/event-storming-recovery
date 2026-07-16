@@ -1,9 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
+import { getItem } from '../api.js';
 import Board from './Board.jsx';
 
+// Grab the whole flow you're viewing (all nodes + edges + a Mermaid graph) into context.
+function FlowActions({ flow }) {
+  const { isInBundle, addToContext, removeFromContext } = useExplorer();
+  const [copied, setCopied] = useState(false);
+  const inBundle = isInBundle('flow', flow.id);
+  const copy = async () => {
+    try { const r = await getItem('flow', flow.id); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
+  };
+  return (
+    <div className="detail-actions" style={{ marginTop: 12, marginBottom: 0 }}>
+      <button className={inBundle ? 'da-in' : ''} onClick={() => (inBundle ? removeFromContext('flow', flow.id) : addToContext('flow', flow.id))}>
+        {inBundle ? 'Flow in bundle ✓' : '+ Add flow to context'}
+      </button>
+      <button onClick={copy}>{copied ? 'Copied ✓' : '⧉ Copy flow for Claude'}</button>
+    </div>
+  );
+}
+
 export default function Main() {
-  const { currentFlow, hotspotById, openHotspot } = useExplorer();
+  const { currentFlow, hotspotById, openHotspot, openMenu } = useExplorer();
   const f = currentFlow;
 
   const spots = f ? (f.hotspots || []).map((h) => hotspotById.get(h)).filter(Boolean) : [];
@@ -25,6 +44,7 @@ export default function Main() {
             </h2>
             <div className="summary">{f.summary || ''}</div>
             {f.trigger && <div className="trigger"><b>Trigger: </b>{f.trigger}</div>}
+            <FlowActions flow={f} />
           </>
         )}
       </div>
@@ -41,7 +61,7 @@ export default function Main() {
               </h3>
               <div className="hs-cards">
                 {spots.map((s) => (
-                  <div key={s.id} className="hs-card" title={s.description || ''} onClick={() => openHotspot(s.id)}>
+                  <div key={s.id} className="hs-card" title={(s.description || '') + '  ·  right-click to add to context'} onClick={() => openHotspot(s.id)} onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, { type: 'hotspot', id: s.id }); }}>
                     <b>{s.label}</b>
                     <span>{s.description}</span>
                   </div>

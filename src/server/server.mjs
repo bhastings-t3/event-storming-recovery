@@ -16,8 +16,20 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildIndexes } from '../lib/selectors.mjs';
-import { buildNodeContext, buildBundleContext, renderNodeContextMarkdown, renderBundleMarkdown } from './context.mjs';
+import { buildNodeContext, renderNodeContextMarkdown, renderBundleMarkdown, renderItemMarkdown } from './context.mjs';
 import { readSource } from './source.mjs';
+
+// existence + label for a typed bundle ref (node / flow / hotspot)
+function itemExists(services, type, id) {
+  if (type === 'flow') return services.model.flows.some((f) => f.id === id);
+  if (type === 'hotspot') return services.indexes.hotspotById.has(id);
+  return services.indexes.nodeById.has(id);
+}
+function itemLabel(services, type, id) {
+  if (type === 'flow') { const f = services.model.flows.find((x) => x.id === id); return f ? f.name : id; }
+  if (type === 'hotspot') { const h = services.indexes.hotspotById.get(id); return h ? h.label : id; }
+  const n = services.indexes.nodeById.get(id); return n ? n.label : id;
+}
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -120,32 +132,29 @@ export function createServer({ resolved, distDir, state, services = buildService
 
     if (p === '/api/context') {
       if (method === 'GET') {
-        const ids = state.getBundle();
-        return sendJson(res, 200, {
-          ids,
-          nodes: buildBundleContext(services, ids, { includeSource: false }),
-          markdown: renderBundleMarkdown(buildBundleContext(services, ids, { includeSource: true })),
-        });
+        const items = state.getBundle();
+        return sendJson(res, 200, { items, markdown: renderBundleMarkdown(services, items) });
       }
       if (method === 'POST') {
         const body = await readJsonBody(req);
-        const nodeId = body && body.nodeId;
-        if (!nodeId || !services.indexes.nodeById.has(nodeId)) return sendJson(res, 404, { error: `unknown node '${nodeId}'` });
-        return sendJson(res, 200, { ids: state.addToBundle(nodeId) });
+        const type = (body && body.type) || 'node';
+        const id = body && body.id;
+        if (!id || !itemExists(services, type, id)) return sendJson(res, 404, { error: `unknown ${type} '${id}'` });
+        return sendJson(res, 200, { items: state.addToBundle(type, id) });
       }
       if (method === 'DELETE') {
         const body = await readJsonBody(req);
-        if (body && body.nodeId) return sendJson(res, 200, { ids: state.removeFromBundle(body.nodeId) });
+        if (body && body.id) return sendJson(res, 200, { items: state.removeFromBundle(body.type || 'node', body.id) });
         state.clearBundle();
-        return sendJson(res, 200, { ids: [] });
+        return sendJson(res, 200, { items: [] });
       }
     }
 
-    if (p === '/api/node' && method === 'GET') {
+    if (p === '/api/item' && method === 'GET') {
+      const type = url.searchParams.get('type') || 'node';
       const id = url.searchParams.get('id');
-      const ctx = id ? buildNodeContext(services, id) : null;
-      if (!ctx) return sendJson(res, 404, { error: `unknown node '${id}'` });
-      return sendJson(res, 200, { node: ctx, markdown: renderNodeContextMarkdown(ctx) });
+      if (!id || !itemExists(services, type, id)) return sendJson(res, 404, { error: `unknown ${type} '${id}'` });
+      return sendJson(res, 200, { type, id, label: itemLabel(services, type, id), markdown: renderItemMarkdown(services, { type, id }) });
     }
 
     if (p === '/api/source' && method === 'GET') {

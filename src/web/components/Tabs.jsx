@@ -9,7 +9,7 @@ const TABS = [
 ];
 
 export default function Tabs() {
-  const { mode, setMode, bundleIds, bundleOpen, setBundleOpen } = useExplorer();
+  const { mode, setMode, bundleItems, bundleOpen, setBundleOpen } = useExplorer();
   return (
     <div id="tabbar">
       {TABS.map(([m, label]) => (
@@ -20,7 +20,7 @@ export default function Tabs() {
         title="Curated context bundle for Claude"
         onClick={() => setBundleOpen((v) => !v)}
       >
-        Context<span className="ctx-pill-n">{bundleIds.length}</span>
+        Context<span className="ctx-pill-n">{bundleItems.length}</span>
       </button>
     </div>
   );

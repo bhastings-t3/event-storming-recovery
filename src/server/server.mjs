@@ -65,17 +65,21 @@ function serveStatic(res, distDir, urlPath) {
   fs.createReadStream(filePath).pipe(res);
 }
 
+/** Build the read-only services bundle (model + indexes + repoRoot) shared by the API and MCP. */
+export function buildServices(resolved) {
+  return { model: resolved.model, indexes: buildIndexes(resolved.model), repoRoot: resolved.repoRoot };
+}
+
 /**
  * @param {object} opts
  * @param {{ model, source, sourcePath, repoRoot, warnings }} opts.resolved
  * @param {string} opts.distDir
  * @param {ReturnType<import('./state.mjs').createState>} opts.state
- * @param {(req,res)=>Promise<boolean>} [opts.mcpHandler]  handles POST/GET/DELETE /mcp; returns true if it took the request
+ * @param {object} [opts.services]  shared services (built from resolved if omitted)
+ * @param {(req,res)=>Promise<boolean>} [opts.mcpHandler]  handles /mcp; returns true if it took the request
  * @returns {http.Server}
  */
-export function createServer({ resolved, distDir, state, mcpHandler }) {
-  const services = { model: resolved.model, indexes: buildIndexes(resolved.model), repoRoot: resolved.repoRoot };
-
+export function createServer({ resolved, distDir, state, services = buildServices(resolved), mcpHandler }) {
   return http.createServer(async (req, res) => {
     const method = req.method || 'GET';
     const url = new URL(req.url || '/', 'http://localhost');
@@ -146,8 +150,8 @@ export function createServer({ resolved, distDir, state, mcpHandler }) {
 }
 
 /** Listen on the first free port at/after `port`. Resolves with { server, url, port }. */
-export function startServer({ resolved, distDir, state, mcpHandler, host = '127.0.0.1', port = 5178 }) {
-  const server = createServer({ resolved, distDir, state, mcpHandler });
+export function startServer({ resolved, distDir, state, services, mcpHandler, host = '127.0.0.1', port = 5178 }) {
+  const server = createServer({ resolved, distDir, state, services, mcpHandler });
   return new Promise((resolve, reject) => {
     const tryListen = (pnum, attemptsLeft) => {
       server.once('error', (err) => {

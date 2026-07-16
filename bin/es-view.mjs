@@ -18,8 +18,9 @@
  */
 import path from 'node:path';
 import { resolveModel } from '../src/server/resolve-model.mjs';
-import { startServer, packageRoot } from '../src/server/server.mjs';
+import { startServer, buildServices, packageRoot } from '../src/server/server.mjs';
 import { createState } from '../src/server/state.mjs';
+import { createMcpHandler } from '../src/server/mcp.mjs';
 import { openBrowser } from '../src/server/open.mjs';
 
 function parseArgs(argv) {
@@ -86,7 +87,9 @@ async function main() {
 
   const distDir = path.join(packageRoot, 'dist', 'web');
   const state = createState();
-  const { url } = await startServer({ resolved, distDir, state, host: opts.host, port: opts.port });
+  const services = buildServices(resolved);
+  const mcpHandler = createMcpHandler(services, state);
+  const { url } = await startServer({ resolved, distDir, state, services, mcpHandler, host: opts.host, port: opts.port });
 
   const c = resolved.model.meta && resolved.model.meta.counts;
   // show a repo-relative path when the model lives at/under cwd, else the absolute path
@@ -100,6 +103,9 @@ async function main() {
   console.log(`  repo-root: ${resolved.repoRoot}`);
   if (c) console.log(`  contents:  ${c.flows} flows, ${c.nodes} nodes, ${c.hotspots} hotspots`);
   for (const w of resolved.warnings || []) console.log(`  ! ${w}`);
+  console.log(`\n  Connect your Claude terminal to this session's context:`);
+  console.log(`    claude mcp add --transport http event-storming ${url}/mcp`);
+  console.log(`  then, in that Claude session: "explain the selected node" (click one here first).`);
   console.log(`\n  Ctrl+C to stop.\n`);
 
   if (opts.open) openBrowser(url);

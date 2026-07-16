@@ -38,5 +38,15 @@
     "react-dom": "^18.3.1",
     "vite": "^6.0.7"
   },
-  "keywords": ["event-storming", "ddd", "domain-driven-design", "reverse-engineering", "architecture", "code-comprehension"]
+  "keywords": [
+    "event-storming",
+    "ddd",
+    "domain-driven-design",
+    "reverse-engineering",
+    "architecture",
+    "code-comprehension"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
 }

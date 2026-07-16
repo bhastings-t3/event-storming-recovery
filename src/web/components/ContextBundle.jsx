@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import { getContext } from '../api.js';
+import ConnectClaude from './ConnectClaude.jsx';
 
 // Slide-over drawer for the curated context bundle: nodes, whole flows (with a Mermaid graph),
 // and hotspots the human has gathered. Copy the whole set as grounded markdown for Claude, or
@@ -32,6 +33,8 @@ export default function ContextBundle() {
           <button className="drawer-x" onClick={() => setBundleOpen(false)}>✕</button>
         </div>
         <div className="drawer-sub">Nodes, flows, and hotspots you've gathered for Claude. Copy them, or reference the <code>event-storming://selected-nodes</code> MCP resource from your Claude session. Flows include a Mermaid graph.</div>
+
+        <ConnectClaude />
 
         {bundleItems.length === 0 ? (
           <div className="drawer-empty">Right-click any node, flow (Overview box or sidebar item), or hotspot → <b>Add to context bundle</b>.</div>

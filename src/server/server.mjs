@@ -18,6 +18,10 @@ import { fileURLToPath } from 'node:url';
 import { buildIndexes } from '../lib/selectors.mjs';
 import { buildNodeContext, renderNodeContextMarkdown, renderBundleMarkdown, renderItemMarkdown } from './context.mjs';
 import { readSource } from './source.mjs';
+import { claudeMcpAdd } from './mcp-register.mjs';
+
+// the MCP server name registered into the user's Claude config
+export const MCP_NAME = 'event-storming';
 
 // existence + label for a typed bundle ref (node / flow / hotspot)
 function itemExists(services, type, id) {
@@ -91,7 +95,8 @@ export function buildServices(resolved) {
  * @param {(req,res)=>Promise<boolean>} [opts.mcpHandler]  handles /mcp; returns true if it took the request
  * @returns {http.Server}
  */
-export function createServer({ resolved, distDir, state, services = buildServices(resolved), mcpHandler }) {
+export function createServer({ resolved, distDir, state, services = buildServices(resolved), mcpHandler, runtime = {} }) {
+  const mcpUrl = () => (runtime.baseUrl ? runtime.baseUrl + '/mcp' : null);
   return http.createServer(async (req, res) => {
     const method = req.method || 'GET';
     const url = new URL(req.url || '/', 'http://localhost');
@@ -165,6 +170,20 @@ export function createServer({ resolved, distDir, state, services = buildService
       return sendJson(res, 200, readSource(resolved.repoRoot, relPath, line, ctx));
     }
 
+    // MCP connection helper: expose the exact command, and run it on the user's behalf.
+    if (p === '/api/mcp/info' && method === 'GET') {
+      const url = mcpUrl();
+      return sendJson(res, 200, { name: MCP_NAME, url, command: url ? `claude mcp add --transport http ${MCP_NAME} ${url}` : null });
+    }
+    if (p === '/api/mcp/register' && method === 'POST') {
+      const url = mcpUrl();
+      if (!url) return sendJson(res, 503, { ok: false, stderr: 'server URL not ready yet' });
+      const body = await readJsonBody(req);
+      const scope = ['local', 'project', 'user'].includes(body && body.scope) ? body.scope : undefined;
+      const result = await claudeMcpAdd({ name: MCP_NAME, url, scope });
+      return sendJson(res, 200, result);
+    }
+
     if (p.startsWith('/api/') || p === '/mcp') return sendJson(res, 404, { error: 'unknown endpoint' });
 
     return serveStatic(res, distDir, req.url || '/');
@@ -172,15 +191,19 @@ export function createServer({ resolved, distDir, state, services = buildService
 }
 
 /** Listen on the first free port at/after `port`. Resolves with { server, url, port }. */
-export function startServer({ resolved, distDir, state, services, mcpHandler, host = '127.0.0.1', port = 5178 }) {
-  const server = createServer({ resolved, distDir, state, services, mcpHandler });
+export function startServer({ resolved, distDir, state, services, mcpHandler, runtime = {}, host = '127.0.0.1', port = 5178 }) {
+  const server = createServer({ resolved, distDir, state, services, mcpHandler, runtime });
   return new Promise((resolve, reject) => {
     const tryListen = (pnum, attemptsLeft) => {
       server.once('error', (err) => {
         if (err.code === 'EADDRINUSE' && attemptsLeft > 0) { tryListen(pnum + 1, attemptsLeft - 1); }
         else reject(err);
       });
-      server.listen(pnum, host, () => resolve({ server, url: `http://${host}:${pnum}`, port: pnum }));
+      server.listen(pnum, host, () => {
+        const url = `http://${host}:${pnum}`;
+        runtime.baseUrl = url; // so /api/mcp/* can build the exact connect command
+        resolve({ server, url, port: pnum });
+      });
     };
     tryListen(port, 20);
   });

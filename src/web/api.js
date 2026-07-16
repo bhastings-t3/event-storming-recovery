@@ -27,6 +27,10 @@ export const clearContext = () => fetch('/api/context', json('DELETE')).then((r)
 // A single item's ready-to-paste markdown (node / flow / hotspot).
 export const getItem = (type, id) => fetch('/api/item?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id)).then((r) => r.json());
 
+// MCP connection helper: the exact `claude mcp add` command, and running it on the user's behalf.
+export const getMcpInfo = () => fetch('/api/mcp/info').then((r) => r.json()); // { name, url, command }
+export const registerMcp = (scope) => fetch('/api/mcp/register', json('POST', { scope })).then((r) => r.json());
+
 // Real source behind an anchor.
 export function fetchSource(path, line, ctx) {
   const q = new URLSearchParams({ path, ...(line ? { line } : {}), ...(ctx ? { ctx } : {}) });

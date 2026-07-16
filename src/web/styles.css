@@ -267,6 +267,18 @@ svg.edges path { transition: opacity .13s; }
 .btn-ghost { font: inherit; font-size: 12.5px; font-weight: 600; padding: 9px 14px; border-radius: var(--radius); border: 1px solid var(--line); background: transparent; color: var(--dim); cursor: pointer; }
 .btn-ghost:hover:not(:disabled) { background: var(--accent); color: #fff; }
 
+/* --- Connect Claude (one-click MCP add) --- */
+.connect { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 12px 13px; margin-bottom: 14px; }
+.connect-title { font-size: 12.5px; font-weight: 650; color: var(--fg); margin-bottom: 3px; }
+.connect-desc { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+.connect-row { display: flex; gap: 8px; align-items: center; }
+.connect-scope { font: inherit; font-size: 11.5px; padding: 8px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--input); color: var(--dim); outline: none; cursor: pointer; }
+.connect-row .btn-primary { flex: 1; }
+.connect-result { font-size: 11px; line-height: 1.5; margin-top: 9px; padding: 8px 10px; border-radius: 6px; }
+.connect-result.ok { background: rgba(95,208,138,.1); border: 1px solid rgba(95,208,138,.3); color: #9fe6b7; }
+.connect-result.err { background: rgba(229,100,94,.09); border: 1px solid rgba(229,100,94,.3); color: #eda3a0; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; }
+.connect-cmd { margin-top: 9px; font: 10.5px/1.5 ui-monospace, Consolas, monospace; color: #9fbef0; background: var(--accent); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; word-break: break-all; user-select: all; }
+
 /* --- detail panel: actions + inline source --- */
 .detail-actions { display: flex; gap: 7px; margin-bottom: 14px; }
 .detail-actions button { font: inherit; font-size: 11.5px; font-weight: 600; padding: 6px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--input); color: var(--dim); cursor: pointer; transition: background .1s, color .1s, border-color .1s; }

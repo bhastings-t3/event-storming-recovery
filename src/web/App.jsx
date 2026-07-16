@@ -8,6 +8,8 @@ import Gallery from './components/Gallery.jsx';
 import Glossary from './components/Glossary.jsx';
 import Overview from './components/Overview.jsx';
 import Detail from './components/Detail.jsx';
+import ContextMenu from './components/ContextMenu.jsx';
+import ContextBundle from './components/ContextBundle.jsx';
 
 function Explorer() {
   const { mode } = useExplorer();
@@ -26,6 +28,8 @@ function Explorer() {
         {mode === 'overview' && <Overview />}
         <Detail />
       </div>
+      <ContextMenu />
+      <ContextBundle />
     </>
   );
 }

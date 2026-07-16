@@ -9,12 +9,19 @@ const TABS = [
 ];
 
 export default function Tabs() {
-  const { mode, setMode } = useExplorer();
+  const { mode, setMode, bundleIds, bundleOpen, setBundleOpen } = useExplorer();
   return (
     <div id="tabbar">
       {TABS.map(([m, label]) => (
         <button key={m} className={'tab' + (mode === m ? ' active' : '')} onClick={() => setMode(m)}>{label}</button>
       ))}
+      <button
+        className={'ctx-pill' + (bundleOpen ? ' active' : '')}
+        title="Curated context bundle for Claude"
+        onClick={() => setBundleOpen((v) => !v)}
+      >
+        Context<span className="ctx-pill-n">{bundleIds.length}</span>
+      </button>
     </div>
   );
 }

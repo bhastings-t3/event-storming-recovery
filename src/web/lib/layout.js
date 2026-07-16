@@ -254,6 +254,7 @@ function placeCard(o, lane, x, y, dupColor, ctx) {
     if (flags.length) c.append(el('div', { class: 'flags' }, flags.join(' · ')));
   }
   if (dupColor) c.append(el('div', { class: 'dupdot', style: 'background:' + dupColor, title: 'this node appears more than once in the flow (same dot color = same node)' }));
+  if (ctx.onContextMenu) c.addEventListener('contextmenu', (e) => { e.preventDefault(); ctx.onContextMenu(e, n.id); });
   lane.append(c); return c;
 }
 

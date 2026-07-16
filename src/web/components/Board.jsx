@@ -6,19 +6,23 @@ import { renderFlowInto, setupPanZoom } from '../lib/layout.js';
 // renders. Re-renders + refits when the flow or the selection changes (matching the original,
 // which re-ran layoutFlow on openDetail to reflect the selected outline).
 export default function Board() {
-  const { currentFlow, selectedNodeId, nodeById, PALETTE, openDetail } = useExplorer();
+  const { currentFlow, selectedNodeId, nodeById, PALETTE, openDetail, openMenu } = useExplorer();
   const wrapRef = useRef(null);
   const laneRef = useRef(null);
 
   useEffect(() => {
     if (!currentFlow || !laneRef.current || !wrapRef.current) return;
-    const ctx = { nodeById, palette: PALETTE, selectedId: selectedNodeId, onOpenDetail: openDetail };
+    const ctx = {
+      nodeById, palette: PALETTE, selectedId: selectedNodeId,
+      onOpenDetail: openDetail,
+      onContextMenu: (e, id) => openMenu(e.clientX, e.clientY, id),
+    };
     const dim = renderFlowInto(currentFlow, laneRef.current, ctx);
     const pz = setupPanZoom(wrapRef.current, laneRef.current);
     // double rAF so the board's flex height has settled before we compute the fit scale
     const r = requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(dim.w, dim.h)));
     return () => cancelAnimationFrame(r);
-  }, [currentFlow, selectedNodeId, nodeById, PALETTE, openDetail]);
+  }, [currentFlow, selectedNodeId, nodeById, PALETTE, openDetail, openMenu]);
 
   return (
     <div id="lane-wrap" ref={wrapRef}>

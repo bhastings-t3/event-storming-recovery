@@ -1,13 +1,45 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import { enforcesRelation, nodeUsages, anchorUrl, flowNodeIds } from '../model.js';
+import { getNode, fetchSource } from '../api.js';
 
+// An anchor link with a lazy "view source" expander that pulls the real code from the server.
 function Anchor({ repoRoot, a }) {
+  const [src, setSrc] = useState(null); // null=closed, {}=loading, result
+  const toggle = async () => {
+    if (src) { setSrc(null); return; }
+    setSrc({ loading: true });
+    try { setSrc(await fetchSource(a.path, a.line)); } catch { setSrc({ exists: false, error: 'failed' }); }
+  };
   return (
-    <a className="anchor" href={anchorUrl(repoRoot, a)}>
-      {a.path + (a.line ? ':' + a.line : '') + (a.symbol ? '  (' + a.symbol + ')' : '')}
-      {a.note && <span className="note">{'  — ' + a.note}</span>}
-    </a>
+    <div className="anchor-block">
+      <a className="anchor" href={anchorUrl(repoRoot, a)}>
+        {a.path + (a.line ? ':' + a.line : '') + (a.symbol ? '  (' + a.symbol + ')' : '')}
+        {a.note && <span className="note">{'  — ' + a.note}</span>}
+      </a>
+      {a.path && <button className="src-toggle" onClick={toggle}>{src ? 'hide source' : 'view source'}</button>}
+      {src && src.loading && <div className="src-note">loading…</div>}
+      {src && !src.loading && (src.exists
+        ? <pre className="src-code"><code>{src.code}</code></pre>
+        : <div className="src-note">source not found at repo root ({src.error || 'missing'})</div>)}
+    </div>
+  );
+}
+
+function DetailActions({ node }) {
+  const { isInBundle, addToContext, removeFromContext } = useExplorer();
+  const [copied, setCopied] = useState(false);
+  const inBundle = isInBundle(node.id);
+  const copy = async () => {
+    try { const r = await getNode(node.id); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
+  };
+  return (
+    <div className="detail-actions">
+      <button className={inBundle ? 'da-in' : ''} onClick={() => (inBundle ? removeFromContext(node.id) : addToContext(node.id))}>
+        {inBundle ? 'In bundle ✓' : '+ Add to context'}
+      </button>
+      <button onClick={copy}>{copied ? 'Copied ✓' : '⧉ Copy for Claude'}</button>
+    </div>
   );
 }
 
@@ -27,6 +59,7 @@ function NodeDetail({ node }) {
         {node.ownedBy && <span className="chip">{'state owned by ' + node.ownedBy}</span>}
         {node.synchronous && <span className="chip">synchronous inline reaction</span>}
       </div>
+      <DetailActions node={node} />
       <div className="desc">{node.description || ''}</div>
 
       {rel && rel.related.length > 0 && (

@@ -8,7 +8,7 @@ const letterOf = (n) => { const c = (n.label || '').trim()[0]; return c && /[a-z
 // Glossary: the ubiquitous language as an alphabetical, readable dictionary. Ported from
 // buildGlossary/renderGlossaryList in generate-views.js.
 export default function Glossary() {
-  const { model, PALETTE, types, glossary, setGlossary, selectFlow, openDetail } = useExplorer();
+  const { model, PALETTE, types, glossary, setGlossary, selectFlow, openDetail, openMenu } = useExplorer();
   const { q, active, sharedOnly } = glossary;
 
   const toggleType = (t) => setGlossary((s) => {
@@ -74,7 +74,7 @@ export default function Glossary() {
             const p = PALETTE[n.type] || PALETTE.invariant;
             const flows = nodeFlows(model, n.id);
             return (
-              <div className="gl-entry" key={n.id} onClick={() => openDetail(n.id)}>
+              <div className="gl-entry" key={n.id} onClick={() => openDetail(n.id)} onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, n.id); }}>
                 <div className="gl-term">
                   <span className="gl-badge" style={{ background: p.fill, color: p.text }}>{p.name}</span>
                   <span className="gl-name">{n.label}</span>

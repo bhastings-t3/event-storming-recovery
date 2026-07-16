@@ -29,6 +29,40 @@ counts. Center: the flow as an Event-Storming sticky lane, invariants hanging of
 verbs between stickies. Click any sticky for its tactical explanation and a `vscode://` deep link to
 `file:line`. Red cards are **hotspots** — the questions a human needs to answer.
 
+## Explore it interactively — and work with Claude
+
+Instead of the static `explorer.html`, run the interactive app straight from npm:
+
+```sh
+npx event-storming-recovery view            # in any repo; auto-discovers model/flows.json
+npx event-storming-recovery view --model path/to/flows.json --repo-root .
+```
+
+It starts a small local server (one port) that serves a SPA (Flows board, Gallery, Glossary,
+Overview, source-linked detail panel) and a JSON + MCP API. Click a sticky to inspect it; **view
+source** pulls the real code behind an anchor inline; **right-click → Add to context bundle** gathers
+nodes; the **Context** pill (top-right) opens a drawer to review, clear, and **Copy for Claude**.
+
+The app is a **context authority any Claude session can read** — it doesn't own Claude. Connect your
+own `claude` terminal to the running app once:
+
+```sh
+claude mcp add --transport http event-storming http://127.0.0.1:5178/mcp
+# or commit a .mcp.json to the repo (see .mcp.json.example)
+```
+
+Then, with the app running, in that Claude session:
+
+- Click a node in the app, then say *"explain the selected node"* → Claude calls `get_current_selection`
+  and gets the node grounded in its invariants, flows, and real source anchors.
+- *"the selected aggregate needs these two invariants — implement it and open a PR"* → Claude works in
+  **your** session, on the real files, with your git/PR flow.
+- `@event-storming:event-storming://selected-nodes` hands Claude the whole curated bundle at once
+  (e.g. several fractured aggregates you want consolidated).
+
+MCP tools: `get_current_selection`, `get_node`, `get_flow`, `list_model`. Resource:
+`event-storming://selected-nodes`.
+
 ## Run it on your own codebase
 
 This is an **agent-orchestrated** process (a coding agent — e.g. Claude Code — drives it; the

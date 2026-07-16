@@ -16,7 +16,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildIndexes } from '../lib/selectors.mjs';
-import { buildNodeContext, buildBundleContext } from './context.mjs';
+import { buildNodeContext, buildBundleContext, renderNodeContextMarkdown, renderBundleMarkdown } from './context.mjs';
 import { readSource } from './source.mjs';
 
 const CONTENT_TYPES = {
@@ -102,16 +102,18 @@ export function createServer({ resolved, distDir, state, services = buildService
     }
 
     if (p === '/api/selection') {
-      if (method === 'GET') {
+      const selResponse = () => {
         const sel = state.getSelection();
-        return sendJson(res, 200, { selection: sel ? buildNodeContext(services, sel.nodeId) : null });
-      }
+        const ctx = sel ? buildNodeContext(services, sel.nodeId) : null;
+        return { selection: ctx, markdown: ctx ? renderNodeContextMarkdown(ctx) : '' };
+      };
+      if (method === 'GET') return sendJson(res, 200, selResponse());
       if (method === 'POST') {
         const body = await readJsonBody(req);
         const nodeId = body && body.nodeId;
         if (nodeId && !services.indexes.nodeById.has(nodeId)) return sendJson(res, 404, { error: `unknown node '${nodeId}'` });
         state.setSelection(nodeId || null);
-        return sendJson(res, 200, { selection: nodeId ? buildNodeContext(services, nodeId) : null });
+        return sendJson(res, 200, selResponse());
       }
       if (method === 'DELETE') { state.clearSelection(); return sendJson(res, 200, { ok: true }); }
     }
@@ -119,7 +121,11 @@ export function createServer({ resolved, distDir, state, services = buildService
     if (p === '/api/context') {
       if (method === 'GET') {
         const ids = state.getBundle();
-        return sendJson(res, 200, { ids, nodes: buildBundleContext(services, ids, { includeSource: false }) });
+        return sendJson(res, 200, {
+          ids,
+          nodes: buildBundleContext(services, ids, { includeSource: false }),
+          markdown: renderBundleMarkdown(buildBundleContext(services, ids, { includeSource: true })),
+        });
       }
       if (method === 'POST') {
         const body = await readJsonBody(req);
@@ -133,6 +139,13 @@ export function createServer({ resolved, distDir, state, services = buildService
         state.clearBundle();
         return sendJson(res, 200, { ids: [] });
       }
+    }
+
+    if (p === '/api/node' && method === 'GET') {
+      const id = url.searchParams.get('id');
+      const ctx = id ? buildNodeContext(services, id) : null;
+      if (!ctx) return sendJson(res, 404, { error: `unknown node '${id}'` });
+      return sendJson(res, 200, { node: ctx, markdown: renderNodeContextMarkdown(ctx) });
     }
 
     if (p === '/api/source' && method === 'GET') {

@@ -5,7 +5,7 @@ import { nodeFlows } from '../model.js';
 // Gallery: every sticky in the model, filtered by type chips + text search. Ported from
 // buildGallery/renderGrid in generate-views.js.
 export default function Gallery() {
-  const { model, PALETTE, types, gallery, setGallery, selectedNodeId, openDetail } = useExplorer();
+  const { model, PALETTE, types, gallery, setGallery, selectedNodeId, openDetail, openMenu } = useExplorer();
   const { q, active } = gallery;
 
   const toggleType = (t) => setGallery((s) => {
@@ -58,6 +58,7 @@ export default function Gallery() {
               className={'gcard' + (selectedNodeId === n.id ? ' selected' : '')}
               style={{ background: p.fill, borderColor: p.edge, color: p.text }}
               onClick={() => openDetail(n.id)}
+              onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, n.id); }}
             >
               <div className="gtype">{p.name}</div>
               <div className="glabel">{n.label}</div>

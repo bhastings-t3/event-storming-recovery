@@ -5,12 +5,37 @@
   "license": "MIT",
   "type": "commonjs",
   "bin": {
+    "es-view": "bin/es-view.mjs",
     "es-merge": "tools/merge-flows.js",
     "es-generate": "tools/generate-views.js"
   },
+  "files": [
+    "bin",
+    "src",
+    "tools",
+    "scripts",
+    "prompts",
+    "docs",
+    "skills",
+    "examples",
+    ".claude-plugin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "preview": "npm run build && node bin/es-view.mjs",
     "demo": "node scripts/build-example.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.7"
   },
   "keywords": ["event-storming", "ddd", "domain-driven-design", "reverse-engineering", "architecture", "code-comprehension"]
 }

@@ -1,0 +1,44 @@
+/* shadcn-style neutral-dark token system (vanilla CSS), ported from the static explorer
+   so the SPA shares one visual language as the full board/gallery/glossary port lands. */
+:root {
+  --bg: #0a0a0d; --panel: #131317; --card: #17171c; --input: #1a1a21;
+  --fg: #f4f4f5; --muted: #9a9aa6; --dim: #d1d1d8;
+  --line: #26262d; --accent: #1e1e26; --accent-2: #26262f; --ring: #6b6b7a;
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--fg);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+a { color: #7db2f5; }
+
+/* --- vertical-slice status screen (temporary until the explorer port replaces it) --- */
+.boot { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.boot-card {
+  width: 100%; max-width: 720px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 28px 30px 30px;
+}
+.boot-card h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; letter-spacing: -.01em; }
+.boot-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+.kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 13px; margin-bottom: 20px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; color: var(--dim); word-break: break-all; }
+.counts { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.count-pill { background: var(--accent-2); border: 1px solid var(--line); border-radius: 99px; padding: 5px 13px; font-size: 12.5px; }
+.count-pill b { color: #fff; font-weight: 700; }
+.warn { background: rgba(210,166,58,.08); border: 1px solid rgba(210,166,58,.3); color: #e7cd88; border-radius: var(--radius); padding: 9px 12px; font-size: 12px; margin-bottom: 16px; }
+.flow-list { border-top: 1px solid var(--line); padding-top: 16px; }
+.flow-list h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
+.flow-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.flow-list li { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 12px; font-size: 13px; color: var(--dim); }
+.flow-list .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.flow-list .st { margin-left: auto; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 99px; }
+.flow-list .st.dead { background: #3a1414; color: #fca5a5; }
+.flow-list .st.superseded { background: #382b10; color: #fcd34d; }
+.boot-note { margin-top: 22px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.boot-err { color: #fca5a5; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; }

@@ -1,17 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { fetchModel } from './api.js';
+import { ExplorerProvider, useExplorer } from './store.jsx';
+import Tabs from './components/Tabs.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import Main from './components/Main.jsx';
+import Gallery from './components/Gallery.jsx';
+import Glossary from './components/Glossary.jsx';
+import Overview from './components/Overview.jsx';
+import Detail from './components/Detail.jsx';
 
-const SOURCE_LABEL = {
-  model: 'explicit --model',
-  traces: 'merged from --traces',
-  discovered: 'auto-discovered in this directory',
-  example: 'bundled toy-shop example',
-};
-const KIND_COLOR = { read: '#6FC993', policy: '#BF9BE0', write: '#6BA3E8' };
+function Explorer() {
+  const { mode } = useExplorer();
+  return (
+    <>
+      <Tabs />
+      <div id="shell">
+        {/* Flows (sidebar + board) stays mounted so its pan/zoom survives tab switches;
+            display:contents lets the two panes act as direct flex children of #shell. */}
+        <div style={{ display: mode === 'flows' ? 'contents' : 'none' }}>
+          <Sidebar />
+          <Main />
+        </div>
+        {mode === 'gallery' && <Gallery />}
+        {mode === 'glossary' && <Glossary />}
+        {mode === 'overview' && <Overview />}
+        <Detail />
+      </div>
+    </>
+  );
+}
 
-// Phase 1 vertical slice: prove npx -> server -> /api/model -> SPA end to end.
-// The full explorer (board, gallery, glossary, overview, detail panel) replaces
-// this boot screen in the next task; the data contract it reads is already here.
 export default function App() {
   const [state, setState] = useState({ status: 'loading' });
 
@@ -38,50 +56,9 @@ export default function App() {
     );
   }
 
-  const { model, meta } = state;
-  const counts = (model.meta && model.meta.counts) || {};
-
   return (
-    <div className="boot">
-      <div className="boot-card">
-        <h1>{(model.meta && model.meta.title) || 'Event Storming Explorer'}</h1>
-        <div className="sub">Strategic flows recovered from the tactical codebase.</div>
-
-        <dl className="kv">
-          <dt>model</dt><dd>{SOURCE_LABEL[meta.source] || meta.source}</dd>
-          <dt>from</dt><dd>{meta.sourcePath}</dd>
-          <dt>repo-root</dt><dd>{meta.repoRoot}</dd>
-        </dl>
-
-        <div className="counts">
-          <span className="count-pill"><b>{counts.flows ?? model.flows.length}</b> flows</span>
-          <span className="count-pill"><b>{counts.nodes ?? model.nodes.length}</b> nodes</span>
-          <span className="count-pill"><b>{counts.hotspots ?? model.hotspots.length}</b> hotspots</span>
-        </div>
-
-        {(meta.warnings || []).map((w, i) => <div className="warn" key={i}>{w}</div>)}
-
-        <div className="flow-list">
-          <h2>Flows</h2>
-          <ul>
-            {model.flows.map((f) => {
-              const dead = f.status && f.status !== 'live';
-              return (
-                <li key={f.id}>
-                  <span className="dot" style={{ background: KIND_COLOR[f.kind] || KIND_COLOR.write }} />
-                  <span>{f.name}</span>
-                  {dead && <span className={`st ${f.status}`}>{f.status}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <div className="boot-note">
-          Vertical slice running. Next: the full board, gallery, glossary, overview, and the
-          source-linked detail panel port in over this screen.
-        </div>
-      </div>
-    </div>
+    <ExplorerProvider model={state.model} meta={state.meta}>
+      <Explorer />
+    </ExplorerProvider>
   );
 }

@@ -9,7 +9,7 @@
     {
       "name": "event-storming-recovery",
       "source": "./",
-      "description": "Recover a strategic Event Storming model from a codebase and render it as a source-linked flow explorer."
+      "description": "Recover a strategic Event Storming model from a codebase, explore it in an interactive source-linked app, and work with Claude on it via a built-in MCP context bridge."
     }
   ]
 }

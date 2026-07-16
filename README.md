@@ -63,13 +63,20 @@ Then, with the app running, in that Claude session:
 MCP tools: `get_current_selection`, `get_node`, `get_flow`, `list_model`. Resource:
 `event-storming://selected-nodes`.
 
+**With the plugin installed you don't run any of this by hand** — just tell Claude *"use the event
+storming explorer"* and the `event-storming-explorer` skill launches the app, connects the MCP
+server (which the plugin declares), and, if no model exists yet, offers to build one first via the
+recovery workflow.
+
 ## Run it on your own codebase
 
 This is an **agent-orchestrated** process (a coding agent — e.g. Claude Code — drives it; the
 deterministic parts are the schema, the merge/validate, and the render). Two ways to start:
 
-- **As a Claude Code plugin** (recommended) — install it, then invoke the `event-storming-recovery`
-  skill and it drives all six phases:
+- **As a Claude Code plugin** (recommended) — install it, then either say *"use the event storming
+  explorer"* (the **`event-storming-explorer`** skill launches the app + MCP bridge, building a model
+  first if none exists) or invoke the **`event-storming-recovery`** skill directly to drive all six
+  recovery phases:
 
   ```
   /plugin marketplace add bhastings-t3/event-storming-recovery
@@ -77,7 +84,9 @@ deterministic parts are the schema, the merge/validate, and the render). Two way
   ```
   (or from a shell: `claude plugin marketplace add bhastings-t3/event-storming-recovery` then
   `claude plugin install event-storming-recovery@event-storming-recovery`). The repo is both the
-  marketplace and the plugin; the skill and its bundled prompts/tools install together.
+  marketplace and the plugin; both skills, the MCP server declaration, and the bundled prompts/tools
+  install together. The explorer's viewer comes from the `event-storming-recovery` npm package via
+  `npx` (publish it — see the repo issues — so installed users get it with no extra setup).
 
 - **By hand / any agent:** follow `prompts/00-orchestrator.md`. It tells the orchestrator how to
   spawn the scouts (`prompts/01-scouts.md`), triage with you (`prompts/02-triage.md`), brief the

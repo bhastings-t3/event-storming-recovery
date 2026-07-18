@@ -30,6 +30,12 @@ const title = argVal('--title', (model.meta && model.meta.title) || 'Event Storm
 const nodeById = new Map(model.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(model.hotspots.map(h => [h.id, h]));
 
+// Physical storage node types (server > database > table > column). They are a substrate for the
+// behavioral model, not steps in a flow, so the flow board + DOT exclude them and any edge touching
+// them; the links survive in the model for the Data-model tab and the detail panel.
+const DATA_TYPES = new Set(['server', 'database', 'table', 'column']);
+const isDataId = id => { const n = nodeById.get(id); return n && DATA_TYPES.has(n.type); };
+
 // Event-storming palette for a dark board. Each sticky's TEXT is a darker tone of its OWN
 // fill hue (tonal, not near-black) so the label reads as part of the card, not stamped on it.
 // Actor vs aggregate keep distinct yellow shades per skill guidance.
@@ -42,6 +48,10 @@ const PALETTE = {
   readModel:      { fill: '#6FC993', edge: '#358a5a', text: '#124a2c', name: 'Read Model' },
   externalSystem: { fill: '#E68DAF', edge: '#b05378', text: '#59213b', name: 'External System' },
   invariant:      { fill: '#26262e', edge: '#42424e', text: '#b7b7c2', name: 'Invariant' },
+  server:         { fill: '#2b323c', edge: '#464f5d', text: '#a5b2c4', name: 'Server' },
+  database:       { fill: '#3c4a5a', edge: '#5a6d84', text: '#b6c4d6', name: 'Database' },
+  table:          { fill: '#6f92b3', edge: '#3f5a76', text: '#16293c', name: 'Table' },
+  column:         { fill: '#c3d3e2', edge: '#7f96ab', text: '#2c3e50', name: 'Column' },
   hotspot:        { fill: '#E5645E', edge: '#a83530', text: '#4c110e', name: 'Hotspot' },
 };
 
@@ -60,8 +70,8 @@ for (const f of model.flows) {
   dot.push(`  subgraph "cluster_${f.id}" {`);
   dot.push(`    label="${dotEsc(f.name)}${dead ? '  [' + f.status.toUpperCase() + ']' : ''}"; fontsize=13; color="${dead ? '#3a3a44' : '#4a4a56'}"; style="rounded"; fontcolor="${dead ? '#71717a' : '#e4e4e7'}";`);
   const used = new Set();
-  (f.steps || []).forEach(s => used.add(s));
-  (f.edges || []).forEach(e => { used.add(e.from); used.add(e.to); });
+  (f.steps || []).forEach(s => { if (!isDataId(s)) used.add(s); });
+  (f.edges || []).forEach(e => { if (isDataId(e.from) || isDataId(e.to)) return; used.add(e.from); used.add(e.to); });
   for (const id of used) {
     const n = nodeById.get(id); if (!n) continue;
     const p = PALETTE[n.type] || PALETTE.invariant;
@@ -327,12 +337,78 @@ const html = `<!DOCTYPE html>
   .ctx-title:hover { color: #fff; text-decoration: underline; }
   .ctx-kind { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 2px 8px; text-decoration: none; }
   .ctx-lane { position: relative; }
+  /* detail panel: conceptual field rows (read-model "Data returned" / aggregate "State & fields") */
+  .fieldrow { border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; margin-bottom: 8px; background: var(--card); }
+  .fr-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .fr-head .fr-name { font-size: 12.5px; font-weight: 650; color: var(--fg); overflow-wrap: anywhere; }
+  .fr-dtype { font: 10px/1.4 ui-monospace, Consolas, monospace; color: #9fbef0; background: var(--accent); border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  .fr-conf { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+  .fr-tag { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; }
+  .fr-tag.sensitive { color: #eda3a0; border-color: rgba(229,100,94,.4); }
+  .fr-deriv { font-size: 12px; color: var(--dim); line-height: 1.5; margin: 6px 0 4px; overflow-wrap: anywhere; }
+  .fr-src { font-size: 11px; color: var(--muted); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 2px 0; }
+  .fr-src.none { color: #6b6b78; font-style: italic; }
+  .fr-role { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 1px 7px; }
+  .fr-col { font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--dim); }
+  .fr-col.link { color: #7db2f5; cursor: pointer; }
+  .fr-col.link:hover { text-decoration: underline; }
+  .fr-col.addr { color: #8a8a96; word-break: break-all; }
+  .fr-xform { font-size: 9.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+  .fr-note { font-size: 10.5px; color: var(--muted); font-style: italic; }
+  /* physical-node containment breadcrumb (server ▸ database ▸ table ▸ column) */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; margin-bottom: 12px; }
+  .breadcrumb .bc-sep { color: #55555f; }
+  .breadcrumb .bc-link { color: #7db2f5; cursor: pointer; }
+  .breadcrumb .bc-link:hover { text-decoration: underline; }
+  .breadcrumb .bc-here { color: var(--dim); font-weight: 650; }
+  /* Data model tab: server ▸ database ▸ table cards, cross-linked to behavioral nodes */
+  #datamodel { flex: 1; min-width: 0; display: none; flex-direction: column; }
+  #datamodel.show { display: flex; }
+  .dm-head { padding: 16px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+  .dm-head h2 { margin: 0 0 8px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .dm-head h2 .count { font-size: 11px; font-weight: 700; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 2px 9px; letter-spacing: 0; }
+  .dm-sub { font-size: 12px; color: var(--muted); line-height: 1.55; max-width: 900px; }
+  .dm-body { flex: 1; overflow-y: auto; padding: 20px 24px 40px; }
+  .dm-empty { color: var(--muted); font-size: 13px; padding: 30px 2px; line-height: 1.6; }
+  .dm-empty-sm { color: #6b6b78; font-size: 11.5px; font-style: italic; padding: 4px 2px; }
+  .dm-server { margin-bottom: 26px; }
+  .dm-server-head { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 4px 2px; flex-wrap: wrap; }
+  .dm-server-head:hover .dm-sname { text-decoration: underline; }
+  .dm-badge { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; }
+  .dm-badge.dm-unattached { background: var(--accent-2); color: var(--muted); }
+  .dm-sname { font-size: 15px; font-weight: 650; color: var(--fg); }
+  .dm-host { font: 11px/1.5 ui-monospace, Consolas, monospace; color: #8a8a96; }
+  .dm-engine { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); background: var(--accent); border-radius: 99px; padding: 1px 8px; }
+  .dm-db { margin: 10px 0 4px 14px; padding-left: 16px; border-left: 1px solid var(--line); }
+  .dm-db-head { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 8px 2px 10px; flex-wrap: wrap; }
+  .dm-db-head:hover .dm-dname { text-decoration: underline; }
+  .dm-dname { font-size: 13.5px; font-weight: 650; color: var(--dim); }
+  .dm-owned { font-size: 10.5px; color: var(--muted); font-style: italic; }
+  .dm-tables { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .dm-table { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow); }
+  .dm-table-head { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; }
+  .dm-table-head:hover { filter: brightness(1.06); }
+  .dm-tt { font-size: 8.5px; font-weight: 800; letter-spacing: .08em; opacity: .7; }
+  .dm-tn { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+  .dm-cols { padding: 6px 4px; }
+  .dm-col { display: flex; align-items: baseline; gap: 8px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background .1s; }
+  .dm-col:hover { background: var(--accent); }
+  .dm-cn { font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--dim); overflow-wrap: anywhere; }
+  .dm-ct { font: 10px/1.4 ui-monospace, Consolas, monospace; color: #7db2f5; margin-left: auto; }
+  .dm-nn { font-size: 8px; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  .dm-consumers { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--line); }
+  .dm-consumer { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--dim); background: var(--input); border: 1px solid var(--line); border-radius: 99px; padding: 3px 9px; cursor: pointer; transition: background .1s, color .1s; }
+  .dm-consumer:hover { background: var(--accent-2); color: #fff; }
+  .dm-cdot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .dm-cverb { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .dm-consumer:hover .dm-cverb { color: #cfcfe0; }
 </style>
 </head>
 <body>
 <div id="tabbar">
   <button id="tab-flows" class="tab active">Flows</button>
   <button id="tab-gallery" class="tab">Gallery</button>
+  <button id="tab-datamodel" class="tab">Data model</button>
   <button id="tab-glossary" class="tab">Glossary</button>
   <button id="tab-overview" class="tab">Overview</button>
 </div>
@@ -353,6 +429,7 @@ const html = `<!DOCTYPE html>
   </div>
 </div>
 <section id="gallery"></section>
+<section id="datamodel"></section>
 <section id="glossary"></section>
 <section id="overview"><div id="ov-wrap"><div id="ov-canvas"></div><div id="ov-zoomctl" class="zoomctl"><button id="ov-zin" title="Zoom in">+</button><button id="ov-zout" title="Zoom out">&minus;</button><button id="ov-zfit" title="Fit to view">&#10530;</button></div></div></section>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
@@ -364,6 +441,12 @@ const PALETTE = ${JSON.stringify(PALETTE)};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
 let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 'tier';
+
+// Physical storage node types (server > database > table > column) — a substrate the behavioral
+// model anchors into. Kept out of the flow board; surfaced in the Data model tab + detail panel.
+const DATA_TYPE_SET = new Set(['server', 'database', 'table', 'column']);
+const isDataNode = n => n && DATA_TYPE_SET.has(n.type);
+const CONF_COLOR = { high: '#6FC993', medium: '#E9A23B', low: '#E5645E' };
 
 // types present in the model, in palette order (drives the gallery filter chips + sort)
 const galleryTypes = Object.keys(PALETTE).filter(t => t !== 'hotspot' && MODEL.nodes.some(n => n.type === t));
@@ -472,6 +555,11 @@ const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9
 function renderFlowInto(f, lane) {
   lane.innerHTML = '';
   lane.style.position = 'relative';
+  // Physical storage nodes (server/database/table/column) are a substrate, not steps in the
+  // behavioral lane. Drop them and any edge touching them so the flow board stays behavioral;
+  // the links survive in the model for the Data-model tab and the detail panel.
+  const isData = id => { const n = nodeById.get(id); return n && DATA_TYPE_SET.has(n.type); };
+  f = { ...f, steps: (f.steps || []).filter(id => !isData(id)), edges: (f.edges || []).filter(e => !isData(e.from) && !isData(e.to)) };
   const flowIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
   const stepIdx = {}; (f.steps || []).forEach((id, i) => (stepIdx[id] = i));
   const isRM = n => n && n.type === 'readModel';
@@ -968,18 +1056,174 @@ function renderGlossary() {
   glSyncChips();
   renderGlossaryList();
 }
+// ---- Data model layer: pure selectors (mirrors src/lib/selectors.mjs) ----
+// Walk a node's parent chain to the root, returning [root, ..., node] (containment breadcrumb).
+function parentChain(node) {
+  const chain = [], seen = new Set(); let cur = node;
+  while (cur && !seen.has(cur.id)) { seen.add(cur.id); chain.unshift(cur); cur = cur.parent ? nodeById.get(cur.parent) : null; }
+  return chain;
+}
+// Behavioral nodes that touch a given table, via flow edges. Returns [{ node, verb }] deduped.
+function tableConsumers(tableId) {
+  const seen = new Set(), out = [];
+  for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+    if (e.to !== tableId) continue;
+    const from = nodeById.get(e.from);
+    if (!from || isDataNode(from)) continue;
+    const key = e.from + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
+    out.push({ node: from, verb: e.verb });
+  }
+  return out;
+}
+// Read-model/aggregate fields that draw from a given column. Returns [{ node, field }].
+function columnConsumers(columnId) {
+  const out = [];
+  for (const n of MODEL.nodes) for (const fld of (n.fields || [])) {
+    if ((fld.sources || []).some(s => s.ref === columnId)) out.push({ node: n, field: fld });
+  }
+  return out;
+}
+// Tables a behavioral node writes/reads/projects, via its flow edges. Returns [{ node: table, verb }].
+function nodeStorageLinks(nodeId) {
+  const seen = new Set(), out = [];
+  for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+    if (e.from !== nodeId) continue;
+    const to = nodeById.get(e.to);
+    if (!to || !isDataNode(to)) continue;
+    const key = e.to + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
+    out.push({ node: to, verb: e.verb });
+  }
+  return out;
+}
+// Build the server > database > table > column containment forest from the flat node list.
+function dataModelTree() {
+  const childrenOf = (id, type) => MODEL.nodes.filter(n => n.type === type && n.parent === id);
+  const wrapTable = t => ({ node: t, columns: childrenOf(t.id, 'column') });
+  const wrapDb = d => ({ node: d, tables: childrenOf(d.id, 'table').map(wrapTable) });
+  const wrapServer = s => ({ node: s, databases: childrenOf(s.id, 'database').map(wrapDb) });
+  const servers = MODEL.nodes.filter(n => n.type === 'server').map(wrapServer);
+  const orphanDbs = MODEL.nodes.filter(n => n.type === 'database' && (!n.parent || !nodeById.has(n.parent))).map(wrapDb);
+  const orphanTables = MODEL.nodes.filter(n => n.type === 'table' && (!n.parent || !nodeById.has(n.parent))).map(wrapTable);
+  const orphanCols = MODEL.nodes.filter(n => n.type === 'column' && (!n.parent || !nodeById.has(n.parent)));
+  const unattached = (orphanDbs.length || orphanTables.length || orphanCols.length)
+    ? { databases: orphanDbs, tables: orphanTables, columns: orphanCols } : null;
+  return { servers, unattached };
+}
+
+// ---- Data model tab: server ▸ database ▸ table cards, cross-linked to behavioral nodes ----
+let dataModelBuilt = false;
+// A table card: columns (click-through to the column node) + the behavioral nodes that write /
+// read / project it (click-through to the sticky).
+function dmTableCard(table, columns) {
+  const p = PALETTE.table || PALETTE.invariant;
+  const card = el('div', { class: 'dm-table', style: 'border-color:' + p.edge });
+  card.append(el('div', { class: 'dm-table-head', style: 'background:' + p.fill + ';color:' + p.text, onclick: () => openDetail(table.id) },
+    el('span', { class: 'dm-tt' }, table.kind === 'view' ? 'VIEW' : 'TABLE'),
+    el('span', { class: 'dm-tn' }, table.schema ? table.schema + '.' + table.label : table.label)));
+  if (columns.length) {
+    const cols = el('div', { class: 'dm-cols' });
+    for (const c of columns) {
+      const col = el('div', { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) }, el('span', { class: 'dm-cn' }, c.label));
+      if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
+      if (c.nullable === false) col.append(el('span', { class: 'dm-nn' }, 'NN'));
+      cols.append(col);
+    }
+    card.append(cols);
+  }
+  const consumers = tableConsumers(table.id);
+  if (consumers.length) {
+    const cons = el('div', { class: 'dm-consumers' });
+    for (const c of consumers) {
+      const cp = PALETTE[c.node.type] || PALETTE.invariant;
+      cons.append(el('span', { class: 'dm-consumer', style: 'border-color:' + cp.edge, title: cp.name + ' — ' + c.verb, onclick: () => openDetail(c.node.id) },
+        el('span', { class: 'dm-cdot', style: 'background:' + cp.fill }),
+        el('span', { class: 'dm-cverb' }, c.verb),
+        c.node.label));
+    }
+    card.append(cons);
+  }
+  return card;
+}
+function dmServerBlock(server, databases) {
+  const sp = PALETTE.server || PALETTE.invariant;
+  const dp = PALETTE.database || PALETTE.invariant;
+  const block = el('div', { class: 'dm-server' });
+  const shead = el('div', { class: 'dm-server-head', onclick: () => openDetail(server.id) },
+    el('span', { class: 'dm-badge', style: 'background:' + sp.fill + ';color:' + sp.text }, 'SERVER'),
+    el('span', { class: 'dm-sname' }, server.label));
+  if (server.host) shead.append(el('span', { class: 'dm-host' }, server.host));
+  if (server.engine) shead.append(el('span', { class: 'dm-engine' }, server.engine));
+  block.append(shead);
+  for (const { node: db, tables } of databases) {
+    const dbEl = el('div', { class: 'dm-db' });
+    const dhead = el('div', { class: 'dm-db-head', onclick: () => openDetail(db.id) },
+      el('span', { class: 'dm-badge', style: 'background:' + dp.fill + ';color:' + dp.text }, 'DATABASE'),
+      el('span', { class: 'dm-dname' }, db.label));
+    if (db.ownedBy) dhead.append(el('span', { class: 'dm-owned' }, 'owned by ' + db.ownedBy));
+    dbEl.append(dhead);
+    const tablesEl = el('div', { class: 'dm-tables' });
+    if (!tables.length) tablesEl.append(el('div', { class: 'dm-empty-sm' }, 'no tables recovered for this database yet'));
+    for (const { node: t, columns } of tables) tablesEl.append(dmTableCard(t, columns));
+    dbEl.append(tablesEl);
+    block.append(dbEl);
+  }
+  return block;
+}
+function buildDataModel() {
+  const g = document.getElementById('datamodel'); g.innerHTML = '';
+  const { servers, unattached } = dataModelTree();
+  const dataCount = MODEL.nodes.filter(n => DATA_TYPE_SET.has(n.type)).length;
+  const head = el('div', { class: 'dm-head' });
+  head.append(el('h2', {}, 'Data model ', el('span', { class: 'count' }, String(dataCount))));
+  head.append(el('div', { class: 'dm-sub' }, 'The storage the code actually touches, recovered from SQL and connection strings. Servers ▸ databases ▸ tables ▸ columns, cross-linked to the behavioral nodes that write and read them. Demand-driven: only the columns a read model or aggregate references appear.'));
+  g.append(head);
+  const body = el('div', { class: 'dm-body' });
+  if (dataCount === 0) body.append(el('div', { class: 'dm-empty' }, 'No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate servers, tables, columns, and field lineage.'));
+  for (const { node: s, databases } of servers) body.append(dmServerBlock(s, databases));
+  if (unattached && (unattached.databases.length || unattached.tables.length)) {
+    const block = el('div', { class: 'dm-server' });
+    block.append(el('div', { class: 'dm-server-head' },
+      el('span', { class: 'dm-badge dm-unattached' }, 'UNATTACHED'),
+      el('span', { class: 'dm-sname' }, 'no server/connection recovered')));
+    for (const { node: db, tables } of unattached.databases) {
+      const dbEl = el('div', { class: 'dm-db' });
+      dbEl.append(el('div', { class: 'dm-db-head', onclick: () => openDetail(db.id) },
+        el('span', { class: 'dm-badge dm-unattached' }, 'DATABASE'),
+        el('span', { class: 'dm-dname' }, db.label)));
+      const t1 = el('div', { class: 'dm-tables' });
+      for (const { node: t, columns } of tables) t1.append(dmTableCard(t, columns));
+      dbEl.append(t1);
+      block.append(dbEl);
+    }
+    if (unattached.tables.length) {
+      const dbEl = el('div', { class: 'dm-db' });
+      const tablesEl = el('div', { class: 'dm-tables' });
+      for (const { node: t, columns } of unattached.tables) tablesEl.append(dmTableCard(t, columns));
+      dbEl.append(tablesEl);
+      block.append(dbEl);
+    }
+    body.append(block);
+  }
+  g.append(body);
+  dataModelBuilt = true;
+}
+function renderDataModel() { if (!dataModelBuilt) buildDataModel(); }
+
 function setMode(m) {
   currentMode = m;
   document.getElementById('tab-flows').classList.toggle('active', m === 'flows');
   document.getElementById('tab-gallery').classList.toggle('active', m === 'gallery');
+  document.getElementById('tab-datamodel').classList.toggle('active', m === 'datamodel');
   document.getElementById('tab-glossary').classList.toggle('active', m === 'glossary');
   document.getElementById('tab-overview').classList.toggle('active', m === 'overview');
   document.getElementById('sidebar').style.display = m === 'flows' ? '' : 'none';
   document.getElementById('main').style.display = m === 'flows' ? '' : 'none';
   document.getElementById('gallery').classList.toggle('show', m === 'gallery');
+  document.getElementById('datamodel').classList.toggle('show', m === 'datamodel');
   document.getElementById('glossary').classList.toggle('show', m === 'glossary');
   document.getElementById('overview').classList.toggle('show', m === 'overview');
   if (m === 'gallery') renderGallery();
+  else if (m === 'datamodel') renderDataModel();
   else if (m === 'glossary') renderGlossary();
   else if (m === 'overview') renderOverview();
 }
@@ -1044,6 +1288,89 @@ function openDetail(id) {
   if (n.synchronous) chips.append(el('span', { class: 'chip' }, 'synchronous inline reaction'));
   inner.append(chips);
   inner.append(el('div', { class: 'desc' }, n.description || ''));
+
+  // Physical node (server/database/table/column): containment breadcrumb + columns + "Used by"
+  // back-references. Mirrors StorageSection in src/web/components/Detail.jsx.
+  if (isDataNode(n)) {
+    const chain = parentChain(n);
+    if (chain.length > 1) {
+      const bc = el('div', { class: 'breadcrumb' });
+      chain.forEach((c, i) => {
+        if (i > 0) bc.append(el('span', { class: 'bc-sep' }, '▸'));
+        if (c.id === n.id) bc.append(el('span', { class: 'bc-here' }, c.label));
+        else bc.append(el('span', { class: 'bc-link', onclick: () => openDetail(c.id) }, c.label));
+      });
+      inner.append(bc);
+    }
+    if (n.type === 'table') {
+      const columns = MODEL.nodes.filter(x => x.type === 'column' && x.parent === n.id);
+      if (columns.length) {
+        inner.append(el('h4', {}, columns.length + ' column' + (columns.length > 1 ? 's' : '')));
+        for (const c of columns) {
+          const lbl = el('div', { class: 'rlabel' }, c.label);
+          if (c.dataType) lbl.append(el('span', { class: 'fr-dtype' }, c.dataType));
+          inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
+        }
+      }
+    }
+    const consumers = n.type === 'table' ? tableConsumers(n.id)
+      : n.type === 'column' ? columnConsumers(n.id).map(c => ({ node: c.node, verb: 'field ' + c.field.name }))
+      : [];
+    if (consumers.length) {
+      inner.append(el('h4', {}, 'Used by ' + consumers.length));
+      for (const c of consumers) {
+        const lbl = el('div', { class: 'rlabel' }, c.node.label);
+        lbl.append(el('span', { class: 'fr-role' }, c.verb));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.node.id) }, lbl));
+      }
+    }
+  }
+
+  // Conceptual fields: read model "Data returned" / aggregate "State & fields", each with its
+  // derivation prose, confidence dot, tags, and 0..N storage sources. Mirrors FieldsSection.
+  if (n.fields && n.fields.length) {
+    const heading = n.type === 'readModel' ? 'Data returned' : n.type === 'aggregate' ? 'State & fields' : 'Fields';
+    inner.append(el('h4', {}, heading));
+    for (const field of n.fields) {
+      const fr = el('div', { class: 'fieldrow' });
+      const fhead = el('div', { class: 'fr-head' }, el('span', { class: 'fr-name' }, field.name));
+      if (field.dataType) fhead.append(el('span', { class: 'fr-dtype' }, field.dataType));
+      const conf = field.confidence && CONF_COLOR[field.confidence];
+      if (conf) fhead.append(el('span', { class: 'fr-conf', style: 'background:' + conf, title: 'derivation confidence: ' + field.confidence }));
+      if (field.conceptual) fhead.append(el('span', { class: 'fr-tag' }, 'conceptual'));
+      if (field.sensitive) fhead.append(el('span', { class: 'fr-tag sensitive' }, 'sensitive'));
+      fr.append(fhead);
+      if (field.derivation) fr.append(el('div', { class: 'fr-deriv' }, field.derivation));
+      const sources = field.sources || [];
+      if (sources.length) {
+        for (const s of sources) {
+          const col = /^(col|tbl|db|srv)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+          const src = el('div', { class: 'fr-src' }, el('span', { class: 'fr-role' }, s.role || 'from'));
+          if (col) src.append(el('span', { class: 'fr-col link', onclick: () => openDetail(col.id) }, col.label));
+          else src.append(el('span', { class: 'fr-col addr' }, s.ref || '(unresolved)'));
+          if (s.transform) src.append(el('span', { class: 'fr-xform' }, s.transform));
+          if (s.note) src.append(el('span', { class: 'fr-note' }, '— ' + s.note));
+          fr.append(src);
+        }
+      } else {
+        fr.append(el('div', { class: 'fr-src none' }, 'computed / no direct source'));
+      }
+      inner.append(fr);
+    }
+  }
+
+  // Behavioral node -> the storage tables it writes/reads/projects. Mirrors the "Storage" block.
+  if (!isDataNode(n)) {
+    const storageLinks = nodeStorageLinks(n.id);
+    if (storageLinks.length) {
+      inner.append(el('h4', {}, 'Storage'));
+      for (const s of storageLinks) {
+        const lbl = el('div', { class: 'rlabel' }, s.node.label);
+        lbl.append(el('span', { class: 'fr-role' }, s.verb));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(s.node.id) }, lbl));
+      }
+    }
+  }
 
   // aggregate <-> invariant cross-reference. The "enforces" relationship lives on flow edges
   // (aggregate --enforces--> invariant); surface the full set here regardless of the flow you
@@ -1146,6 +1473,7 @@ document.querySelectorAll('#groupby .gb').forEach(b => b.addEventListener('click
 }));
 document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
 document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
+document.getElementById('tab-datamodel').addEventListener('click', () => setMode('datamodel'));
 document.getElementById('tab-glossary').addEventListener('click', () => setMode('glossary'));
 document.getElementById('tab-overview').addEventListener('click', () => setMode('overview'));
 

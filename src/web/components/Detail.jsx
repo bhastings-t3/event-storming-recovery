@@ -1,7 +1,98 @@
 import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
-import { enforcesRelation, nodeUsages, anchorUrl, flowNodeIds } from '../model.js';
+import {
+  enforcesRelation, nodeUsages, anchorUrl, flowNodeIds,
+  isDataNode, parentChain, tableConsumers, columnConsumers, nodeStorageLinks,
+} from '../model.js';
 import { getItem, fetchSource } from '../api.js';
+
+const CONF_COLOR = { high: '#6FC993', medium: '#E9A23B', low: '#E5645E' };
+
+// One conceptual field of a read model / aggregate: its derivation prose and 0..N storage sources.
+function FieldRow({ field, nodeById, openDetail }) {
+  const conf = field.confidence && CONF_COLOR[field.confidence];
+  return (
+    <div className="fieldrow">
+      <div className="fr-head">
+        <span className="fr-name">{field.name}</span>
+        {field.dataType && <span className="fr-dtype">{field.dataType}</span>}
+        {conf && <span className="fr-conf" style={{ background: conf }} title={'derivation confidence: ' + field.confidence} />}
+        {field.conceptual && <span className="fr-tag">conceptual</span>}
+        {field.sensitive && <span className="fr-tag sensitive">sensitive</span>}
+      </div>
+      {field.derivation && <div className="fr-deriv">{field.derivation}</div>}
+      {(field.sources || []).map((s, i) => {
+        const col = /^(col|tbl|db|srv)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+        return (
+          <div className="fr-src" key={i}>
+            <span className="fr-role">{s.role || 'from'}</span>
+            {col
+              ? <span className="fr-col link" onClick={() => openDetail(col.id)}>{col.label}</span>
+              : <span className="fr-col addr">{s.ref || '(unresolved)'}</span>}
+            {s.transform && <span className="fr-xform">{s.transform}</span>}
+            {s.note && <span className="fr-note">{'— ' + s.note}</span>}
+          </div>
+        );
+      })}
+      {(!field.sources || field.sources.length === 0) && <div className="fr-src none">computed / no direct source</div>}
+    </div>
+  );
+}
+
+function FieldsSection({ node, nodeById, openDetail }) {
+  if (!node.fields || !node.fields.length) return null;
+  const heading = node.type === 'readModel' ? 'Data returned' : node.type === 'aggregate' ? 'State & fields' : 'Fields';
+  return (
+    <>
+      <h4>{heading}</h4>
+      {node.fields.map((f, i) => <FieldRow key={i} field={f} nodeById={nodeById} openDetail={openDetail} />)}
+    </>
+  );
+}
+
+// Physical node (server/database/table/column): containment breadcrumb + what depends on it.
+function StorageSection({ node, model, nodeById, openDetail }) {
+  const chain = parentChain(nodeById, node);
+  const consumers = node.type === 'table' ? tableConsumers(model, nodeById, node.id)
+    : node.type === 'column' ? columnConsumers(model, node.id).map((c) => ({ node: c.node, verb: 'field ' + c.field.name }))
+    : [];
+  const columns = node.type === 'table' ? model.nodes.filter((n) => n.type === 'column' && n.parent === node.id) : [];
+  return (
+    <>
+      {chain.length > 1 && (
+        <div className="breadcrumb">
+          {chain.map((c, i) => (
+            <span key={c.id}>
+              {i > 0 && <span className="bc-sep">▸</span>}
+              {c.id === node.id ? <span className="bc-here">{c.label}</span>
+                : <span className="bc-link" onClick={() => openDetail(c.id)}>{c.label}</span>}
+            </span>
+          ))}
+        </div>
+      )}
+      {columns.length > 0 && (
+        <>
+          <h4>{columns.length + ' column' + (columns.length > 1 ? 's' : '')}</h4>
+          {columns.map((c) => (
+            <div key={c.id} className="relrow" onClick={() => openDetail(c.id)}>
+              <div className="rlabel">{c.label}{c.dataType && <span className="fr-dtype">{c.dataType}</span>}</div>
+            </div>
+          ))}
+        </>
+      )}
+      {consumers.length > 0 && (
+        <>
+          <h4>{'Used by ' + consumers.length}</h4>
+          {consumers.map((c, i) => (
+            <div key={i} className="relrow" onClick={() => openDetail(c.node.id)}>
+              <div className="rlabel">{c.node.label}<span className="fr-role">{c.verb}</span></div>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
 
 // An anchor link with a lazy "view source" expander that pulls the real code from the server.
 function Anchor({ repoRoot, a }) {
@@ -46,8 +137,10 @@ function DetailActions({ node }) {
 function NodeDetail({ node }) {
   const { model, PALETTE, nodeById, repoRoot, selectFlow, openDetail } = useExplorer();
   const p = PALETTE[node.type] || PALETTE.invariant;
+  const dataNode = isDataNode(node);
   const rel = enforcesRelation(model, nodeById, node);
   const usages = nodeUsages(node);
+  const storageLinks = dataNode ? [] : nodeStorageLinks(model, nodeById, node.id);
   const inFlows = model.flows.filter((f) => (f.steps || []).includes(node.id) || (f.edges || []).some((e) => e.from === node.id || e.to === node.id));
 
   return (
@@ -56,11 +149,29 @@ function NodeDetail({ node }) {
       <h3>{node.label}</h3>
       <div className="chips">
         {node.inferred && <span className="chip">inferred from code</span>}
+        {dataNode && node.inferred === false && <span className="chip">named in code</span>}
+        {node.engine && <span className="chip">{node.engine}</span>}
+        {node.kind === 'view' && <span className="chip">view</span>}
         {node.ownedBy && <span className="chip">{'state owned by ' + node.ownedBy}</span>}
         {node.synchronous && <span className="chip">synchronous inline reaction</span>}
+        {(node.provenance || []).map((pv) => <span key={pv} className="chip">{pv}</span>)}
       </div>
       <DetailActions node={node} />
       <div className="desc">{node.description || ''}</div>
+
+      {dataNode && <StorageSection node={node} model={model} nodeById={nodeById} openDetail={openDetail} />}
+      <FieldsSection node={node} nodeById={nodeById} openDetail={openDetail} />
+
+      {storageLinks.length > 0 && (
+        <>
+          <h4>Storage</h4>
+          {storageLinks.map((s, i) => (
+            <div key={i} className="relrow" onClick={() => openDetail(s.node.id)}>
+              <div className="rlabel">{s.node.label}<span className="fr-role">{s.verb}</span></div>
+            </div>
+          ))}
+        </>
+      )}
 
       {rel && rel.related.length > 0 && (
         <>

@@ -3,7 +3,11 @@
 import { PALETTE } from './palette.js';
 import { flowNodeIds } from '../lib/selectors.mjs';
 
-export { buildIndexes, flowNodeIds, nodeFlows, enforcesRelation, nodeUsages } from '../lib/selectors.mjs';
+export {
+  buildIndexes, flowNodeIds, nodeFlows, enforcesRelation, nodeUsages,
+  DATA_TYPES, DATA_TYPE_SET, isDataNode, STORAGE_VERBS,
+  parentChain, dataModelTree, tableConsumers, columnConsumers, nodeStorageLinks,
+} from '../lib/selectors.mjs';
 
 // types present in the model, in palette order (drives gallery/glossary filter chips + sort)
 export function galleryTypes(model) {

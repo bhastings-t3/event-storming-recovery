@@ -7,6 +7,7 @@ import Main from './components/Main.jsx';
 import Gallery from './components/Gallery.jsx';
 import Glossary from './components/Glossary.jsx';
 import Overview from './components/Overview.jsx';
+import DataModel from './components/DataModel.jsx';
 import Detail from './components/Detail.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
 import ContextBundle from './components/ContextBundle.jsx';
@@ -24,6 +25,7 @@ function Explorer() {
           <Main />
         </div>
         {mode === 'gallery' && <Gallery />}
+        {mode === 'data' && <DataModel />}
         {mode === 'glossary' && <Glossary />}
         {mode === 'overview' && <Overview />}
         <Detail />

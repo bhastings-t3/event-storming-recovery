@@ -6,6 +6,7 @@
 // Globals the original relied on (nodeById, PALETTE, selectedId, openDetail) are passed in
 // through `ctx = { nodeById, palette, selectedId, onOpenDetail }`.
 import { el } from './dom.js';
+import { DATA_TYPE_SET } from '../../lib/selectors.mjs';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9f43', '#4d96ff', '#ff6ec7', '#c0eb75', '#f78fb3', '#5ed0e0', '#e0a458'];
@@ -22,6 +23,11 @@ export function renderFlowInto(f, lane, ctx) {
   const { nodeById, palette: PALETTE } = ctx;
   lane.innerHTML = '';
   lane.style.position = 'relative';
+  // Physical storage nodes (server/database/table/column) are a substrate, not steps in the
+  // behavioral lane. Drop them and any edge touching them so the flow board stays behavioral;
+  // the links survive in the model for the Data-model tab and the detail panel.
+  const isData = (id) => { const n = nodeById.get(id); return n && DATA_TYPE_SET.has(n.type); };
+  f = { ...f, steps: (f.steps || []).filter(id => !isData(id)), edges: (f.edges || []).filter(e => !isData(e.from) && !isData(e.to)) };
   const flowIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
   const stepIdx = {}; (f.steps || []).forEach((id, i) => (stepIdx[id] = i));
   const isRM = n => n && n.type === 'readModel';

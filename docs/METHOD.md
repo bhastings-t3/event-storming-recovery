@@ -169,6 +169,28 @@ cheaper and more consistent to mine once, after the merge, than to have every tr
 re-describe the shared vocabulary. (Trace agents may jot candidate jargon into their notes to seed
 this phase; the mining consolidates it.)
 
+## Phase 5.5 — Data mapping (optional)
+
+The behavioral model deliberately abstracts storage away: a read model is "what an actor reads to
+decide," an aggregate is "state that changes together" — neither says *what data it returns* or
+*where that data lives*. That join (behavior ↔ storage) is the one thing a services-and-repositories
+codebase keeps in plain sight (the tables are right there in the SQL) yet never records as a whole.
+Phase 5.5 recovers it: a wave of agents sweeps SQL literals, ORM/repository calls, and connection
+strings (corroborated by migrations when they exist), and adds two things to the model — a `fields[]`
+array on read models and aggregates, and a physical layer of `server`/`database`/`table`/`column`
+nodes joined by `parent` containment and demand-driven `persists to`/`projects from`/`writes` edges.
+
+The load-bearing idea is that **a field is a conceptual property, not a column alias.** A read
+model's `total` may be a sum across joined rows; an aggregate's `status` may be assembled in app code;
+some fields are computed and never stored. So every field carries a prose *derivation* over **0..N**
+sources (zero is valid), and keeps two signals apart: `conceptual` (consumers see it) versus
+`confidence` (we trust its derivation). Physical nodes are `inferred: false` — the inverse of the
+behavioral layer — because the code literally names them. Like every other layer it stays
+**demand-driven**: only the columns a field references appear, never a full-schema dump. It renders in
+the explorer's **Data model** tab and the detail panel's *Data returned / State & fields* sections,
+and is exposed over MCP so a connected Claude terminal can answer "what does this return, and where
+does it come from."
+
 ## Phase 6 — Generate & verify
 
 `generate-views.js` renders the canonical model to a Graphviz DOT (one cluster per flow, Event

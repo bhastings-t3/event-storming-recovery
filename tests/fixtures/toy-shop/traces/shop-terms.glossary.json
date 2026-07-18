@@ -4,17 +4,30 @@
       "id": "term-order",
       "term": "Order",
       "category": "concept",
-      "aka": ["Cart checkout", "Purchase"],
+      "aka": [
+        "Cart checkout",
+        "Purchase"
+      ],
       "definition": "A customer's confirmed purchase: the aggregate that owns line items, totals, and the order lifecycle once checkout succeeds. It is created by PlaceOrder and is the root the rest of fulfilment hangs off.",
-      "relatedNodes": ["agg-order"],
-      "anchors": [{ "path": "src/Orders/Order.cs", "line": 12, "symbol": "Order" }],
+      "relatedNodes": [
+        "agg-order"
+      ],
+      "anchors": [
+        {
+          "path": "src/Orders/Order.cs",
+          "line": 12,
+          "symbol": "Order"
+        }
+      ],
       "status": "resolved"
     },
     {
       "id": "term-sku",
       "term": "SKU",
       "category": "acronym",
-      "aka": ["Stock Keeping Unit"],
+      "aka": [
+        "Stock Keeping Unit"
+      ],
       "definition": "The per-variant product identifier stock is tracked against. Reservation and availability checks key off the SKU, not the product.",
       "status": "resolved"
     },
@@ -23,7 +36,9 @@
       "term": "Stock reservation",
       "category": "concept",
       "definition": "A soft hold placed on inventory for a SKU while an order is being placed, released if payment fails.",
-      "relatedNodes": ["agg-inventory"],
+      "relatedNodes": [
+        "agg-inventory"
+      ],
       "status": "resolved"
     },
     {

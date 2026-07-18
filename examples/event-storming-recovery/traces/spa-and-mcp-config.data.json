@@ -1,0 +1,425 @@
+{
+  "nodes": [
+    {
+      "id": "rm-flow-board",
+      "type": "readModel",
+      "label": "Flows board",
+      "inferred": true,
+      "tactical": {
+        "explanation": "Re-derived client-side from the single GET /api/model payload; re-stated here to attach its fields[]. Not a separate endpoint.",
+        "anchors": [
+          {
+            "path": "src/web/components/Sidebar.jsx",
+            "line": 3,
+            "symbol": "Sidebar",
+            "note": "sidebarGroups(model, groupMode, nodeById) pivots the flow list"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "flowList",
+          "conceptual": true,
+          "dataType": "array<group>",
+          "derivation": "The left sidebar's grouped flow list. sidebarGroups(model, groupMode, nodeById) either keeps the two tier buckets (tier !== 2 vs tier === 2) or, in 'actor'/'aggregate' pivot mode, walks every flow's node ids (flowNodeIds = steps + edge endpoints), buckets flows under each actor/aggregate node of that type, and sorts groups by node label. Pure client-side derivation over the one payload; switching group mode is React state only, no re-fetch.",
+          "sources": [
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "derived-from",
+              "transform": "transformation",
+              "note": "flows grouped by tier or pivoted per actor/aggregate"
+            },
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "joined-on",
+              "transform": "join",
+              "note": "resolve pivot node ids -> actor/aggregate labels via nodeById"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "orm-mapping"
+          ],
+          "notes": "Client-derived view over GET /api/model, not a separate endpoint.",
+          "evidence": [
+            {
+              "path": "src/web/components/Sidebar.jsx",
+              "line": 3,
+              "symbol": "Sidebar",
+              "note": "renders sidebarGroups output"
+            },
+            {
+              "path": "src/web/model.js",
+              "line": 19,
+              "symbol": "sidebarGroups",
+              "note": "tier / actor / aggregate grouping over model.flows"
+            }
+          ]
+        },
+        {
+          "name": "boardLane",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "The pan/zoom board for the currently selected flow: currentFlow = model.flows.find(id), rendered as its ordered sticky lane (flow.steps) with labeled edges, plus the flow's hotspots and tier-2 instances. Step and edge ids are resolved to sticky nodes via the memoized nodeById index. Client-side; selecting a flow changes React state only, never re-fetches.",
+          "sources": [
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "derived-from",
+              "transform": "transformation",
+              "note": "the selected flow's steps + edges + hotspots"
+            },
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "joined-on",
+              "transform": "join",
+              "note": "resolve step/edge ids to stickies for the lane"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "orm-mapping"
+          ],
+          "evidence": [
+            {
+              "path": "src/web/components/Main.jsx",
+              "line": 24,
+              "symbol": "Main",
+              "note": "renders currentFlow + its hotspots/instances on the board"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-gallery",
+      "type": "readModel",
+      "label": "Gallery tab",
+      "inferred": true,
+      "tactical": {
+        "explanation": "Re-derived client-side from the single GET /api/model payload; re-stated here to attach its fields[]. Not a separate endpoint.",
+        "anchors": [
+          {
+            "path": "src/web/components/Gallery.jsx",
+            "line": 7,
+            "symbol": "Gallery",
+            "note": "filter/sort model.nodes by type chips + query"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "stickies",
+          "conceptual": true,
+          "dataType": "array<node>",
+          "derivation": "Every sticky node in the model as a filterable grid. Gallery filters model.nodes by the active type-chip set and a text query over label + description + palette type name, then sorts by palette type order (types.indexOf) then label. Pure client-side re-derivation of the one payload, no server call. Each card also surfaces nodeFlows(model, id).length (how many flows the node appears in) and a 'retired' badge when all its flows are dead.",
+          "sources": [
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "derived-from",
+              "transform": "transformation",
+              "note": "filter by type chips + query, sort by palette type then label"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "orm-mapping"
+          ],
+          "notes": "Client-derived view over GET /api/model, not a separate endpoint.",
+          "evidence": [
+            {
+              "path": "src/web/components/Gallery.jsx",
+              "line": 19,
+              "symbol": "Gallery",
+              "note": "filter/sort over model.nodes"
+            }
+          ]
+        },
+        {
+          "name": "typeChips",
+          "conceptual": true,
+          "dataType": "array<string>",
+          "derivation": "The filter/sort type vocabulary: galleryTypes(model) lists the node types actually present in the model, in PALETTE order (excluding hotspot). Drives both the chip filter row and the grid's primary sort key.",
+          "sources": [
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "grouped-by",
+              "transform": "aggregation",
+              "note": "distinct node.type values present, palette-ordered"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "orm-mapping"
+          ],
+          "evidence": [
+            {
+              "path": "src/web/model.js",
+              "line": 13,
+              "symbol": "galleryTypes",
+              "note": "types present in palette order; drives chips + sort"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-glossary",
+      "type": "readModel",
+      "label": "Glossary tab",
+      "inferred": true,
+      "tactical": {
+        "explanation": "Re-derived client-side from the single GET /api/model payload; re-stated here to attach its fields[]. Not a separate endpoint.",
+        "anchors": [
+          {
+            "path": "src/web/components/Glossary.jsx",
+            "line": 10,
+            "symbol": "Glossary",
+            "note": "filter/sort model.nodes into an A-Z dictionary"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "terms",
+          "conceptual": true,
+          "dataType": "array<node>",
+          "derivation": "The ubiquitous-language dictionary. IMPORTANT: the SPA Glossary tab renders model.NODES (the stickies), not the curated model.terms array. Glossary.jsx filters model.nodes by the active type chips and a label+description query, optionally keeps only nodes appearing in more than one flow (sharedOnly, via nodeFlows), sorts by label case-insensitively, and interleaves A-Z letter headers; the heading literally counts '{n} of {model.nodes.length} terms'. (The curated model.terms array is instead rendered by the STATIC explorer.html glossary -- see rm-explorer.glossary / col-flows-terms -- not by this SPA tab.)",
+          "sources": [
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "derived-from",
+              "transform": "transformation",
+              "note": "filter/sort stickies into an A-Z dictionary; sharedOnly keeps multi-flow nodes"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "orm-mapping"
+          ],
+          "notes": "Tuning brief expected col-flows-terms, but the SPA Glossary provably reads model.nodes (Glossary.jsx:22,45) -- wired to col-flows-nodes to match the code. See data.notes Schema friction.",
+          "evidence": [
+            {
+              "path": "src/web/components/Glossary.jsx",
+              "line": 22,
+              "symbol": "Glossary",
+              "note": "let nodes = model.nodes.filter(...)"
+            },
+            {
+              "path": "src/web/components/Glossary.jsx",
+              "line": 45,
+              "symbol": "Glossary",
+              "note": "'{n} of {model.nodes.length} terms' heading"
+            },
+            {
+              "path": "src/lib/selectors.mjs",
+              "line": 16,
+              "symbol": "nodeFlows",
+              "note": "shared: flows a node appears in (drives sharedOnly)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agg-mcp-registration",
+      "type": "aggregate",
+      "label": "MCP Registration",
+      "inferred": true,
+      "ownedBy": "ext-claude-cli",
+      "tactical": {
+        "explanation": "State owned by ext-claude-cli; the only writer is the `claude mcp add` shell-out. es-view holds no in-memory or on-disk store for it. Re-stated here to attach the registration's fields (name/url/scope).",
+        "anchors": [
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 13,
+            "symbol": "claudeMcpAdd",
+            "note": "the only writer; effect lands in the external CLI config"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The registered MCP server alias: the compile-time constant MCP_NAME = 'event-storming' (server.mjs:24), passed as the <name> argument of `claude mcp add`. Fixed, not user-supplied.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "assumed"
+          ],
+          "notes": "The registration's state lives in the user's Claude config (ownedBy ext-claude-cli), written by shelling `claude mcp add` in mcp-register.mjs; es-view reads no store for it, so there is no physical node to cite.",
+          "evidence": [
+            {
+              "path": "src/server/server.mjs",
+              "line": 24,
+              "symbol": "MCP_NAME",
+              "note": "registered alias 'event-storming'"
+            },
+            {
+              "path": "src/server/mcp-register.mjs",
+              "line": 15,
+              "symbol": "claudeMcpAdd",
+              "note": "name interpolated into the command"
+            }
+          ]
+        },
+        {
+          "name": "url",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The HTTP MCP endpoint registered for the alias: mcpUrl() = runtime.baseUrl + '/mcp' (server.mjs:99), where runtime.baseUrl = `http://<host>:<port>` is set only after the socket binds (server.mjs:204). Uses the ACTUAL bound port, which may fall forward past the default 5178 on EADDRINUSE, so the registered URL agrees with the live server. Quoted in the register command; a 503 is returned if the socket is not yet bound.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "assumed"
+          ],
+          "notes": "In-memory only (runtime.baseUrl); the durable copy lands in the external Claude config via `claude mcp add`. Not a store es-view reads.",
+          "evidence": [
+            {
+              "path": "src/server/server.mjs",
+              "line": 99,
+              "symbol": "mcpUrl",
+              "note": "runtime.baseUrl + '/mcp'"
+            },
+            {
+              "path": "src/server/mcp-register.mjs",
+              "line": 15,
+              "symbol": "claudeMcpAdd",
+              "note": "url quoted into the command"
+            }
+          ]
+        },
+        {
+          "name": "scope",
+          "conceptual": true,
+          "dataType": "enum",
+          "derivation": "Which store in the user's Claude config the entry lands in: one of local | project | user, chosen in the ConnectClaude dropdown. Double-whitelisted: the route accepts scope only if in {local,project,user} else undefined (server.mjs:182), and claudeMcpAdd re-checks the SCOPES set and appends ` --scope <scope>` only on a hit (mcp-register.mjs:14). An undefined scope omits the flag, letting the Claude CLI apply its default.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "assumed"
+          ],
+          "notes": "Selects the external Claude config store (project-local list / shared .mcp.json / user-global settings); es-view does not read it back.",
+          "evidence": [
+            {
+              "path": "src/server/mcp-register.mjs",
+              "line": 11,
+              "symbol": "SCOPES",
+              "note": "whitelist Set {local, project, user}"
+            },
+            {
+              "path": "src/server/server.mjs",
+              "line": 182,
+              "symbol": "createServer",
+              "note": "route-level scope whitelist before the call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-mcp-connect-command",
+      "type": "readModel",
+      "label": "MCP connect command",
+      "inferred": true,
+      "tactical": {
+        "explanation": "Projected in-memory from runtime.baseUrl (no file). GET /api/mcp/info returns { name, url, command }; re-stated here to attach those computed fields.",
+        "anchors": [
+          {
+            "path": "src/server/server.mjs",
+            "line": 174,
+            "symbol": "createServer",
+            "note": "GET /api/mcp/info returns { name, url, command } without running it"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "command",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The copy-able connect command shown WITHOUT running it: `claude mcp add --transport http event-storming <url>`, where <url> = mcpUrl() (runtime.baseUrl + '/mcp'). Assembled in GET /api/mcp/info (server.mjs:176) from MCP_NAME + the live URL; the SPA renders info.command under the button and bin/es-view.mjs prints the same line in its startup banner. The info form omits --scope and does not quote the URL, a cosmetic drift from the string the register write actually builds.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Computed in-memory from runtime.baseUrl; null until the socket binds. Not persisted.",
+          "evidence": [
+            {
+              "path": "src/server/server.mjs",
+              "line": 176,
+              "symbol": "createServer",
+              "note": "command string built from MCP_NAME + mcpUrl()"
+            },
+            {
+              "path": "src/web/components/ConnectClaude.jsx",
+              "line": 53,
+              "symbol": "ConnectClaude",
+              "note": "renders info.command under the button"
+            },
+            {
+              "path": "bin/es-view.mjs",
+              "line": 107,
+              "symbol": "main",
+              "note": "startup banner prints the same claude mcp add line"
+            }
+          ]
+        },
+        {
+          "name": "url",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The live MCP endpoint offered for connection: mcpUrl() = runtime.baseUrl + '/mcp', using the actual bound port. null until the socket binds.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Computed in-memory from runtime.baseUrl; not persisted.",
+          "evidence": [
+            {
+              "path": "src/server/server.mjs",
+              "line": 99,
+              "symbol": "mcpUrl",
+              "note": "runtime.baseUrl + '/mcp'"
+            },
+            {
+              "path": "src/server/server.mjs",
+              "line": 175,
+              "symbol": "createServer",
+              "note": "url = mcpUrl() returned in the /api/mcp/info payload"
+            }
+          ]
+        },
+        {
+          "name": "name",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The alias offered in the command: the MCP_NAME constant 'event-storming' (server.mjs:24), returned as the `name` field of the /api/mcp/info payload.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "evidence": [
+            {
+              "path": "src/server/server.mjs",
+              "line": 24,
+              "symbol": "MCP_NAME",
+              "note": "registered alias 'event-storming'"
+            },
+            {
+              "path": "src/server/server.mjs",
+              "line": 176,
+              "symbol": "createServer",
+              "note": "name returned in /api/mcp/info"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "flows": []
+}

@@ -7,11 +7,12 @@ import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mergeTraceDocs, mergeTracesDir } from '../src/lib/merge.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const merge = join(root, 'tools', 'merge-flows.js');
 const generate = join(root, 'tools', 'generate-views.js');
-const toyTraces = join(root, 'examples', 'toy-shop', 'traces');
+const toyTraces = join(root, 'tests', 'fixtures', 'toy-shop', 'traces');
 
 test('merge validates the toy-shop traces and emits the expected model', () => {
   const out = mkdtempSync(join(tmpdir(), 'es-'));
@@ -114,6 +115,77 @@ test('merge REJECTS an invalid model (aggregate issuing a command)', () => {
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
+});
+
+test('data-model layer: fields[], physical parents, and the new verbs validate correctly', () => {
+  // Helpers to build a minimal one-doc model around a readModel that carries a fields[] source ref.
+  const doc = (refId, extraNodes = [], edges = []) => [{
+    name: 'dm.json',
+    doc: {
+      nodes: [
+        {
+          id: 'rm-x', type: 'readModel', label: 'X',
+          tactical: { explanation: 'e', anchors: [{ path: 'a', line: 1, symbol: 's' }] },
+          fields: [{ name: 'total', derivation: 'Sum of the lines.', conceptual: true, confidence: 'medium', sources: [{ ref: refId, role: 'derived-from', transform: 'aggregation' }] }]
+        },
+        { id: 'fld-y', type: 'field', label: 'y', fieldKind: 'key', parent: 'ds-z' },
+        { id: 'ds-z', type: 'datastore', label: 'z', storeKind: 'file' },
+        ...extraNodes
+      ],
+      flows: [{ id: 'f', name: 'F', tier: 1, kind: 'read', status: 'live', steps: ['rm-x'], edges, hotspots: [] }],
+      hotspots: []
+    }
+  }];
+
+  // (a) a well-formed fields[] whose ref resolves merges with no errors...
+  const ok = mergeTraceDocs(doc('fld-y', [], [{ from: 'rm-x', to: 'ds-z', verb: 'persists to' }]));
+  assert.equal(ok.errors.length, 0, 'well-formed fields[] + resolvable ref => no errors');
+  // (d) ...and the new verb does not draw a nonstandard-verb warning
+  assert.ok(!ok.warnings.some((w) => /nonstandard edge verb/.test(w)), "'persists to' is a standard verb");
+
+  // (b) a dangling field ref in a field source is an error
+  const bad = mergeTraceDocs(doc('fld-does-not-exist'));
+  assert.ok(bad.errors.some((e) => /field 'total' source ref 'fld-does-not-exist' not in nodes/.test(e)), 'dangling field source ref errors');
+
+  // (c) an unknown parent is an error
+  const orphanParent = mergeTraceDocs(doc('fld-y', [{ id: 'ds-bad', type: 'datastore', label: 'bad', parent: 'ds-missing' }]));
+  assert.ok(orphanParent.errors.some((e) => /node ds-bad: parent 'ds-missing' not in nodes/.test(e)), 'unknown parent errors');
+
+  // (e) the real toy-shop fixture still merges with zero errors after the data-model additions
+  const toy = mergeTracesDir(toyTraces);
+  assert.equal(toy.errors.length, 0, `toy-shop merges clean, got: ${toy.errors.join('; ')}`);
+  assert.ok((toy.model.meta.counts.byType.datastore || 0) >= 3, 'datastore nodes are counted in byType');
+});
+
+test('data-model integrity: parent cycles error, wrong-level parents warn, fields union across files', () => {
+  // A parent cycle (a -> b -> a) is rejected, not left to produce a garbage breadcrumb.
+  const cyc = mergeTraceDocs([{ name: 'c.json', doc: { nodes: [
+    { id: 'ds-a', type: 'datastore', label: 'a', parent: 'ds-b' },
+    { id: 'ds-b', type: 'datastore', label: 'b', parent: 'ds-a' },
+  ], flows: [] } }]);
+  assert.ok(cyc.errors.some((e) => /parent chain has a cycle/.test(e)), 'a parent cycle is an error');
+
+  // A wrong-level parent (a datastore parented to a field) warns but does not error (forgiving, but
+  // flagged because it would drop the node from the containment tree).
+  const wl = mergeTraceDocs([{ name: 'w.json', doc: { nodes: [
+    { id: 'fld-x', type: 'field', label: 'x' },
+    { id: 'ds-a', type: 'datastore', label: 'a', parent: 'fld-x' },
+  ], flows: [] } }]);
+  assert.ok(wl.warnings.some((w) => /must be a datastore .* not a field/.test(w)), 'wrong-level parent warns');
+  assert.ok(!wl.errors.some((e) => /parent/.test(e)), 'wrong-level parent is not an error');
+
+  // fields[] added in a LATER file (the data-mapping phase) union onto a node the trace phase made.
+  const merged = mergeTraceDocs([
+    { name: '01-trace.json', doc: { nodes: [
+      { id: 'agg-o', type: 'aggregate', label: 'Order', tactical: { explanation: 'e', anchors: [{ path: 'a', line: 1, symbol: 's' }] } },
+    ], flows: [{ id: 'f', name: 'F', tier: 1, kind: 'write', status: 'live', steps: ['agg-o'], edges: [], hotspots: [] }] } },
+    { name: '02-data.json', doc: { nodes: [
+      { id: 'agg-o', type: 'aggregate', label: 'Order', fields: [{ name: 'status', derivation: 'Order lifecycle state.' }] },
+    ], flows: [] } },
+  ]);
+  const aggO = merged.model.nodes.find((n) => n.id === 'agg-o');
+  assert.equal(merged.errors.length, 0, `union merge is clean, got: ${merged.errors.join('; ')}`);
+  assert.ok((aggO.fields || []).some((f) => f.name === 'status'), 'fields from a later file union onto the existing node');
 });
 
 test('plugin + marketplace manifests are well-formed and agree', () => {

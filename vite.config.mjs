@@ -19,7 +19,9 @@ export default defineConfig({
     port: 5179,
     strictPort: false,
     proxy: {
-      '/api': 'http://127.0.0.1:5178',
+      // Match only real API routes under /api/ — a bare '/api' prefix also swallows the
+      // SPA's own `api.js` module request (/api.js) and 404s it, blanking the dev app.
+      '^/api/': 'http://127.0.0.1:5178',
     },
   },
 });

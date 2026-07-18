@@ -5,7 +5,8 @@
  *   1. --model <flows.json>   explicit, already-merged canonical model
  *   2. --traces <dir>         merge the per-flow trace JSONs on the fly
  *   3. auto-discover          first "model/flows.json" under cwd (then any flows.json)
- *   4. bundled example        examples/toy-shop/model/flows.json shipped in the package
+ *   4. bundled example        examples/event-storming-recovery/model/flows.json (this tool's
+ *                             own recovered self-model) shipped in the package
  *
  * Returns the model plus provenance so the CLI can tell the user where the data
  * came from, and a default repo-root for resolving source anchors.
@@ -89,17 +90,19 @@ export function resolveModel({ modelPath, tracesDir, repoRoot, cwd, packageRoot 
       source = 'discovered';
       if (discovered.length > 1) warnings.push(`found ${discovered.length} flows.json files; using ${path.relative(cwd, sourcePath) || sourcePath}. Pass --model to choose another.`);
     } else {
-      sourcePath = path.join(packageRoot, 'examples', 'toy-shop', 'model', 'flows.json');
+      sourcePath = path.join(packageRoot, 'examples', 'event-storming-recovery', 'model', 'flows.json');
       model = readModelFile(sourcePath);
       source = 'example';
     }
   }
 
-  // Repo root for source anchors: explicit flag > model meta > the model file's own tree > cwd.
+  // Repo root for source anchors: explicit flag > (bundled self-model → the package itself, whose
+  // src/ and tools/ the example's anchors point at) > model meta > cwd.
   const resolvedRepoRoot = repoRoot
     ? path.resolve(cwd, repoRoot)
-    : (model.meta && model.meta.repoRoot)
-      || (source === 'example' ? path.join(packageRoot, 'examples', 'toy-shop') : cwd);
+    : source === 'example'
+      ? packageRoot
+      : (model.meta && model.meta.repoRoot) || cwd;
 
   return { model, source, sourcePath, repoRoot: resolvedRepoRoot, warnings };
 }

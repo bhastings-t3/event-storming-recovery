@@ -1,0 +1,448 @@
+{
+  "nodes": [
+    {
+      "id": "actor-viewer",
+      "type": "actor",
+      "label": "Explorer viewer",
+      "inferred": true,
+      "description": "The human viewing the Event Storming explorer SPA. Here they curate a bundle: right-clicking or clicking 'Add to context' on nodes, whole flows, and hotspots to gather the set they want to hand to Claude, then optionally copying it or leaving it for a connected Claude session to @-mention."
+    },
+    {
+      "id": "actor-claude",
+      "type": "actor",
+      "label": "Connected Claude session",
+      "inferred": true,
+      "description": "A Claude session connected to the es-view MCP endpoint (same process as the SPA). It reads the curated bundle by @-mentioning the event-storming://selected-nodes resource, receiving the whole gathered set as grounded markdown so a refactor request is anchored to real files, not just labels."
+    },
+    {
+      "id": "cmd-add-to-bundle",
+      "type": "command",
+      "label": "AddToContextBundle",
+      "inferred": true,
+      "description": "Add one typed item (a node, a whole flow, or a hotspot) to the curated context bundle. The item must exist in the model for its declared type; adding an item already present is a no-op (the bundle is a set).",
+      "tactical": {
+        "explanation": "SPA surfaces call addContext(type,id): the node Detail panel's DetailActions button (type 'node'), the flow Overview FlowActions button (type 'flow'), and the right-click ContextMenu (node/flow/hotspot). addContext POSTs /api/context {type,id}. server.mjs validates via itemExists (flow => model.flows, hotspot => hotspotById, else nodeById); on a miss it 404s 'unknown <type>'. On success it calls state.addToBundle(type,id) and returns the new items[]. store.jsx replaces bundleItems from the response so the UI count updates. This is a UI-mirroring write against in-memory server state only (no file, no transaction) -- the same shared state.mjs object the MCP resource reads.",
+        "anchors": [
+          {
+            "path": "src/web/api.js",
+            "line": 23,
+            "symbol": "addContext",
+            "note": "POST /api/context {type,id}"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 143,
+            "symbol": "createServer",
+            "note": "POST branch: itemExists guard then state.addToBundle"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 21,
+            "symbol": "addToBundle",
+            "note": "Map.set keyed by type:id if absent"
+          },
+          {
+            "path": "src/web/components/Detail.jsx",
+            "line": 129,
+            "symbol": "DetailActions",
+            "note": "'+ Add to context' node button"
+          },
+          {
+            "path": "src/web/components/Main.jsx",
+            "line": 16,
+            "symbol": "FlowActions",
+            "note": "flow add-to-bundle button"
+          },
+          {
+            "path": "src/web/components/ContextMenu.jsx",
+            "line": 43,
+            "symbol": "ContextMenu",
+            "note": "right-click add for node/flow/hotspot"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-remove-from-bundle",
+      "type": "command",
+      "label": "RemoveFromContextBundle",
+      "inferred": true,
+      "description": "Remove one typed item from the curated bundle. A correction the human makes while curating (the ✕ on a bundle row, or toggling off the same add control).",
+      "tactical": {
+        "explanation": "removeContext(type,id) issues DELETE /api/context {type,id}. server.mjs DELETE branch, when a body.id is present, calls state.removeFromBundle(type,id) (Map.delete by type:id key -- a missing key is a silent no-op) and returns the remaining items[]. Reached from the ContextBundle drawer row ✕ (removeFromContext) and the same add/remove toggle in DetailActions/FlowActions/ContextMenu when the item is already in the bundle. Pure in-memory mutation, no validation needed (delete of an absent key is harmless).",
+        "anchors": [
+          {
+            "path": "src/web/api.js",
+            "line": 24,
+            "symbol": "removeContext",
+            "note": "DELETE /api/context {type,id}"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 150,
+            "symbol": "createServer",
+            "note": "DELETE branch: body.id => removeFromBundle"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 22,
+            "symbol": "removeFromBundle",
+            "note": "Map.delete by type:id"
+          },
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 50,
+            "symbol": "ContextBundle",
+            "note": "drawer row ✕ remove"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-clear-bundle",
+      "type": "command",
+      "label": "ClearContextBundle",
+      "inferred": true,
+      "description": "Empty the whole curated bundle in one action (the drawer's 'Clear' button), discarding every gathered node/flow/hotspot.",
+      "tactical": {
+        "explanation": "clearContext() issues DELETE /api/context with NO body. server.mjs DELETE branch falls through the 'has id' check to state.clearBundle() (Map.clear) and returns items: []. Triggered by the ContextBundle drawer 'Clear' button (clearBundle in store.jsx). In-memory only; there is no server-side confirmation and no undo.",
+        "anchors": [
+          {
+            "path": "src/web/api.js",
+            "line": 25,
+            "symbol": "clearContext",
+            "note": "DELETE /api/context (no body)"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 153,
+            "symbol": "createServer",
+            "note": "DELETE with no id => state.clearBundle()"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 23,
+            "symbol": "clearBundle",
+            "note": "Map.clear"
+          },
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 59,
+            "symbol": "ContextBundle",
+            "note": "'Clear' button"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-selection",
+      "type": "aggregate",
+      "label": "Selection & context bundle",
+      "inferred": true,
+      "description": "The live 'what am I looking at / what have I gathered' state for one es-view run, held purely in memory and shared same-process between the SPA API and the MCP bridge. This flow uses its bundle facet: an insertion-ordered set of typed refs { type: node|flow|hotspot, id }; the selection tracer uses the selection facet on the same object.",
+      "tactical": {
+        "explanation": "createState() in state.mjs closes over `const bundle = new Map()` keyed by `${type}:${id}` -> { type, id, at }, alongside the selection field. Bundle methods: getBundle() (values mapped to {type,id}, insertion order preserved by Map), addToBundle (set-if-absent -> dedup invariant), removeFromBundle (delete), clearBundle (clear). NON-PERSISTENT by design: no file, no db -- process memory only; a server restart loses the bundle. It survives an in-run browser reload only because store.jsx hydrates bundleItems once on mount from GET /api/context (useEffect at store.jsx:32). This is the SAME object the selection flow mutates and the SAME object every MCP session and every browser tab shares (one bundle per process, not per session).",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 11,
+            "symbol": "createState",
+            "note": "bundle Map + add/remove/clear/getBundle"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 32,
+            "symbol": "ExplorerProvider",
+            "note": "hydrate bundle once on mount (survives reload)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "inv-bundle-item-exists",
+      "type": "invariant",
+      "label": "A bundle item references a real model item of its type, at most once",
+      "inferred": true,
+      "description": "The curated bundle may only hold refs that resolve: each { type, id } must point at an existing node, flow, or hotspot for its declared type, and each type:id may appear at most once (the bundle is a set, insertion-ordered).",
+      "tactical": {
+        "explanation": "Two enforced facets of one contract. (1) EXISTENCE, checked at the command boundary in server.mjs before mutating: itemExists(type,id) resolves flow->model.flows, hotspot->hotspotById, node->nodeById; a miss returns 404 'unknown <type>' and the item is never added (server.mjs:147, helper at :27). (2) UNIQUENESS/ORDER, enforced by the store: addToBundle only sets when `!bundle.has(key)`, so re-adding is a no-op and Map insertion order is the bundle order (state.mjs:21). Note existence is validated only at add-time; because the model is frozen for the process lifetime there is no later drift to re-check. Remove/clear need no guard.",
+        "anchors": [
+          {
+            "path": "src/server/server.mjs",
+            "line": 147,
+            "symbol": "createServer",
+            "note": "POST guarded by itemExists => 404 on unknown item"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 27,
+            "symbol": "itemExists",
+            "note": "type-dispatched existence check (flow/hotspot/node)"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 21,
+            "symbol": "addToBundle",
+            "note": "set-if-absent: uniqueness + insertion order"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-bundle-item-added",
+      "type": "event",
+      "label": "ContextItemAdded",
+      "inferred": true,
+      "description": "A node, flow, or hotspot the human chose has entered the curated bundle. This is the domain-significant fact of the flow: the gathered set that Claude will read has grown by one grounded item.",
+      "tactical": {
+        "explanation": "Realized by addToBundle's Map.set (state.mjs:21) after the existence guard passes; the POST returns the new items[] and store.jsx updates bundleItems so the drawer count and in-bundle toggles reflect it (store.jsx:48). No event is persisted or published -- 'the fact' is the presence of the ref in the in-memory Map, read live by the MCP resource projection.",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 21,
+            "symbol": "addToBundle",
+            "note": "the ref enters the bundle Map"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 48,
+            "symbol": "addToContext",
+            "note": "SPA reflects the added item"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-bundle-item-removed",
+      "type": "event",
+      "label": "ContextItemRemoved",
+      "inferred": true,
+      "description": "An item the human previously gathered has been taken out of the curated bundle.",
+      "tactical": {
+        "explanation": "Realized by removeFromBundle's Map.delete (state.mjs:22); the DELETE returns the remaining items[] and store.jsx refreshes bundleItems. A no-op when the key was absent.",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 22,
+            "symbol": "removeFromBundle",
+            "note": "the ref leaves the bundle Map"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-bundle-cleared",
+      "type": "event",
+      "label": "ContextBundleCleared",
+      "inferred": true,
+      "description": "The human emptied the whole curated bundle at once; nothing remains for Claude to read until they gather again.",
+      "tactical": {
+        "explanation": "Realized by clearBundle's Map.clear (state.mjs:23) on a bodyless DELETE /api/context; the response items: [] resets the SPA. Irreversible in-run (no undo, no history).",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 23,
+            "symbol": "clearBundle",
+            "note": "the whole bundle Map is emptied"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-context-bundle",
+      "type": "readModel",
+      "label": "Curated context bundle (selected-nodes)",
+      "inferred": true,
+      "description": "The curated bundle projected to one grounded markdown document: each gathered node/flow/hotspot rendered with its description, invariants, flows, source anchors (real code), and for flows a colored Mermaid graph, joined by rules. This is what actor-claude reads. Exposed two ways: the MCP resource event-storming://selected-nodes (the domain-significant channel) and GET /api/context markdown for the SPA's 'Copy all' clipboard channel.",
+      "tactical": {
+        "explanation": "renderBundleMarkdown(services, items) maps each ref through renderItemMarkdown -> buildNodeContext/buildFlowContext/buildHotspotContext then the matching renderer, filtering unresolved refs (returns '' -> dropped) and joining with '---'. The projection is COMPUTED ON READ (lazy), not materialized on the add/remove event: it re-reads state.getBundle() each time. It resolves each ref against agg-model (services.model/indexes) and, per anchor, embeds real source excerpts read from ext-source-fs via readSource. Channels: (a) MCP resource 'selected-nodes' registered in mcp.mjs, whose read handler calls renderBundleMarkdown over the live state.getBundle(); (b) GET /api/context returns { items, markdown } and the ContextBundle drawer's 'Copy all' writes that markdown to the clipboard. Both channels render the SAME projection over the SAME shared bundle.",
+        "anchors": [
+          {
+            "path": "src/server/context.mjs",
+            "line": 158,
+            "symbol": "renderBundleMarkdown",
+            "note": "project bundle refs -> grounded markdown"
+          },
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 87,
+            "symbol": "buildMcpServer",
+            "note": "registerResource event-storming://selected-nodes"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 140,
+            "symbol": "createServer",
+            "note": "GET /api/context {items, markdown} for the Copy-all channel"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then read by the es-view server and the view generator. Its invariants are the merge-time validations.",
+      "tactical": {
+        "explanation": "In this flow the model is the read-only source the bundle projection resolves each typed ref against: renderItemMarkdown looks up nodes/flows/hotspots through services.model + indexes to turn a bare {type,id} into grounded content. Held in memory for the process (resolved once at startup); this flow never mutates it.",
+        "anchors": [
+          {
+            "path": "src/lib/merge.mjs",
+            "line": 215,
+            "symbol": "mergeTraceDocs",
+            "note": "the assembled model object the projection reads"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-source-fs",
+      "type": "externalSystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process boundary. Here it holds the target-repo source files that the bundle projection reads to embed real code behind each anchor, so the markdown Claude receives is grounded in actual files.",
+      "tactical": {
+        "explanation": "Reached via readSource(repoRoot, path, line) while rendering each bundle item's anchors; the returned code excerpt is inlined into the markdown. Read-only on this path.",
+        "anchors": [
+          {
+            "path": "src/server/source.mjs",
+            "line": 13,
+            "symbol": "readSource",
+            "note": "read source excerpt behind an anchor"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "curate-context-bundle",
+      "name": "Viewer curates a context bundle for a connected Claude session",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "In the explorer SPA the human gathers a set of nodes, whole flows, and hotspots into a 'context bundle' by clicking 'Add to context' or right-clicking items. Each add is validated (the item must exist for its type) and stored in an insertion-ordered set in the server's in-memory state, the same object the MCP bridge reads. The bundle is projected on demand to one grounded markdown document (descriptions, invariants, flows, real source, Mermaid graphs) and handed to Claude two ways: as the @-mentionable MCP resource event-storming://selected-nodes, and as the SPA's 'Copy all' clipboard export. The point is to let the human assemble exactly the slice of the model a refactor conversation needs, grounded in actual files.",
+      "trigger": "The viewer clicks '+ Add to context' on a node/flow, or right-clicks a node/flow/hotspot and picks 'Add to context bundle', in the explorer SPA.",
+      "steps": [
+        "actor-viewer",
+        "cmd-add-to-bundle",
+        "agg-selection",
+        "evt-bundle-item-added",
+        "rm-context-bundle",
+        "actor-claude"
+      ],
+      "edges": [
+        {
+          "from": "actor-viewer",
+          "to": "cmd-add-to-bundle",
+          "verb": "issues"
+        },
+        {
+          "from": "actor-viewer",
+          "to": "cmd-remove-from-bundle",
+          "verb": "issues"
+        },
+        {
+          "from": "actor-viewer",
+          "to": "cmd-clear-bundle",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-add-to-bundle",
+          "to": "agg-selection",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-remove-from-bundle",
+          "to": "agg-selection",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-clear-bundle",
+          "to": "agg-selection",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-selection",
+          "to": "inv-bundle-item-exists",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-selection",
+          "to": "evt-bundle-item-added",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-selection",
+          "to": "evt-bundle-item-removed",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-selection",
+          "to": "evt-bundle-cleared",
+          "verb": "emits"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "agg-selection",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "ext-source-fs",
+          "verb": "reads"
+        },
+        {
+          "from": "actor-claude",
+          "to": "rm-context-bundle",
+          "verb": "reads"
+        },
+        {
+          "from": "actor-viewer",
+          "to": "rm-context-bundle",
+          "verb": "reads"
+        }
+      ],
+      "hotspots": [
+        "hot-bundle-single-global-state"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-bundle-single-global-state",
+      "label": "The context bundle is one process-global set, not per-session",
+      "description": "The bundle (like the selection) lives in a single in-memory Map on the shared state object -- one bundle per es-view process, keyed by nothing but type:id. Every browser tab and every connected MCP/Claude session reads and mutates the SAME bundle. With the default 127.0.0.1 bind this is just 'one human, one run', but es-view can bind --host 0.0.0.0, at which point multiple viewers would stomp each other's bundle and a connected Claude would see a racy union of everyone's curation via the selected-nodes resource. Human question: is the bundle intended to be a single shared workspace for one run, or should it be scoped per browser session / per MCP connection before the server is ever exposed beyond localhost?",
+      "tactical": {
+        "explanation": "state.mjs createState() holds one `bundle` Map with no session/tab/connection key; server.mjs and mcp.mjs both close over the same state instance (bin/es-view.mjs passes one state to startServer and createMcpHandler). The MCP resource handler renders renderBundleMarkdown(services, state.getBundle()) over that shared bundle. There is no per-session partitioning anywhere on the add/read path.",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 12,
+            "symbol": "createState",
+            "note": "single bundle Map, no session key"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 91,
+            "symbol": "main",
+            "note": "one shared state passed to both HTTP and MCP handlers"
+          },
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 96,
+            "symbol": "buildMcpServer",
+            "note": "resource renders the shared bundle live"
+          }
+        ]
+      }
+    }
+  ]
+}

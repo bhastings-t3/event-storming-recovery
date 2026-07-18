@@ -45,18 +45,22 @@ builds the model](#run-it-on-your-own-codebase)**.
 
 ## See the output in 30 seconds
 
+The bundled example is **this tool's own recovered self-model** — the workflow run against this very
+repository (a code-derived Event Storming model of the CLI, the es-view server, and the MCP bridge):
+
 ```sh
-node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json
-node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"
-# then open examples/toy-shop/model/explorer.html in a browser
+npm run demo   # rebuilds examples/event-storming-recovery/model from its traces
+# then open examples/event-storming-recovery/model/explorer.html in a browser
 ```
 
-![toy-shop explorer](examples/toy-shop/preview.png)
+![event-storming-recovery self-model explorer](examples/event-storming-recovery/preview.png)
 
 Left: the flows, badged by kind (read/write/policy) and status (dead/superseded), with hotspot
 counts. Center: the flow as an Event-Storming sticky lane, invariants hanging off aggregates, edge
 verbs between stickies. Click any sticky for its tactical explanation and a `vscode://` deep link to
-`file:line`. Red cards are **hotspots** — the questions a human needs to answer.
+`file:line`. Red cards are **hotspots** — the questions a human needs to answer. The **Data model**
+tab shows the storage the code touches (here, the filesystem model dir and `flows.json`'s shape,
+since there's no database) cross-linked to the read models and aggregates that read and write it.
 
 ## Explore it interactively — and work with Claude
 
@@ -192,11 +196,11 @@ See [`METHOD.md`](docs/METHOD.md) for the full methodology and the reasoning beh
 |---|---|
 | `bin/`, `src/` | the `es-view` app: the local server (`src/server/`, incl. the MCP endpoint), the React SPA explorer (`src/web/`), and shared libs (`src/lib/`). Launched by `npx event-storming-recovery view` |
 | `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + static explorer) |
-| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining templates + the shared recursive-exploration protocol |
+| `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining / data-mapping templates + the shared recursive-exploration protocol |
 | `docs/` | `METHOD.md` (the methodology and its reasoning) and `flows-schema.md` (the node/edge/flow contract) |
 | `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo, `dev.mjs` runs the app in dev) |
-| `tests/` | smoke tests (`node --test`) covering merge, generate, and the validator |
-| `examples/toy-shop/` | a tiny synthetic model so the pipeline runs out of the box |
+| `tests/` | smoke tests (`node --test`) covering merge, generate, and the validator; `tests/fixtures/toy-shop/` is the synthetic model they run against |
+| `examples/event-storming-recovery/` | the bundled example: this tool's own recovered self-model (produced by running the workflow on this repo) |
 | `skills/event-storming-recovery/` | the **recovery** skill — orchestrates building the model |
 | `skills/event-storming-explorer/` | the **explorer** skill — launches the app + MCP bridge and drives working with Claude on the model |
 | `.claude-plugin/` | marketplace + plugin manifests (incl. the `event-storming` MCP server declaration) that make this repo installable as a plugin |

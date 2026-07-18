@@ -1,0 +1,177 @@
+{
+  "nodes": [
+    {
+      "id": "agg-selection",
+      "type": "aggregate",
+      "label": "Selection / Context bundle",
+      "tactical": {
+        "explanation": "In-memory session state from createState() in state.mjs: a `selection` ref and an insertion-ordered `bundle` Map. No file, no database — process memory only, shared same-process between the SPA API and the MCP bridge. See the behavioral traces for the full call chain.",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 9,
+            "symbol": "createState",
+            "note": "closes over `let selection = null` + `const bundle = new Map()`; in-memory only, no persistence"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "selectionNodeId",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The id of the single node the human last opened in the SPA (the detail panel), mirrored to the server via POST /api/selection -> state.setSelection(nodeId). This is what get_current_selection returns to a connected Claude session. Exactly one node at a time (the selection is a scalar ref, not a set); null before the first open and after clearSelection(). The POST rejects an unknown id (404) so the stored id always resolves to a node in agg-model.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Held in process memory as the `nodeId` of state.mjs `selection` ({ nodeId, at } | null); never written to disk. Set by POST /api/selection (server.mjs setSelection), read by get_current_selection.",
+          "evidence": [
+            {
+              "path": "src/server/state.mjs",
+              "line": 17,
+              "symbol": "setSelection",
+              "note": "selection = nodeId ? { nodeId, at: Date.now() } : null"
+            },
+            {
+              "path": "src/server/server.mjs",
+              "line": 132,
+              "symbol": "createServer",
+              "note": "POST /api/selection validates the id then state.setSelection(nodeId)"
+            }
+          ]
+        },
+        {
+          "name": "selectionAt",
+          "conceptual": true,
+          "dataType": "timestamp",
+          "derivation": "Epoch-ms wall-clock stamp (Date.now()) captured when the selection is set, alongside the nodeId in the `selection` object. It is recorded but NEVER surfaced: no API response, MCP tool, or renderer reads `at`, so there is no way to tell how old the selection is. This is exactly the blind spot behind hot-selection-never-cleared — closing the detail panel never clears the selection server-side, and because `at` is invisible a connected Claude session cannot detect that it is looking at a stale node.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Held in process memory as the `at` field of state.mjs `selection`; captured but unused (never projected). See hotspot hot-selection-never-cleared.",
+          "evidence": [
+            {
+              "path": "src/server/state.mjs",
+              "line": 17,
+              "symbol": "setSelection",
+              "note": "at: Date.now() stamped but never read back"
+            }
+          ]
+        },
+        {
+          "name": "bundleItems",
+          "conceptual": true,
+          "dataType": "array<ref>",
+          "derivation": "The curated context bundle: an insertion-ordered set of typed refs { type, id, at } where type is one of node | flow | hotspot, so a whole flow ('the graph') can be gathered alongside individual nodes. Backed by a Map keyed by `${type}:${id}`, which gives the dedup invariant (addToBundle is set-if-absent) and preserves click order. getBundle() projects each entry down to { type, id } (dropping `at`). One bundle per PROCESS, not per session or per browser tab (see hot-bundle-single-global-state); survives an in-run browser reload only because the SPA re-hydrates it once on mount from GET /api/context.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Held in process memory as state.mjs `bundle` (Map<\"type:id\", { type, id, at }>); never persisted, lost on server restart. Mutated by addToBundle/removeFromBundle/clearBundle via /api/context; read by getBundle(). See hotspots hot-bundle-single-global-state.",
+          "evidence": [
+            {
+              "path": "src/server/state.mjs",
+              "line": 11,
+              "symbol": "createState",
+              "note": "const bundle = new Map() keyed by `${type}:${id}` -> { type, id, at }"
+            },
+            {
+              "path": "src/server/state.mjs",
+              "line": 20,
+              "symbol": "getBundle",
+              "note": "insertion-ordered values projected to { type, id }"
+            },
+            {
+              "path": "src/server/state.mjs",
+              "line": 21,
+              "symbol": "addToBundle",
+              "note": "set-if-absent dedup invariant"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-context-bundle",
+      "type": "readModel",
+      "label": "Curated context bundle",
+      "tactical": {
+        "explanation": "renderBundleMarkdown(services, items) in context.mjs projects the live bundle (state.getBundle()) into one grounded markdown document, computed lazily on read. Resolves each ref against agg-model and embeds real source excerpts. No storage of its own — a projection over agg-selection's bundle + agg-model. See the behavioral traces for the two channels (MCP resource + GET /api/context).",
+        "anchors": [
+          {
+            "path": "src/server/context.mjs",
+            "line": 158,
+            "symbol": "renderBundleMarkdown",
+            "note": "project bundle refs -> grounded markdown, computed on read"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "items",
+          "conceptual": true,
+          "dataType": "array<ref>",
+          "derivation": "The resolved list of gathered refs the selected-nodes resource / GET /api/context returns: the live state.getBundle() output, an insertion-ordered array of { type, id } (type node | flow | hotspot). This is the machine-readable half of the payload (the SPA drawer lists them; the markdown field renders them). Assembled at read time from the shared in-memory bundle, not stored.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Read-time projection of agg-selection.bundleItems (state.mjs `bundle` via getBundle()); no store of its own. Returned by GET /api/context as `items`.",
+          "evidence": [
+            {
+              "path": "src/server/server.mjs",
+              "line": 140,
+              "symbol": "createServer",
+              "note": "GET /api/context: const items = state.getBundle()"
+            },
+            {
+              "path": "src/server/state.mjs",
+              "line": 20,
+              "symbol": "getBundle",
+              "note": "the ordered typed refs resolved here"
+            }
+          ]
+        },
+        {
+          "name": "markdown",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The rendered bundle document: each gathered node/flow/hotspot ref mapped through renderItemMarkdown -> buildNodeContext/buildFlowContext/buildHotspotContext then the matching renderer (descriptions, invariants, flows, real source anchors, and for flows a colored Mermaid graph), joined by '---'. Unresolved refs render '' and are dropped; an empty bundle yields a '_No items_' placeholder. COMPUTED ON READ (lazy) over agg-model + live source files (ext-source-fs via readSource) — never materialized on the add/remove event. Served identically over the MCP resource event-storming://selected-nodes and the SPA's GET /api/context 'Copy all' channel.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "notes": "Computed by context.mjs renderBundleMarkdown at read time over agg-model + on-disk source excerpts; nothing persisted. It is a join of agg-selection.bundleItems against agg-model, not a field of any stored row.",
+          "evidence": [
+            {
+              "path": "src/server/context.mjs",
+              "line": 158,
+              "symbol": "renderBundleMarkdown",
+              "note": "maps each ref -> grounded markdown, joins with ---"
+            },
+            {
+              "path": "src/server/context.mjs",
+              "line": 151,
+              "symbol": "renderItemMarkdown",
+              "note": "dispatch node/flow/hotspot to its renderer"
+            },
+            {
+              "path": "src/server/mcp.mjs",
+              "line": 95,
+              "symbol": "selected-nodes",
+              "note": "MCP resource read handler renders the same projection"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "flows": []
+}

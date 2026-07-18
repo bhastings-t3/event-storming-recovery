@@ -2,7 +2,10 @@
 // enforced by), the flows it lives in, and the REAL source behind each anchor. This is the
 // payload the SPA shows inline and the MCP tools hand to Claude so a refactor request is
 // anchored to actual files, not just a label.
-import { nodeFlows, enforcesRelation, nodeUsages, flowNodeIds } from '../lib/selectors.mjs';
+import {
+  nodeFlows, enforcesRelation, nodeUsages, flowNodeIds,
+  isDataNode, parentChain, datastoreConsumers, fieldConsumers, nodeStorageLinks, dataModelTree, isRecordSet,
+} from '../lib/selectors.mjs';
 import { PALETTE } from '../lib/palette.mjs';
 import { readSource } from './source.mjs';
 
@@ -17,9 +20,36 @@ export function buildNodeContext(services, nodeId, { includeSource = true } = {}
   const n = indexes.nodeById.get(nodeId);
   if (!n) return null;
 
+  const nodeById = indexes.nodeById;
   const flows = nodeFlows(model, nodeId).map((f) => ({ id: f.id, name: f.name, status: f.status || 'live', kind: f.kind || null }));
-  const rel = enforcesRelation(model, indexes.nodeById, n);
+  const rel = enforcesRelation(model, nodeById, n);
   const usages = nodeUsages(n);
+  const dataNode = isDataNode(n);
+
+  // Conceptual fields (read models / aggregates): each a prose derivation over 0..N storage sources.
+  const fields = (n.fields || []).map((fld) => ({
+    name: fld.name,
+    dataType: fld.dataType || null,
+    conceptual: !!fld.conceptual,
+    confidence: fld.confidence || null,
+    derivation: fld.derivation || '',
+    sources: (fld.sources || []).map((s) => {
+      const col = /^(ds|fld)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+      return { ref: s.ref || null, label: col ? col.label : (s.ref || null), role: s.role || null, transform: s.transform || null, note: s.note || null };
+    }),
+  }));
+
+  // Physical-storage grounding: containment breadcrumb, contained fields, and what depends on it.
+  const breadcrumb = dataNode ? parentChain(nodeById, n).map((c) => ({ id: c.id, type: c.type, label: c.label, storeKind: c.storeKind || c.fieldKind || null })) : null;
+  const contained = n.type === 'datastore'
+    ? model.nodes.filter((x) => x.type === 'field' && x.parent === n.id).map((c) => ({ id: c.id, label: c.label, dataType: c.dataType || null, fieldKind: c.fieldKind || null }))
+    : null;
+  const usedBy = n.type === 'datastore'
+    ? datastoreConsumers(model, nodeById, n.id).map((c) => ({ id: c.node.id, label: c.node.label, type: c.node.type, verb: c.verb }))
+    : n.type === 'field'
+      ? fieldConsumers(model, n.id).map((c) => ({ id: c.node.id, label: c.node.label, type: c.node.type, verb: 'field ' + c.field.name }))
+      : null;
+  const storage = !dataNode ? nodeStorageLinks(model, nodeById, n.id).map((s) => ({ id: s.node.id, label: s.node.label, verb: s.verb })) : null;
 
   const anchors = [];
   for (const u of usages) {
@@ -38,6 +68,16 @@ export function buildNodeContext(services, nodeId, { includeSource = true } = {}
     inferred: !!n.inferred,
     ownedBy: n.ownedBy || null,
     synchronous: !!n.synchronous,
+    provenance: n.provenance || null,
+    storeKind: n.storeKind || null,
+    fieldKind: n.fieldKind || null,
+    host: n.host || null,
+    engine: n.engine || null,
+    fields,
+    breadcrumb,
+    contained,
+    usedBy,
+    storage,
     flows,
     related: rel ? { heading: rel.heading, nodes: rel.related.map((r) => ({ id: r.id, type: r.type, label: r.label })) } : null,
     usages: usages.map((u) => ({ flow: u.flow || null, explanation: u.explanation || '' })),
@@ -55,7 +95,36 @@ export function renderNodeContextMarkdown(ctx) {
   if (ctx.inferred) tags.push('inferred from code');
   if (ctx.ownedBy) tags.push('state owned by ' + ctx.ownedBy);
   if (ctx.synchronous) tags.push('synchronous inline reaction');
+  if (ctx.storeKind) tags.push(ctx.storeKind);
+  if (ctx.fieldKind) tags.push(ctx.fieldKind);
+  if (ctx.engine) tags.push(ctx.engine);
+  for (const pv of (ctx.provenance || [])) tags.push(pv);
   if (tags.length) out.push(`_${tags.join(' · ')}_`);
+
+  if (ctx.breadcrumb && ctx.breadcrumb.length > 1) {
+    out.push(`\n**Location:** ${ctx.breadcrumb.map((c) => c.label).join(' ▸ ')}`);
+  }
+
+  if (ctx.fields && ctx.fields.length) {
+    out.push(`\n**${ctx.type === 'readModel' ? 'Data returned' : ctx.type === 'aggregate' ? 'State & fields' : 'Fields'}:**`);
+    for (const fld of ctx.fields) {
+      const meta = [fld.dataType, fld.confidence && (fld.confidence + ' confidence'), fld.conceptual && 'conceptual'].filter(Boolean).join(', ');
+      out.push(`- **${fld.name}**${meta ? ` _(${meta})_` : ''}${fld.derivation ? ' — ' + fld.derivation : ''}`);
+      for (const s of fld.sources) out.push(`    - ${s.role || 'from'} \`${s.label || s.ref}\`${s.transform ? ' (' + s.transform + ')' : ''}${s.note ? ' — ' + s.note : ''}`);
+      if (!fld.sources.length) out.push('    - _computed / no direct source_');
+    }
+  }
+
+  if (ctx.contained && ctx.contained.length) {
+    out.push(`\n**Fields (${ctx.contained.length}):** ` + ctx.contained.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', '));
+  }
+  if (ctx.usedBy && ctx.usedBy.length) {
+    out.push(`\n**Used by:**`);
+    for (const u of ctx.usedBy) out.push(`- ${u.label} _(${u.type})_ — ${u.verb}`);
+  }
+  if (ctx.storage && ctx.storage.length) {
+    out.push(`\n**Storage:** ` + ctx.storage.map((s) => `${s.label} (${s.verb})`).join(', '));
+  }
 
   if (ctx.related && ctx.related.nodes.length) {
     out.push(`\n**${ctx.related.heading}:**`);
@@ -163,6 +232,31 @@ export function renderHotspotMarkdown(hc) {
     out.push(`\n\`${loc}\`${a.note ? ' — ' + a.note : ''}`);
     if (a.source && a.source.exists) out.push('```\n' + a.source.code + '\n```');
   }
+  return out.join('\n');
+}
+
+/** Render the recovered data model as markdown: the datastore containment tree (whatever kind of
+ * storage it is) with the behavioral nodes that touch each record set. The storage the code uses. */
+export function renderDataModelMarkdown(services) {
+  const { model, indexes } = services;
+  const nodeById = indexes.nodeById;
+  const { roots } = dataModelTree(model, nodeById);
+  const dataCount = model.nodes.filter((n) => n.type === 'datastore' || n.type === 'field').length;
+  if (!dataCount) return '_No data model recovered yet. Run the data-mapping phase to populate data stores and field lineage._';
+  const out = ['# Data model', ''];
+  const kindOf = (n) => n.storeKind || 'store';
+  const walk = (t, depth) => {
+    const { node: ds, stores, fields } = t;
+    const pad = '  '.repeat(depth);
+    const header = depth === 0 ? `## ${ds.label}` : `${pad}- **${ds.label}**`;
+    out.push(`${header} _(${kindOf(ds)})_${ds.host ? ` — \`${ds.host}\`` : ''}`);
+    if (fields.length) out.push(`${pad}  - fields: ${fields.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', ')}`);
+    if (isRecordSet(model, nodeById, ds)) {
+      for (const c of datastoreConsumers(model, nodeById, ds.id)) out.push(`${pad}  - ${c.node.label} _(${c.node.type})_ — ${c.verb}`);
+    }
+    for (const s of stores) walk(s, depth + 1);
+  };
+  for (const r of roots) walk(r, 0);
   return out.join('\n');
 }
 

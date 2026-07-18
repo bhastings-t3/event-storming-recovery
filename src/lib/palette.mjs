@@ -10,5 +10,9 @@ export const PALETTE = {
   readModel:      { fill: '#6FC993', edge: '#358a5a', text: '#124a2c', name: 'Read Model' },
   externalSystem: { fill: '#E68DAF', edge: '#b05378', text: '#59213b', name: 'External System' },
   invariant:      { fill: '#26262e', edge: '#42424e', text: '#b7b7c2', name: 'Invariant' },
+  server:         { fill: '#2b323c', edge: '#464f5d', text: '#a5b2c4', name: 'Server' },
+  database:       { fill: '#3c4a5a', edge: '#5a6d84', text: '#b6c4d6', name: 'Database' },
+  table:          { fill: '#6f92b3', edge: '#3f5a76', text: '#16293c', name: 'Table' },
+  column:         { fill: '#c3d3e2', edge: '#7f96ab', text: '#2c3e50', name: 'Column' },
   hotspot:        { fill: '#E5645E', edge: '#a83530', text: '#4c110e', name: 'Hotspot' },
 };

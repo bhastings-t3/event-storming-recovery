@@ -10,11 +10,49 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const NODE_TYPES = new Set(['actor', 'command', 'aggregate', 'event', 'policy', 'readModel', 'externalSystem', 'invariant']);
-export const EDGE_VERBS = new Set(['issues', 'handled by', 'emits', 'triggers', 'updates', 'read by', 'reads', 'raises', 'enforces', 'calls', 'returns']);
+export const NODE_TYPES = new Set(['actor', 'command', 'aggregate', 'event', 'policy', 'readModel', 'externalSystem', 'invariant', 'server', 'database', 'table', 'column']);
+export const EDGE_VERBS = new Set(['issues', 'handled by', 'emits', 'triggers', 'updates', 'read by', 'reads', 'raises', 'enforces', 'calls', 'returns', 'persists to', 'projects from', 'writes', 'connects via']);
 const ANCHOR_REQUIRED = new Set(['command', 'aggregate', 'event', 'policy', 'readModel', 'invariant']);
 const TERM_STATUS = new Set(['resolved', 'partial', 'unresolved']);
 const TERM_CATEGORIES = new Set(['concept', 'jargon', 'acronym', 'role', 'system', 'state', 'metric']);
+
+// Data-model field lineage enums (see docs/flows-schema.md). Nonstandard values are warnings, not
+// errors, mirroring the forgiving treatment of nonstandard edge verbs.
+const FIELD_CONFIDENCE = new Set(['high', 'medium', 'low']);
+// Physical-storage containment: the expected parent type for each data node type. A node parented
+// at the wrong level would silently vanish from the containment tree, so we warn on it.
+const PARENT_LEVEL = { column: 'table', table: 'database', database: 'server' };
+const FIELD_ROLES = new Set(['derived-from', 'filtered-by', 'joined-on', 'grouped-by', 'constant']);
+const FIELD_TRANSFORMS = new Set(['identity', 'transformation', 'aggregation', 'join', 'filter', 'lookup', 'constant']);
+// A field source ref that looks like a local physical node id must resolve to a known node.
+const LOCAL_REF = /^(col|tbl|db|srv)-/;
+
+/**
+ * Validate a node's `fields[]` (data-model layer). Pushes into the shared errors/warnings arrays.
+ * A field is a conceptual property with a prose derivation and 0..N storage sources; empty/omitted
+ * sources is valid. Refs that look like local node ids must resolve; free-form addresses pass as-is.
+ *
+ * @param {object} n - the node (already known to have `fields`)
+ * @param {Map} nodes - id -> merged node (for ref resolution)
+ * @param {string[]} errors
+ * @param {string[]} warnings
+ */
+function validateFields(n, nodes, errors, warnings) {
+  if (!Array.isArray(n.fields)) return;
+  n.fields.forEach((f, i) => {
+    if (!f || !String(f.name || '').trim() || !String(f.derivation || '').trim()) {
+      errors.push(`node ${n.id}: field ${i} missing name/derivation`);
+      return;
+    }
+    if (f.confidence !== undefined && !FIELD_CONFIDENCE.has(f.confidence)) warnings.push(`node ${n.id}: field '${f.name}' has nonstandard field confidence '${f.confidence}'`);
+    if (f.conceptual !== undefined && typeof f.conceptual !== 'boolean') warnings.push(`node ${n.id}: field '${f.name}' has non-boolean conceptual`);
+    for (const s of f.sources || []) {
+      if (s.role !== undefined && !FIELD_ROLES.has(s.role)) warnings.push(`node ${n.id}: field '${f.name}' has nonstandard source role '${s.role}'`);
+      if (s.transform !== undefined && !FIELD_TRANSFORMS.has(s.transform)) warnings.push(`node ${n.id}: field '${f.name}' has nonstandard source transform '${s.transform}'`);
+      if (s.ref !== undefined && LOCAL_REF.test(s.ref) && !nodes.has(s.ref)) errors.push(`node ${n.id}: field '${f.name}' source ref '${s.ref}' not in nodes`);
+    }
+  });
+}
 
 /**
  * Merge already-parsed trace documents into a canonical model.
@@ -51,6 +89,19 @@ export function mergeTraceDocs(sources) {
         if (n.ownedBy && !m.ownedBy) m.ownedBy = n.ownedBy;
         if (n.synchronous !== undefined && m.synchronous === undefined) m.synchronous = n.synchronous;
         if (n.inferred === false) m.inferred = false; // explicit code naming wins
+        // Data-model enrichment often arrives in a LATER trace file (the data-mapping phase) than
+        // the one that first defined the node. Carry fields + physical attributes across, unioning
+        // fields by name so the data pass can annotate an aggregate/read model the trace pass made.
+        if (Array.isArray(n.fields) && n.fields.length) {
+          const byName = new Map((m.fields || []).map(f => [f.name, f]));
+          for (const f of n.fields) byName.set(f.name, f); // the data pass is authority on a field
+          m.fields = [...byName.values()];
+        }
+        for (const k of ['parent', 'engine', 'host', 'kind', 'schema', 'dataType']) {
+          if (n[k] !== undefined && m[k] === undefined) m[k] = n[k];
+        }
+        if (n.nullable !== undefined && m.nullable === undefined) m.nullable = n.nullable;
+        if (Array.isArray(n.provenance) && n.provenance.length) m.provenance = [...new Set([...(m.provenance || []), ...n.provenance])];
         if (n.tactical) {
           m.usages.push({ flow: flowIds, explanation: n.tactical.explanation || '', anchors: n.tactical.anchors || [] });
           // keep the richest explanation as the primary tactical block
@@ -74,6 +125,26 @@ export function mergeTraceDocs(sources) {
       if (terms.has(t.id)) { warnings.push(`duplicate term id ${t.id} (${name}) - keeping first`); continue; }
       terms.set(t.id, t);
     }
+  }
+
+  // Data-model integrity: parent containment must resolve (right level, no cycles), and fields[]
+  // lineage is well-formed.
+  for (const [, n] of nodes) {
+    if (n.parent !== undefined && n.parent !== null) {
+      const p = nodes.get(n.parent);
+      if (!p) {
+        errors.push(`node ${n.id}: parent '${n.parent}' not in nodes`);
+      } else {
+        const want = PARENT_LEVEL[n.type];
+        if (want && p.type !== want) warnings.push(`node ${n.id}: ${n.type} parent '${n.parent}' should be a ${want}, not a ${p.type} (it will be dropped from the data-model tree)`);
+        // Walk up to catch a parent cycle (self-parent or a→b→a); parentChain would otherwise
+        // produce a meaningless breadcrumb.
+        const seen = new Set([n.id]);
+        let cur = p;
+        while (cur) { if (seen.has(cur.id)) { errors.push(`node ${n.id}: parent chain has a cycle`); break; } seen.add(cur.id); cur = cur.parent ? nodes.get(cur.parent) : null; }
+      }
+    }
+    if (n.fields !== undefined) validateFields(n, nodes, errors, warnings);
   }
 
   // Cross-reference validation
@@ -110,11 +181,17 @@ export function mergeTraceDocs(sources) {
     for (const nid of t.relatedNodes || []) if (!nodes.has(nid)) errors.push(`term ${tid}: relatedNodes '${nid}' not in nodes`);
   }
 
-  // Orphan check: nodes referenced by no flow
+  // Orphan check: nodes referenced by no flow. Physical nodes reached only via containment
+  // (`parent`) or field lineage (`fields[].sources[].ref`) also count as referenced, so they
+  // don't spuriously warn even when no flow step/edge names them directly.
   const referenced = new Set();
   for (const [, f] of flows) {
     (f.steps || []).forEach(s => referenced.add(s));
     (f.edges || []).forEach(e => { referenced.add(e.from); referenced.add(e.to); });
+  }
+  for (const [, n] of nodes) {
+    if (n.parent !== undefined && n.parent !== null) referenced.add(n.parent);
+    for (const f of n.fields || []) for (const s of f.sources || []) if (s.ref !== undefined) referenced.add(s.ref);
   }
   for (const id of nodes.keys()) if (!referenced.has(id)) warnings.push(`node ${id} is referenced by no flow`);
 

@@ -1,0 +1,159 @@
+{
+  "nodes": [
+    {
+      "id": "actor-viewer",
+      "type": "actor",
+      "label": "Viewer",
+      "inferred": true,
+      "description": "The human viewing the explorer SPA in a browser. They open the page, navigate flows, and curate the context bundle. Here they are the one whose page load triggers the model fetch; every tab they switch to is a view derived client-side from that single payload."
+    },
+    {
+      "id": "cmd-load-model",
+      "type": "command",
+      "label": "LoadModel",
+      "inferred": true,
+      "description": "The SPA's boot read: fetch the whole canonical model once so every tab can be derived from it client-side. A read command (no aggregate write) issued implicitly when the explorer page mounts.",
+      "tactical": {
+        "explanation": "On mount, App's useEffect calls fetchModel() exactly once (empty dependency array, guarded by an `alive` flag). fetchModel does GET /api/model (api.js) and expects { model, meta }. The server route is deliberately minimal: it returns the already-resolved model plus provenance meta (source, sourcePath, repoRoot, warnings) straight from the closure captured at startup -- no per-request merge, no per-view endpoints. There is exactly ONE payload endpoint; the Gallery / Data-model / Glossary / Flows-board / Overview tabs are NOT separate fetches, they are re-derived from this one response. On success the payload is handed to ExplorerProvider, which memoizes the id indexes; on failure the boot card shows the error.",
+        "anchors": [
+          { "path": "src/web/App.jsx", "line": 44, "symbol": "App", "note": "boot useEffect: fetchModel() once, [] deps, alive guard" },
+          { "path": "src/web/api.js", "line": 4, "symbol": "fetchModel", "note": "GET /api/model -> { model, meta }" },
+          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "GET /api/model returns resolved.model + meta, no computation" }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then read by the es-view server and the view generator. Its invariants are the merge-time validations.",
+      "tactical": {
+        "explanation": "Served here as the in-memory snapshot resolved at server startup. resolveModel (bin/es-view.mjs main) runs once, and buildServices builds the id indexes (buildIndexes) once; the server closure holds `resolved.model` for the life of the process. GET /api/model hands the whole object back verbatim. State lives in a file (CLI: writeFileSync) or purely in memory (server path); this read flow never writes it.",
+        "anchors": [
+          { "path": "src/lib/merge.mjs", "line": 215, "symbol": "mergeTraceDocs", "note": "the assembled model object" },
+          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "indexes built once from resolved.model at startup" },
+          { "path": "bin/es-view.mjs", "line": 82, "symbol": "main", "note": "resolveModel runs once; model captured for the process lifetime" }
+        ]
+      }
+    },
+    {
+      "id": "rm-model-index",
+      "type": "readModel",
+      "label": "Raw model payload",
+      "inferred": true,
+      "description": "The whole resolved model plus provenance meta, returned as one JSON payload from GET /api/model (the same projection the MCP list_model tool exposes). The SPA holds it in a single React context and re-derives every tab from it -- it is the substrate, not a rendered view.",
+      "tactical": {
+        "explanation": "Shape: { model, meta:{ source, sourcePath, repoRoot, warnings } }. Held in ExplorerProvider, which memoizes buildIndexes(model) (nodeById/hotspotById) and galleryTypes(model) once, then exposes model+indexes to all components via context. No re-fetch happens after boot -- there is no polling, websocket, or live-reload. Every other read model in this flow is computed from THIS object in the browser via the shared selectors, with zero further server round-trips.",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "/api/model builds the { model, meta } payload" },
+          { "path": "src/web/store.jsx", "line": 15, "symbol": "ExplorerProvider", "note": "holds the payload; memoizes indexes + gallery types once" }
+        ]
+      }
+    },
+    {
+      "id": "rm-flow-board",
+      "type": "readModel",
+      "label": "Flows board",
+      "inferred": true,
+      "description": "The default tab: the left sidebar (flows grouped by tier / pivoted by actor or aggregate) plus the pan/zoom board rendering the currently selected flow's sticky lane. What the viewer reads to navigate the recovered flows.",
+      "tactical": {
+        "explanation": "Derived entirely client-side from the payload. Sidebar calls sidebarGroups(model, groupMode, nodeById), which pivots flows via flowNodeIds/nodeFlows into tier buckets or per-actor/per-aggregate groups. The board renders currentFlow (model.flows.find by id) and its edges. All of this reads the one in-memory model; switching flows changes React state only, never re-fetches.",
+        "anchors": [
+          { "path": "src/web/components/Sidebar.jsx", "line": 3, "symbol": "Sidebar", "note": "sidebarGroups(model, groupMode, nodeById) pivots the flow list" },
+          { "path": "src/web/model.js", "line": 19, "symbol": "sidebarGroups", "note": "tier / actor / aggregate grouping over model.flows" },
+          { "path": "src/web/components/Main.jsx", "line": 24, "symbol": "Main", "note": "renders currentFlow + its hotspots/instances on the board" }
+        ]
+      }
+    },
+    {
+      "id": "rm-data-model",
+      "type": "readModel",
+      "label": "Data-model tab",
+      "inferred": true,
+      "description": "The physical-layer view: the server > database > table > column containment forest with each table card showing its columns and the behavioral stickies that write / read / project it. What the viewer reads to see where data comes from.",
+      "tactical": {
+        "explanation": "Derived client-side: DataModel calls dataModelTree(model, nodeById) to build the containment forest (re-homing orphans under an '(unattached)' bucket) and tableConsumers(model, nodeById, tableId) to list behavioral consumers per table. Both are the SHARED selectors in src/lib/selectors.mjs, re-exported through src/web/model.js -- the identical code the server-side context/markdown renderers use, so browser and MCP projections agree.",
+        "anchors": [
+          { "path": "src/web/components/DataModel.jsx", "line": 3, "symbol": "DataModel", "note": "imports dataModelTree + tableConsumers from model.js" },
+          { "path": "src/lib/selectors.mjs", "line": 64, "symbol": "dataModelTree", "note": "shared: build the server>db>table>column forest" },
+          { "path": "src/lib/selectors.mjs", "line": 83, "symbol": "tableConsumers", "note": "shared: behavioral nodes touching a table" }
+        ]
+      }
+    },
+    {
+      "id": "rm-glossary",
+      "type": "readModel",
+      "label": "Glossary tab",
+      "inferred": true,
+      "description": "The ubiquitous language as an alphabetical dictionary: every sticky filtered by type chips and text, optionally restricted to shared (multi-flow) concepts, with letter-header navigation. What the viewer reads to learn the domain vocabulary.",
+      "tactical": {
+        "explanation": "Derived client-side from model.nodes: Glossary filters by active type set + query, and when sharedOnly is on keeps only nodes with nodeFlows(model,id).length > 1 (appear in more than one flow), then sorts and interleaves A-Z letter headers. Ported from buildGlossary/renderGlossaryList in generate-views.js so the SPA and the static explorer.html agree. Type chips come from galleryTypes(model).",
+        "anchors": [
+          { "path": "src/web/components/Glossary.jsx", "line": 10, "symbol": "Glossary", "note": "filter/sort model.nodes; sharedOnly via nodeFlows" },
+          { "path": "src/lib/selectors.mjs", "line": 16, "symbol": "nodeFlows", "note": "shared: flows a node appears in (drives sharedOnly)" }
+        ]
+      }
+    },
+    {
+      "id": "rm-gallery",
+      "type": "readModel",
+      "label": "Gallery tab",
+      "inferred": true,
+      "description": "Every sticky in the model as a filterable grid: type chips plus text search, sorted by palette type order then label. What the viewer reads to browse the full node set regardless of flow.",
+      "tactical": {
+        "explanation": "Derived client-side: Gallery filters model.nodes by the active type set + query and sorts by galleryTypes(model) index then label. galleryTypes(model) (src/web/model.js) lists the types actually present in palette order and drives both the filter chips and the sort. Ported from buildGallery/renderGrid in generate-views.js. No server call -- pure re-derivation of the one payload.",
+        "anchors": [
+          { "path": "src/web/components/Gallery.jsx", "line": 7, "symbol": "Gallery", "note": "filter/sort model.nodes by type chips + query" },
+          { "path": "src/web/model.js", "line": 13, "symbol": "galleryTypes", "note": "types present in palette order; drives chips + sort" }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "browser-load-model",
+      "name": "Viewer opens the explorer and the SPA loads the whole model once",
+      "tier": 1,
+      "kind": "read",
+      "status": "live",
+      "summary": "The viewer opens the es-view explorer in a browser. On mount the SPA fetches GET /api/model exactly once and the server returns the entire resolved model plus provenance meta from the snapshot it captured at startup -- minimal server work, one endpoint, no per-view queries. The SPA holds that single payload in one React context and re-derives every tab client-side (Flows board, Gallery, Data model, Glossary, Overview) via selectors shared with the server. The point is that the server is a thin model transport and the explorer's richness is all client-side derivation over ONE response.",
+      "trigger": "The viewer opens the es-view URL in a browser; the React App mounts and its boot useEffect fires.",
+      "steps": ["actor-viewer", "cmd-load-model", "agg-model", "rm-model-index", "rm-flow-board", "rm-data-model", "rm-glossary", "rm-gallery"],
+      "edges": [
+        { "from": "actor-viewer", "to": "cmd-load-model", "verb": "issues" },
+        { "from": "cmd-load-model", "to": "agg-model", "verb": "reads" },
+        { "from": "cmd-load-model", "to": "rm-model-index", "verb": "returns" },
+        { "from": "rm-flow-board", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-data-model", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-glossary", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-gallery", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-flow-board", "to": "tbl-flows-json", "verb": "projects from" },
+        { "from": "rm-gallery", "to": "tbl-flows-json", "verb": "projects from" },
+        { "from": "rm-glossary", "to": "tbl-flows-json", "verb": "projects from" },
+        { "from": "actor-viewer", "to": "rm-flow-board", "verb": "reads" },
+        { "from": "actor-viewer", "to": "rm-data-model", "verb": "reads" },
+        { "from": "actor-viewer", "to": "rm-glossary", "verb": "reads" },
+        { "from": "actor-viewer", "to": "rm-gallery", "verb": "reads" }
+      ],
+      "hotspots": ["hot-model-loaded-once"],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-model-loaded-once",
+      "label": "The explorer loads the model once at boot; edits need a page reload AND a server restart",
+      "description": "The SPA fetches /api/model exactly once (App boot useEffect, empty deps) and never re-fetches -- no polling, websocket, or live-reload. The server serves the model snapshot resolved at startup and builds its indexes eagerly, so it never picks up file changes either. Result: after editing flows.json (or the traces feeding --traces), the viewer sees nothing new until the operator BOTH restarts es-view (to re-resolve + re-index) AND reloads the page (to re-fetch). Human question: is a one-shot frozen boot acceptable for the curate-while-you-work loop this tool is built for, or should es-view watch the model file and the SPA poll / offer a reload affordance?",
+      "tactical": {
+        "explanation": "App.jsx useEffect has [] deps and an alive guard -- exactly one fetch per page load, no interval or socket. server.mjs GET /api/model returns resolved.model captured in the createServer closure; buildServices runs buildIndexes once at startup (bin/es-view.mjs main); resolveModel likewise runs once. Nothing invalidates or rebuilds either the payload or the indexes for the process lifetime.",
+        "anchors": [
+          { "path": "src/web/App.jsx", "line": 42, "symbol": "App", "note": "single boot fetch, [] deps, no re-fetch path" },
+          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "returns the startup model snapshot verbatim" },
+          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "indexes built once, never invalidated" },
+          { "path": "bin/es-view.mjs", "line": 82, "symbol": "main", "note": "resolveModel + buildServices run once at startup" }
+        ]
+      }
+    }
+  ]
+}

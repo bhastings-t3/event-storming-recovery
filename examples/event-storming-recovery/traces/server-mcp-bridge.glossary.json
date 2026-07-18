@@ -1,0 +1,233 @@
+{
+  "terms": [
+    {
+      "id": "term-smb-es-view",
+      "term": "es-view",
+      "category": "jargon",
+      "aka": ["npx event-storming-recovery view", "es-view server", "the explorer app"],
+      "definition": "The tool's runtime: one local node:http process that serves the React SPA, the JSON API, and the MCP endpoint over a single shared in-memory state, launched by `npx event-storming-recovery view`. It resolves a model (explicit --model, merged --traces, an auto-discovered flows.json, or the bundled toy-shop example), binds one loopback port, and opens the browser. Distinct from the static explorer.html the generator emits: es-view serves the live model and hosts the MCP bridge.",
+      "relatedNodes": ["agg-es-view-session"],
+      "anchors": [
+        { "path": "bin/es-view.mjs", "line": 75, "symbol": "main" },
+        { "path": "src/server/server.mjs", "line": 194, "symbol": "startServer" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-mcp",
+      "term": "MCP (Model Context Protocol)",
+      "category": "acronym",
+      "aka": ["Model Context Protocol", "@modelcontextprotocol/sdk"],
+      "definition": "The open protocol Claude uses to read context from external servers. es-view exposes an MCP server so a connected Claude session can pull what the human is looking at (tools) and the curated set they gathered (a resource). The server side uses the @modelcontextprotocol/sdk McpServer as an in-process library; the Claude process that speaks MCP across the boundary is the external client.",
+      "relatedNodes": ["ext-claude-mcp-client"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 18, "symbol": "buildMcpServer" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-selection-bridge",
+      "term": "Selection bridge",
+      "category": "concept",
+      "aka": ["MCP bridge", "context bridge", "the selection wire"],
+      "definition": "The tool's core trick: the human clicks a node in the browser, the SPA mirrors that choice to the server's shared in-memory state, and a connected Claude session reads it through the MCP `get_current_selection` tool. Because the web UI and the MCP server run in the SAME process and close over the same `state`, no polling or subscription is needed. This is what lets a Claude terminal know 'the selected node' the user is pointing at.",
+      "relatedNodes": ["agg-selection"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 1, "symbol": "module header" },
+        { "path": "src/server/state.mjs", "line": 9, "symbol": "createState" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-selection",
+      "term": "Selection",
+      "category": "concept",
+      "aka": ["current selection", "the selected node"],
+      "definition": "The single domain node the human is currently looking at in the explorer, held in memory as `{ nodeId, at }`. It is pull-based and always fresh: the grounded projection (label, type, description, enforced invariants, flows, real source behind each anchor) is recomputed on each read of `get_current_selection` or GET /api/selection. Exactly one node at a time; setting a new one replaces the last.",
+      "relatedNodes": ["rm-current-selection", "agg-selection"],
+      "anchors": [
+        { "path": "src/server/state.mjs", "line": 17, "symbol": "setSelection" },
+        { "path": "src/server/mcp.mjs", "line": 22, "symbol": "get_current_selection" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-context-bundle",
+      "term": "Context bundle",
+      "category": "concept",
+      "aka": ["curated bundle", "the gathered set", "selected-nodes"],
+      "definition": "The curated, @-mentionable set of typed refs ({ type: node | flow | hotspot, id }) the human gathers in the explorer, insertion-ordered and deduplicated (it is a set). Projected to one grounded markdown document (each item rendered with its invariants, flows, source anchors, and for flows a colored Mermaid graph) and handed to Claude all at once. Distinct from the Selection, which is the single node in focus right now.",
+      "relatedNodes": ["rm-context-bundle", "agg-selection"],
+      "anchors": [
+        { "path": "src/server/state.mjs", "line": 20, "symbol": "getBundle" },
+        { "path": "src/server/context.mjs", "line": 158, "symbol": "renderBundleMarkdown" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-grounding",
+      "term": "Grounding / grounded context",
+      "category": "concept",
+      "aka": ["grounded", "grounded node context", "source behind the anchor"],
+      "definition": "Assembling a node/flow/hotspot together with the REAL source code read from disk behind each of its anchors, so a refactor request Claude receives is tied to actual files, not just a label. buildNodeContext gathers the node's description, fields, invariant relation, flows, and for each anchor calls readSource(repoRoot, path, line) to inline the excerpt. 'Grounded' throughout the tool means this: label plus its evidence.",
+      "relatedNodes": ["rm-node-context"],
+      "anchors": [
+        { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext" },
+        { "path": "src/server/context.mjs", "line": 58, "symbol": "readSource inline" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-anchor",
+      "term": "Anchor",
+      "category": "jargon",
+      "aka": ["tactical anchor", "source anchor", "{ path, line, symbol }"],
+      "definition": "A pointer from a model node to a specific place in the source: { path, line, symbol, note }. `symbol` (method/handler/class) is the durable part since line numbers rot across rebases. Anchors are what grounding reads through to fetch real code, what the SPA turns into vscode:// deep links, and what MCP tool results inline. A cross-cutting term the whole tool uses, not owned by one node.",
+      "anchors": [
+        { "path": "docs/flows-schema.md", "line": 31, "symbol": "tactical.anchors" },
+        { "path": "src/server/context.mjs", "line": 55, "symbol": "anchors loop" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-mcp-tool-set",
+      "term": "MCP tool set",
+      "category": "concept",
+      "aka": ["get_current_selection", "get_node", "get_flow", "list_model", "list_data_model"],
+      "definition": "The five read tools the MCP server registers, each returning grounded markdown: get_current_selection (the node the human is looking at now), get_node (any node by id), get_flow (a whole flow with its Mermaid graph), list_model (a compact index of all flow and node ids), and list_data_model (the physical server/database/table/column tree). All are read-only over the live model; 'current selection' is a tool (always fresh) rather than a resource because it needs no subscription.",
+      "relatedNodes": ["rm-node-context", "rm-model-index", "rm-current-selection"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 22, "symbol": "registerTool" },
+        { "path": "src/server/mcp.mjs", "line": 63, "symbol": "list_model" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-mcp-resource",
+      "term": "MCP resource (event-storming://selected-nodes)",
+      "category": "jargon",
+      "aka": ["selected-nodes", "event-storming://selected-nodes"],
+      "definition": "The one MCP resource the server exposes: the curated context bundle rendered as a single text/markdown document at the URI `event-storming://selected-nodes`. Unlike the always-fresh selection tool, it is modeled as a resource because the user @-mentions it to hand Claude the whole gathered set at once. Its content is regenerated from the live bundle each time it is read.",
+      "relatedNodes": ["rm-context-bundle"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 87, "symbol": "registerResource selected-nodes" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-streamable-http",
+      "term": "Streamable HTTP transport",
+      "category": "jargon",
+      "aka": ["StreamableHTTPServerTransport", "streamable-HTTP"],
+      "definition": "The MCP transport es-view mounts at POST /mcp, via the SDK's StreamableHTTPServerTransport with enableJsonResponse. An `initialize` POST spins up a session and issues an Mcp-Session-Id; later POST/GET/DELETE reuse the transport for that session. Every session's tools close over the same shared services + state, so the live selection is always what Claude reads.",
+      "relatedNodes": ["ext-claude-mcp-client"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 132, "symbol": "StreamableHTTPServerTransport" },
+        { "path": "src/server/mcp.mjs", "line": 120, "symbol": "createMcpHandler" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-mcp-session",
+      "term": "MCP session (Mcp-Session-Id)",
+      "category": "jargon",
+      "aka": ["Mcp-Session-Id", "sessionId"],
+      "definition": "One MCP conversation between a Claude client and the es-view server, keyed by the Mcp-Session-Id header. It is created on the first `initialize` POST (a randomUUID), stored in a transports Map, and reused for subsequent requests until the transport closes. Note this is a transport-level session and is separate from the process-global selection/bundle state, which is shared across ALL sessions and browser tabs, not per-session.",
+      "relatedNodes": ["agg-es-view-session"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 125, "symbol": "mcp-session-id header" },
+        { "path": "src/server/mcp.mjs", "line": 135, "symbol": "onsessioninitialized" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-connect-command",
+      "term": "Connect command (claude mcp add)",
+      "category": "jargon",
+      "aka": ["claude mcp add --transport http", "Add to Claude", "RegisterMcp"],
+      "definition": "The `claude mcp add --transport http <name> <url>` command that wires this running es-view session into the user's Claude configuration. The app surfaces it three ways: printed in the CLI banner, returned by GET /api/mcp/info to read/copy, and run on the user's behalf (via a shell, with a whitelisted --scope of local|project|user) when they click 'Add to Claude'. Because es-view already runs as the user with their PATH, this grants no new privilege.",
+      "relatedNodes": ["rm-mcp-connect-command", "cmd-register-mcp"],
+      "anchors": [
+        { "path": "src/server/mcp-register.mjs", "line": 13, "symbol": "claudeMcpAdd" },
+        { "path": "src/server/server.mjs", "line": 178, "symbol": "/api/mcp/register" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-event-storming-name",
+      "term": "event-storming (MCP server name)",
+      "category": "jargon",
+      "aka": ["MCP_NAME", "event-storming-recovery (self-name)"],
+      "definition": "The alias this app registers under in the user's Claude config, MCP_NAME = 'event-storming' (the name shown in the connect UI and the `claude mcp add` command). Note a mismatch: the McpServer identifies ITSELF to clients as 'event-storming-recovery' (its SDK name/version), so the tool effectively goes by two names. Which is canonical for the user to reference is unsettled.",
+      "relatedNodes": ["agg-mcp-registration"],
+      "anchors": [
+        { "path": "src/server/server.mjs", "line": 24, "symbol": "MCP_NAME" },
+        { "path": "src/server/mcp.mjs", "line": 20, "symbol": "new McpServer name" }
+      ],
+      "status": "partial",
+      "openQuestion": "Should the registration alias ('event-storming') and the McpServer self-identifier ('event-storming-recovery') be unified, and which name is the intended public one users type after `claude mcp add` and in `/mcp`? (See hotspot hot-mcp-name-mismatch.)"
+    },
+    {
+      "id": "term-smb-spa",
+      "term": "SPA (single-page app)",
+      "category": "acronym",
+      "aka": ["single-page app", "the explorer UI", "React app"],
+      "definition": "The React single-page app es-view serves as static files from dist/web (with SPA fallback to index.html). It fetches the model once from /api/model, holds it in one React context, and re-derives every tab (Board, Data-model, Glossary, Gallery, Detail) from it. It is the browser half of the selection bridge: clicks here POST to /api/selection and /api/context. Distinct from the standalone explorer.html the generator emits.",
+      "relatedNodes": ["rm-model-index"],
+      "anchors": [
+        { "path": "src/server/server.mjs", "line": 67, "symbol": "serveStatic" },
+        { "path": "src/web/api.js", "line": 4, "symbol": "fetchModel" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-json-api",
+      "term": "JSON API (/api/*)",
+      "category": "jargon",
+      "aka": ["/api/model", "/api/selection", "/api/context", "/api/source", "/api/item"],
+      "definition": "The local HTTP+JSON surface es-view serves alongside the SPA and MCP endpoint: /api/model (resolved model + provenance), /api/health, GET/POST/DELETE /api/selection and /api/context (the shared selection and bundle), /api/item and /api/source (grounded markdown / real code behind an anchor), and /api/mcp/info + /api/mcp/register (the connect helper). It is the SPA's data plane and mirrors the same state the MCP tools read.",
+      "anchors": [
+        { "path": "src/server/server.mjs", "line": 100, "symbol": "createServer request router" },
+        { "path": "src/web/api.js", "line": 1, "symbol": "api client" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-in-memory-state",
+      "term": "In-memory state",
+      "category": "jargon",
+      "aka": ["state.mjs", "shared state", "non-persistent"],
+      "definition": "The mutable session state (the current selection plus the context bundle) created once at boot and shared same-process by the JSON API and the MCP server. Non-persistent by design: it is the live 'what am I looking at / what have I gathered right now' for one es-view run, lost on restart. It is one process-global set, NOT per browser tab or per MCP session, so every connected reader sees the same selection and bundle.",
+      "relatedNodes": ["agg-selection", "agg-es-view-session"],
+      "anchors": [
+        { "path": "src/server/state.mjs", "line": 9, "symbol": "createState" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-port-fall-forward",
+      "term": "Port fall-forward",
+      "category": "jargon",
+      "aka": ["EADDRINUSE fall-forward", "port 5178 -> 5179+"],
+      "definition": "The server's port-selection behavior: it tries the preferred port (default 5178) and, on EADDRINUSE, increments and retries up to 20 times, then binds and prints whatever port it landed on. Convenient for running several explorers at once, but it means the live MCP URL can differ from any hardcoded one (see hotspot hot-port-fall-forward-stale-mcp).",
+      "relatedNodes": ["agg-es-view-session"],
+      "anchors": [
+        { "path": "src/server/server.mjs", "line": 197, "symbol": "tryListen" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-smb-loopback-trust-boundary",
+      "term": "Loopback trust boundary (127.0.0.1 / --host)",
+      "category": "jargon",
+      "aka": ["127.0.0.1", "loopback", "--host exposure"],
+      "definition": "es-view binds to 127.0.0.1 by default, so the unauthenticated JSON API and MCP endpoint are reachable only from the local machine, treated as the trust boundary (no auth anywhere on the surface). The --host flag is passed straight to server.listen, so `--host 0.0.0.0` (or a LAN IP) drops that boundary and exposes the full API, including the arbitrary-file-read GET /api/source and the MCP tools, to the network (see hotspots hot-host-exposure, hot-source-api-network-exposed).",
+      "relatedNodes": ["agg-es-view-session"],
+      "anchors": [
+        { "path": "src/server/server.mjs", "line": 202, "symbol": "server.listen host" },
+        { "path": "bin/es-view.mjs", "line": 27, "symbol": "host default" }
+      ],
+      "status": "resolved"
+    }
+  ]
+}

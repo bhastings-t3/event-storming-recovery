@@ -1,0 +1,156 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The developer/orchestrator who runs the recovery CLIs (es-merge, es-generate, demo) and launches es-view. Here they run `npm run demo` to rebuild the bundled toy-shop example end to end."
+    },
+    {
+      "id": "cmd-build-example",
+      "type": "command",
+      "label": "BuildExample",
+      "inferred": true,
+      "description": "Regenerate the bundled toy-shop example model and its views in one shot. A thin convenience wrapper (npm run demo) that synchronously chains the merge CLI and then the generate-views CLI over the shipped example, so the shipped default explorer stays in sync with its trace set.",
+      "tactical": {
+        "explanation": "Orchestration / composition wrapper -- NOT a domain transform of its own (the two-plane rule keeps the merge and generate pipelines inside their own commands). scripts/build-example.mjs resolves root two levels up from import.meta.url, defines ex = examples/toy-shop and model = ex/model/flows.json, and a helper `run = (args) => execFileSync('node', args, { stdio:'inherit', cwd:root })`. It then makes TWO synchronous child-process calls IN ORDER: (1) run([tools/merge-flows.js, ex/traces, model]) folds the example's per-flow traces into flows.json; (2) run([tools/generate-views.js, model, ex/model, '--title', 'Toy Shop Event Storming']) renders flows.dot + explorer.html next to it. execFileSync is blocking with stdio inherited, so step 2 only runs if step 1 exits 0 (merge-flows.js exits 1 on validation errors, which would abort the chain and skip regeneration). It prints the built explorer.html path and exits. Wired via package.json scripts.demo -> `node scripts/build-example.mjs`. This command issues no state of its own; it delegates to cmd-merge-traces then cmd-generate-views.",
+        "anchors": [
+          { "path": "package.json", "line": 31, "symbol": "scripts.demo", "note": "\"demo\": \"node scripts/build-example.mjs\" -- the reachable entry point" },
+          { "path": "scripts/build-example.mjs", "line": 11, "symbol": "run", "note": "run = execFileSync('node', args, { stdio:'inherit', cwd:root }) -- synchronous, blocking, inherits exit status" },
+          { "path": "scripts/build-example.mjs", "line": 13, "symbol": "run", "note": "step 1: execFileSync merge-flows.js <ex/traces> <ex/model/flows.json>" },
+          { "path": "scripts/build-example.mjs", "line": 14, "symbol": "run", "note": "step 2: execFileSync generate-views.js <flows.json> <ex/model> --title 'Toy Shop Event Storming'" }
+        ]
+      }
+    },
+    {
+      "id": "cmd-merge-traces",
+      "type": "command",
+      "label": "MergeTraces",
+      "inferred": true,
+      "description": "Fold every per-flow trace document into one canonical, validated model. Invoked as the first synchronous step of the demo wrapper over the toy-shop traces directory.",
+      "tactical": {
+        "explanation": "Referenced here as the first leg of the build-example chain; the authoritative definition (ETL merge + validation pipeline, kept single-plane) lives in the merge-traces flow. In this flow it is reached as a child `node` process: execFileSync('node', [tools/merge-flows.js, examples/toy-shop/traces, examples/toy-shop/model/flows.json]). A nonzero exit (validation errors) aborts the demo before generate-views runs.",
+        "anchors": [
+          { "path": "scripts/build-example.mjs", "line": 13, "symbol": "run", "note": "merge-flows.js invoked with the toy-shop traces dir and flows.json out path" },
+          { "path": "src/lib/merge.mjs", "line": 238, "symbol": "mergeTracesDir", "note": "the merge implementation the CLI front end delegates to" }
+        ]
+      }
+    },
+    {
+      "id": "cmd-generate-views",
+      "type": "command",
+      "label": "GenerateViews",
+      "inferred": true,
+      "description": "Render the canonical flows.json into the two shipped views: a Graphviz flows.dot digraph (one cluster per flow, event-storming palette) and a self-contained interactive explorer.html with the whole model inlined. Invoked as the second synchronous step of the demo wrapper.",
+      "tactical": {
+        "explanation": "STUB reference (may merge by id with the dedicated generate-views tracer's node). tools/generate-views.js JSON.parses the flows.json model, resolves --repo-root/--title (falling back to model.meta), builds the DOT string excluding physical data-model node types, writes flows.dot, then serializes the entire model into a self-contained explorer.html (< escaped) and writes it. In this flow it is reached as a child `node` process after the merge succeeds: execFileSync('node', [tools/generate-views.js, flows.json, examples/toy-shop/model, '--title', 'Toy Shop Event Storming']). Pure read-render transform (single plane): reads agg-model, writes two read-model files; promotes no events of its own here.",
+        "anchors": [
+          { "path": "scripts/build-example.mjs", "line": 14, "symbol": "run", "note": "generate-views.js invoked with the merged flows.json + out dir + title" },
+          { "path": "tools/generate-views.js", "line": 24, "symbol": "module", "note": "JSON.parse(readFileSync(flowsFile)) -- reads the merged model" },
+          { "path": "tools/generate-views.js", "line": 91, "symbol": "module", "note": "writeFileSync(outDir/flows.dot, ...)" },
+          { "path": "tools/generate-views.js", "line": 1487, "symbol": "module", "note": "writeFileSync(outDir/explorer.html, html)" }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. In this flow it is the pivot between the two steps: written by the merge, then read back by the view generator.",
+      "tactical": {
+        "explanation": "Referenced here (authoritative definition lives in the merge-traces flow). The demo materializes it at examples/toy-shop/model/flows.json via merge-flows.js writeFileSync, then generate-views.js JSON.parses that same file as its input. Between the two child processes the model lives only as the on-disk flows.json (no shared in-memory state -- each CLI is a separate `node` process), so the file IS the hand-off store.",
+        "anchors": [
+          { "path": "src/lib/merge.mjs", "line": 215, "symbol": "mergeTraceDocs", "note": "the assembled model object persisted as flows.json" }
+        ]
+      }
+    },
+    {
+      "id": "rm-flows-dot",
+      "type": "readModel",
+      "label": "Graphviz flows.dot",
+      "inferred": true,
+      "description": "The Graphviz DOT projection of the model: one subgraph cluster per flow, event-storming palette per node type, physical data-model nodes and their edges excluded. A static artifact an operator renders (dot -Tsvg) to read the recovered flows outside the interactive explorer.",
+      "tactical": {
+        "explanation": "Built by generate-views.js: iterates model.flows, emits a cluster_<flowId> subgraph per flow, one node per non-data step/edge endpoint colored via PALETTE, and edges labelled with their verb; dead flows get dashed styling. Written by fs.writeFileSync(path.join(outDir, 'flows.dot'), dot.join('\\n')). In the demo, outDir is examples/toy-shop/model, overwriting the bundled flows.dot in place.",
+        "anchors": [
+          { "path": "tools/generate-views.js", "line": 68, "symbol": "module", "note": "DOT build loop over model.flows (clusters, palette, edges)" },
+          { "path": "tools/generate-views.js", "line": 91, "symbol": "module", "note": "writeFileSync(outDir/flows.dot, dot.join('\\n'))" }
+        ]
+      }
+    },
+    {
+      "id": "rm-explorer",
+      "type": "readModel",
+      "label": "Interactive explorer.html",
+      "inferred": true,
+      "description": "The self-contained interactive Event Storming explorer: a single HTML file with the entire model serialized inline and vanilla-JS/CSS UI (Flows board, Gallery, Data model, Glossary, Overview tabs, detail panel with source anchors). The primary human-facing read model, openable directly in a browser with no server or external deps.",
+      "tactical": {
+        "explanation": "Built by generate-views.js: the model is JSON.stringified (with < escaped to \\u003c) and inlined into a template HTML string as `const MODEL = ...`, alongside REPO_ROOT and PALETTE, then written by fs.writeFileSync(path.join(outDir, 'explorer.html'), html). This is a FROZEN snapshot -- it embeds the model at generation time and never re-reads flows.json. In the demo, outDir is examples/toy-shop/model, overwriting the bundled explorer.html in place; build-example.mjs then logs the written path.",
+        "anchors": [
+          { "path": "tools/generate-views.js", "line": 94, "symbol": "module", "note": "modelJson = JSON.stringify(model).replace(/</g,'\\u003c') -- model inlined into the page" },
+          { "path": "tools/generate-views.js", "line": 438, "symbol": "module", "note": "const MODEL = ${modelJson} -- frozen snapshot embedded in explorer.html" },
+          { "path": "tools/generate-views.js", "line": 1487, "symbol": "module", "note": "writeFileSync(outDir/explorer.html, html)" }
+        ]
+      }
+    },
+    {
+      "id": "ext-source-fs",
+      "type": "externalSystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process boundary. In the demo it holds the toy-shop per-flow traces read as input and receives the three regenerated artifacts written in place: examples/toy-shop/model/{flows.json, flows.dot, explorer.html}.",
+      "tactical": {
+        "explanation": "Reached via node:fs from both child CLIs. merge-flows.js writeFileSync(examples/toy-shop/model/flows.json); generate-views.js writeFileSync(flows.dot) and writeFileSync(explorer.html) into examples/toy-shop/model. The demo overwrites these in place -- and examples/toy-shop/model/flows.json is exactly the bundled fallback resolve-model.mjs serves when es-view finds no model.",
+        "anchors": [
+          { "path": "tools/merge-flows.js", "line": 31, "symbol": "cli", "note": "writeFileSync(outFile=flows.json)" },
+          { "path": "tools/generate-views.js", "line": 91, "symbol": "module", "note": "writeFileSync(flows.dot)" },
+          { "path": "tools/generate-views.js", "line": 1487, "symbol": "module", "note": "writeFileSync(explorer.html)" },
+          { "path": "src/server/resolve-model.mjs", "line": 92, "symbol": "resolveModel", "note": "the same flows.json is the 4th-tier bundled fallback the server serves" }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "build-example-demo",
+      "name": "Operator rebuilds the bundled toy-shop example (npm run demo)",
+      "tier": 2,
+      "kind": "write",
+      "status": "live",
+      "summary": "A thin orchestration wrapper. The operator runs `npm run demo`, which executes scripts/build-example.mjs. The script makes two synchronous execFileSync('node', ...) calls in order: first it invokes the merge CLI (merge-flows.js) over examples/toy-shop/traces to (re)write flows.json, then it invokes the view generator (generate-views.js) over that flows.json to (re)write flows.dot and explorer.html into examples/toy-shop/model. Because the calls are blocking and inherit exit status, a merge validation failure (exit 1) aborts before regeneration. The point is a one-command way to keep the shipped example -- which doubles as es-view's bundled fallback model -- in sync with its trace set.",
+      "trigger": "Operator runs `npm run demo` (i.e. `node scripts/build-example.mjs`).",
+      "steps": ["actor-operator", "cmd-build-example", "cmd-merge-traces", "agg-model", "cmd-generate-views", "rm-flows-dot", "rm-explorer", "ext-source-fs"],
+      "edges": [
+        { "from": "actor-operator", "to": "cmd-build-example", "verb": "issues" },
+        { "from": "cmd-build-example", "to": "cmd-merge-traces", "verb": "invokes", "synchronous": true },
+        { "from": "cmd-merge-traces", "to": "agg-model", "verb": "handled by" },
+        { "from": "agg-model", "to": "ext-source-fs", "verb": "persists to" },
+        { "from": "cmd-build-example", "to": "cmd-generate-views", "verb": "invokes", "synchronous": true },
+        { "from": "cmd-generate-views", "to": "agg-model", "verb": "reads" },
+        { "from": "cmd-generate-views", "to": "rm-flows-dot", "verb": "writes" },
+        { "from": "cmd-generate-views", "to": "rm-explorer", "verb": "writes" },
+        { "from": "rm-flows-dot", "to": "ext-source-fs", "verb": "persists to" },
+        { "from": "rm-explorer", "to": "ext-source-fs", "verb": "persists to" }
+      ],
+      "hotspots": ["hot-example-overwrite-in-place"],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-example-overwrite-in-place",
+      "label": "npm run demo overwrites the shipped fallback model in place with no backup or gate",
+      "description": "The demo regenerates examples/toy-shop/model/{flows.json,flows.dot,explorer.html} directly over the shipped files. That same examples/toy-shop/model/flows.json is es-view's 4th-tier bundled fallback (resolve-model.mjs:92), served whenever a user runs es-view with no model of their own. So the quality of the shipped default is only as good as the toy-shop trace set at demo time, and there is no backup, diff, or review gate before the shipped artifact is replaced. Compounding it: es-merge (hot-invalid-model-written) writes flows.json BEFORE checking validation errors, so a toy-shop trace edit that fails validation would still leave a written flows.json on disk (the chain then aborts before generate-views, so flows.dot/explorer.html would be stale relative to it) -- and if that broken flows.json is committed, es-view ships a broken default. Human question: should the demo (or the package's prepack/CI) validate and guard the regenerated toy-shop model -- e.g. fail the build on merge errors, or verify the artifacts against a golden snapshot -- before it can become the shipped fallback?",
+      "tactical": {
+        "explanation": "scripts/build-example.mjs writes straight into examples/toy-shop/model (the packaged example dir, listed in package.json files[]). resolve-model.mjs tier 4 resolves sourcePath = packageRoot/examples/toy-shop/model/flows.json as the bundled example; bin/es-view.mjs advertises the fallback to the bundled toy-shop example when no model is found here. No test in the demo path asserts the regenerated artifacts before they overwrite the shipped ones (smoke.test.mjs merges the traces but does not gate the demo).",
+        "anchors": [
+          { "path": "scripts/build-example.mjs", "line": 13, "symbol": "run", "note": "writes flows.json then flows.dot/explorer.html into examples/toy-shop/model in place" },
+          { "path": "src/server/resolve-model.mjs", "line": 92, "symbol": "resolveModel", "note": "examples/toy-shop/model/flows.json is the bundled fallback served when no model is found" },
+          { "path": "bin/es-view.mjs", "line": 66, "symbol": "help", "note": "documents fall-back to the bundled toy-shop example" }
+        ]
+      }
+    }
+  ]
+}

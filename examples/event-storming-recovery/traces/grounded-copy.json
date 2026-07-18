@@ -1,0 +1,99 @@
+{
+  "nodes": [
+    {
+      "id": "actor-viewer",
+      "type": "actor",
+      "label": "Viewer",
+      "inferred": true,
+      "description": "The human viewing the explorer SPA: navigates flows and nodes, curates the context bundle, and copies grounded markdown to hand to a Claude session. Here they hit a 'Copy for Claude' button to put one item (or the whole bundle) on the clipboard for a manual paste."
+    },
+    {
+      "id": "cmd-copy-grounded-markdown",
+      "type": "command",
+      "label": "CopyGroundedMarkdown",
+      "inferred": true,
+      "description": "Render one selected item (a node, a whole flow, or a hotspot) as grounded markdown and hand it back to the viewer to copy to the clipboard. The markdown carries the label, type, description, invariants/relations, the flows it appears in, and REAL source excerpts pulled from disk; a flow item also embeds a Mermaid graph of its edges. This is the manual clipboard channel to Claude, the alternative to the server-persisted MCP bundle.",
+      "tactical": {
+        "explanation": "Read-only projection request (single plane; keep the markdown-assembly stages in tactical, do NOT promote them to events). Client: getItem(type,id) issues GET /api/item?type=<node|flow|hotspot>&id=... (api.js:28); the button handler awaits the JSON then navigator.clipboard.writeText(r.markdown) puts it on the OS clipboard (a browser capability, not a modeled external system) and flips the label to 'Copied ✓'; clipboard failures are silently swallowed (catch {}). Server: the /api/item route (server.mjs:158-163) guards with itemExists (unknown type/id -> 404) and calls renderItemMarkdown(services,{type,id}). renderItemMarkdown (context.mjs:151) dispatches by type: node -> buildNodeContext + renderNodeContextMarkdown; flow -> buildFlowContext + renderFlowMarkdown (whose flowMermaid emits a palette-colored `flowchart LR`); hotspot -> buildHotspotContext + renderHotspotMarkdown. buildNodeContext (context.mjs:18) is where grounding happens: for every anchor it calls readSource(repoRoot, path, line) to slice the actual file (+/-8 lines) so the paste is anchored to code, not just a label. The bundle 'Copy all' instance instead calls getContext() -> GET /api/context (server.mjs:139-141) -> renderBundleMarkdown, which maps renderItemMarkdown over every bundle item and joins them with `---`. No state is written on this path; the model is read from memory and the source from disk.",
+        "anchors": [
+          { "path": "src/web/api.js", "line": 28, "symbol": "getItem", "note": "GET /api/item?type=&id= -> { type, id, label, markdown }" },
+          { "path": "src/server/server.mjs", "line": 158, "symbol": "createServer", "note": "/api/item route: itemExists 404 guard + renderItemMarkdown" },
+          { "path": "src/server/context.mjs", "line": 151, "symbol": "renderItemMarkdown", "note": "dispatch node/flow/hotspot -> the matching render*Markdown" },
+          { "path": "src/server/context.mjs", "line": 187, "symbol": "flowMermaid", "note": "flow items embed a colored Mermaid flowchart of the edges" },
+          { "path": "src/web/components/Detail.jsx", "line": 125, "symbol": "copy", "note": "navigator.clipboard.writeText(r.markdown) — the clipboard write" }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, held in the es-view server's in-memory state, and read here to project one item's grounded markdown.",
+      "tactical": {
+        "explanation": "Read-only access on the copy path. The server holds the resolved model in memory (services.model) with prebuilt indexes (services.indexes.nodeById / hotspotById via buildIndexes). renderItemMarkdown -> buildNodeContext/buildFlowContext/buildHotspotContext walk the model: nodeById lookups, nodeFlows/enforcesRelation/nodeUsages for a node, flowNodeIds + f.edges for a flow, hotspotById for a hotspot. Nothing mutates the model; selection/bundle state is untouched by /api/item (the bundle 'Copy all' reads state.getBundle but still does not write). No file is written on this channel.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext", "note": "reads model+indexes to assemble one node's grounded context" },
+          { "path": "src/server/context.mjs", "line": 164, "symbol": "buildFlowContext", "note": "walks flowNodeIds + edges to assemble a whole flow" }
+        ]
+      }
+    },
+    {
+      "id": "ext-source-fs",
+      "type": "externalSystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process boundary. On the copy path it holds the target-repo source files that ground the markdown: each anchor's real code is sliced from disk and embedded in the pasted output so Claude sees actual code, not just labels.",
+      "tactical": {
+        "explanation": "Reached via readSource (source.mjs) using node:fs. For each anchor buildNodeContext calls readSource(repoRoot, a.path, a.line): it resolves the path against repoRoot, guards against ../ escapes (path.startsWith(root)), then fs.readFileSync and slices +/-8 lines around the anchor line into a code block. A missing/escaping path yields { exists:false } and is simply omitted from the markdown (no fenced code emitted). Read-only; this channel never writes the filesystem.",
+        "anchors": [
+          { "path": "src/server/source.mjs", "line": 13, "symbol": "readSource", "note": "fs.readFileSync + slice around the anchor line; repo-root sandboxed" },
+          { "path": "src/server/context.mjs", "line": 58, "symbol": "buildNodeContext", "note": "entry.source = readSource(repoRoot, a.path, a.line) per anchor" }
+        ]
+      }
+    },
+    {
+      "id": "rm-item-markdown",
+      "type": "readModel",
+      "label": "Grounded item markdown",
+      "inferred": true,
+      "description": "The ready-to-paste markdown for one item (a node, a whole flow with a Mermaid graph, or a hotspot) or for the whole context bundle. It is what the viewer copies to the clipboard and pastes into Claude as grounding, the manual alternative to the MCP selected-nodes resource.",
+      "tactical": {
+        "explanation": "The projection returned as { type, id, label, markdown } from GET /api/item (or { items, markdown } from GET /api/context for 'Copy all'). Assembled by renderNodeContextMarkdown / renderFlowMarkdown / renderHotspotMarkdown (context.mjs): heading + description + tag line, fields/columns/storage, related invariants, 'appears in N flows', and a fenced code block per grounded anchor; a flow also gets an edge list and the Mermaid `flowchart LR`. renderBundleMarkdown joins each item's markdown with `---`. It is purely derived (a projection, per the two-plane rule) and is never persisted; its only sink is the browser clipboard via navigator.clipboard.writeText, from which the viewer pastes.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 88, "symbol": "renderNodeContextMarkdown", "note": "node markdown incl. fenced source excerpts" },
+          { "path": "src/server/context.mjs", "line": 269, "symbol": "renderFlowMarkdown", "note": "flow markdown: edge list + hotspots + Mermaid graph + each node" },
+          { "path": "src/server/context.mjs", "line": 158, "symbol": "renderBundleMarkdown", "note": "'Copy all' joins each item's markdown with a --- rule" }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "grounded-copy",
+      "name": "Viewer copies grounded markdown to the clipboard for Claude",
+      "tier": 2,
+      "kind": "read",
+      "status": "live",
+      "summary": "From several places in the explorer (a node detail panel, a flow header, a right-click menu, or the context-bundle drawer) the viewer hits a 'Copy for Claude' button. The SPA calls GET /api/item (or GET /api/context for the whole bundle), the server reads the in-memory model and slices the real source behind each anchor from disk, and returns grounded markdown, a flow item also embedding a Mermaid graph. The handler writes that markdown to the OS clipboard so the viewer can paste it straight into a Claude session. This is the manual clipboard channel, the parallel 'give it to Claude' path to the server-persisted MCP context bundle.",
+      "trigger": "Viewer clicks a 'Copy for Claude' / 'Copy all for Claude' button (detail panel, flow header, right-click context menu, or bundle drawer).",
+      "steps": ["actor-viewer", "cmd-copy-grounded-markdown", "agg-model", "ext-source-fs", "rm-item-markdown"],
+      "edges": [
+        { "from": "actor-viewer", "to": "cmd-copy-grounded-markdown", "verb": "issues" },
+        { "from": "cmd-copy-grounded-markdown", "to": "agg-model", "verb": "reads" },
+        { "from": "cmd-copy-grounded-markdown", "to": "ext-source-fs", "verb": "reads" },
+        { "from": "cmd-copy-grounded-markdown", "to": "rm-item-markdown", "verb": "returns" },
+        { "from": "rm-item-markdown", "to": "actor-viewer", "verb": "read by" },
+        { "from": "rm-item-markdown", "to": "tbl-flows-json", "verb": "projects from" }
+      ],
+      "hotspots": [],
+      "instances": [
+        { "label": "Detail panel: '⧉ Copy for Claude' (single node)", "route": "Node detail → Copy for Claude → GET /api/item?type=node", "file": "src/web/components/Detail.jsx" },
+        { "label": "Flow header: '⧉ Copy flow for Claude' (whole flow incl. Mermaid graph)", "route": "Flow header → Copy flow for Claude → GET /api/item?type=flow", "file": "src/web/components/Main.jsx" },
+        { "label": "Right-click context menu: '⧉ Copy this <node|flow|hotspot> for Claude'", "route": "Right-click any item → Copy for Claude → GET /api/item?type=<node|flow|hotspot>", "file": "src/web/components/ContextMenu.jsx" },
+        { "label": "Context bundle drawer: 'Copy all for Claude' (whole bundle)", "route": "Bundle drawer → Copy all for Claude → GET /api/context → renderBundleMarkdown", "file": "src/web/components/ContextBundle.jsx" }
+      ]
+    }
+  ],
+  "hotspots": []
+}

@@ -1,0 +1,457 @@
+{
+  "nodes": [
+    {
+      "id": "actor-claude",
+      "type": "actor",
+      "label": "Connected Claude session",
+      "inferred": true,
+      "description": "A Claude session acting as an MCP client, connected to the running es-view server. It reads the live selection, node/flow context, model index, data model, and curated bundle to ground a refactor in what the human is actually looking at."
+    },
+    {
+      "id": "ext-claude-mcp-client",
+      "type": "externalSystem",
+      "label": "Claude MCP client (streamable-HTTP transport)",
+      "inferred": false,
+      "description": "The Claude process across the process boundary that speaks MCP to POST /mcp over streamable HTTP. It is the external system the read requests arrive from; the @modelcontextprotocol/sdk used server-side is an in-process LIBRARY, not this external system.",
+      "tactical": {
+        "explanation": "SESSION LIFECYCLE (transport plumbing, kept in tactical per the two-plane rule): the client connects to POST /mcp. createMcpHandler holds a `transports` Map keyed by Mcp-Session-Id. An `initialize` POST with no session id spins up a StreamableHTTPServerTransport with a randomUUID sessionIdGenerator and enableJsonResponse, and connects a FRESH McpServer (buildMcpServer) that closes over the shared `services` + `state`; onsessioninitialized registers the transport in the Map. Later POST/GET/DELETE reuse the transport by Mcp-Session-Id; transport.onclose deletes the session. Request bodies are capped at 4MB (readJsonBody destroys the socket past 4_000_000 bytes). The transient `transports` Map is transport bookkeeping, NOT a domain aggregate. CONTRADICTION: the file header comment says 'stateless' but the implementation is stateful (per-session transports).",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 120,
+            "symbol": "createMcpHandler",
+            "note": "transports Map keyed by Mcp-Session-Id"
+          },
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 131,
+            "symbol": "mcpHandler",
+            "note": "initialize => new StreamableHTTPServerTransport + fresh McpServer over shared services/state"
+          },
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 137,
+            "symbol": "mcpHandler",
+            "note": "onclose deletes the session; 4MB body cap in readJsonBody"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-source-fs",
+      "type": "externalSystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process boundary. Holds the per-flow trace JSONs read as input and receives the merged flows.json written as output (CLI path only; the server keeps the merged model in memory). In this flow it is the source of the REAL code excerpts each grounded projection pulls behind an anchor.",
+      "tactical": {
+        "explanation": "Reached via node:fs in readSource: for each anchor {path,line} the grounder resolves an absolute path sandboxed to repoRoot (guards against ../ escape), reads the file, and returns a +/-8-line excerpt. Every grounded read model (get_current_selection, get_node, get_flow, the bundle resource) pulls its source excerpts this way; list_model and list_data_model do NOT touch the filesystem.",
+        "anchors": [
+          {
+            "path": "src/server/source.mjs",
+            "line": 13,
+            "symbol": "readSource",
+            "note": "repo-sandboxed file read; +/-8 line excerpt behind an anchor"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 58,
+            "symbol": "buildNodeContext",
+            "note": "readSource(repoRoot, a.path, a.line) per anchor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then read by the es-view server and the view generator. Its invariants are the merge-time validations.",
+      "tactical": {
+        "explanation": "READ SIDE (this flow): the resolved model is held in memory in `services` (model + indexes + repoRoot) built once by buildServices. Every MCP projection reads it: list_model iterates model.flows/model.nodes; buildNodeContext looks up indexes.nodeById and derives fields/breadcrumb/columns/usedBy/storage/flows/enforces via selectors; buildFlowContext walks model.flows; renderDataModelMarkdown walks the physical nodes via dataModelTree. No write occurs on the read path.",
+        "anchors": [
+          {
+            "path": "src/server/server.mjs",
+            "line": 85,
+            "symbol": "buildServices",
+            "note": "model + buildIndexes(model) + repoRoot shared by API and MCP"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 18,
+            "symbol": "buildNodeContext",
+            "note": "reads indexes.nodeById + selectors to ground a node"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-selection",
+      "type": "aggregate",
+      "label": "Selection / Context bundle",
+      "inferred": true,
+      "description": "The live in-memory session state shared same-process by the SPA and the MCP bridge: the current selection (the node the human last clicked) and the curated context bundle (an insertion-ordered set of typed refs to nodes, flows, and hotspots). Purely in-memory, no file: it is this run's 'what am I looking at right now'.",
+      "tactical": {
+        "explanation": "createState() closes over `selection` ({ nodeId, at } | null) and a `bundle` Map keyed by `type:id`. Written by the SPA (openDetail -> pushSelection -> POST /api/selection -> state.setSelection; addToBundle/removeFromBundle via /api/context) and READ here by the MCP layer: get_current_selection calls state.getSelection(); the selected-nodes resource calls state.getBundle(). Non-persistent by design; lost when the process exits. clearSelection()/clearBundle() exist but the SPA never calls the selection clear (see hotspot).",
+        "anchors": [
+          {
+            "path": "src/server/state.mjs",
+            "line": 9,
+            "symbol": "createState",
+            "note": "in-memory selection + bundle Map, no file"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 16,
+            "symbol": "getSelection",
+            "note": "getSelection() read by get_current_selection"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 20,
+            "symbol": "getBundle",
+            "note": "getBundle() read by the selected-nodes resource"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-current-selection",
+      "type": "readModel",
+      "label": "Current selection (grounded)",
+      "inferred": true,
+      "description": "The grounded context for the node the human is currently looking at in the explorer: label, type, description, the invariants it enforces (or is enforced by), the flows it appears in, and the real source behind each anchor. This is what get_current_selection returns so Claude can act on 'the selected node'.",
+      "tactical": {
+        "explanation": "get_current_selection reads state.getSelection() (agg-selection, in-memory). If nothing is selected it returns a friendly 'ask the user to click a node' message; if a node is selected it grounds it with buildNodeContext(services, sel.nodeId) from agg-model and pulls real source via readSource -> ext-source-fs, then renderNodeContextMarkdown -> MCP text. If the selected id is no longer in the model it says so. The SAME projection is served to the SPA over GET /api/selection.",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 29,
+            "symbol": "get_current_selection",
+            "note": "state.getSelection() -> buildNodeContext -> renderNodeContextMarkdown"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 18,
+            "symbol": "buildNodeContext",
+            "note": "grounds the selected node from agg-model + source"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 121,
+            "symbol": "createServer",
+            "note": "same selection projection served to the SPA at GET /api/selection"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-node-context",
+      "type": "readModel",
+      "label": "Grounded node context",
+      "inferred": true,
+      "description": "The full grounded context for any node id: its type, description, fields, physical breadcrumb/columns, what uses it, storage links, the invariant relation, the flows it appears in, and source anchors with real code. Returned by get_node and used by the SPA detail panel and GET /api/item.",
+      "tactical": {
+        "explanation": "get_node(nodeId) (zod string) calls buildNodeContext(services, nodeId): looks up indexes.nodeById (agg-model), maps fields with resolved storage sources, derives breadcrumb/columns/usedBy/storage via selectors, computes the enforces relation and the node's flows, and for every anchor pulls a source excerpt via readSource -> ext-source-fs. renderNodeContextMarkdown formats it. Unknown ids return a 'use list_model' hint.",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 44,
+            "symbol": "get_node",
+            "note": "buildNodeContext by id -> renderNodeContextMarkdown"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 18,
+            "symbol": "buildNodeContext",
+            "note": "fields/breadcrumb/columns/usedBy/storage/enforces/flows/anchors"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 88,
+            "symbol": "renderNodeContextMarkdown",
+            "note": "markdown projection incl. fenced source code"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-flow-context",
+      "type": "readModel",
+      "label": "Grounded flow (with Mermaid graph)",
+      "inferred": true,
+      "description": "A whole flow grounded in code: its trigger/summary, the edges as labeled verbs, its hotspots (open questions), every node grounded with source anchors, and a Mermaid flowchart colored by the event-storming palette so the model sees the graph structurally. Returned by get_flow.",
+      "tactical": {
+        "explanation": "get_flow(flowId) (zod string) calls buildFlowContext(services, flowId): finds the flow in model.flows (agg-model), grounds each node via buildNodeContext (-> readSource -> ext-source-fs), maps edges to labeled verbs, resolves hotspots via indexes.hotspotById, and builds a Mermaid flowchart via flowMermaid (exact labels, palette colors, no OCR). renderFlowMarkdown formats the whole thing. Unknown ids return a 'use list_model' hint.",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 57,
+            "symbol": "get_flow",
+            "note": "buildFlowContext -> renderFlowMarkdown"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 164,
+            "symbol": "buildFlowContext",
+            "note": "grounds every node + edges + hotspots + Mermaid"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 187,
+            "symbol": "flowMermaid",
+            "note": "colored Mermaid flowchart of the flow graph"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-model-index",
+      "type": "readModel",
+      "label": "Model index",
+      "inferred": true,
+      "description": "A compact index of the whole model: every flow id + name (+ status when not live), and every node id + label + type. The discovery surface Claude uses to find ids for get_node / get_flow. Returned by list_model.",
+      "tactical": {
+        "explanation": "list_model iterates model.flows (id, name, status) and model.nodes (id, label, type) straight from agg-model and joins them into markdown. Pure in-memory projection: it does NOT ground source (no readSource, no ext-source-fs).",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 70,
+            "symbol": "list_model",
+            "note": "map model.flows + model.nodes to a compact id index"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-data-model",
+      "type": "readModel",
+      "label": "Recovered data model",
+      "inferred": true,
+      "description": "The physical storage the code actually touches, as a tree: server ▸ database ▸ table ▸ column, and for each table the behavioral nodes that write/read/project it. Answers 'what tables does this touch / where does this data live / who writes this table'. Returned by list_data_model and shown in the Data-model tab.",
+      "tactical": {
+        "explanation": "list_data_model calls renderDataModelMarkdown(services): dataModelTree(model, indexes.nodeById) groups the physical nodes (server/database/table/column) into a containment tree (agg-model), and for each table tableConsumers lists the behavioral nodes and their verb. Returns a 'run the data-mapping phase' placeholder when no physical nodes exist. Pure projection over agg-model; no source grounding.",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 84,
+            "symbol": "list_data_model",
+            "note": "renderDataModelMarkdown(services)"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 238,
+            "symbol": "renderDataModelMarkdown",
+            "note": "dataModelTree + per-table consumers"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-context-bundle",
+      "type": "readModel",
+      "label": "Curated context bundle",
+      "inferred": true,
+      "description": "The items the human has gathered in the explorer (nodes, whole flows each with a Mermaid graph, and hotspots) rendered as one grounded markdown document, each item carrying its invariants, flows, and source anchors. Exposed as the @-mentionable MCP resource event-storming://selected-nodes.",
+      "tactical": {
+        "explanation": "The selected-nodes resource callback reads state.getBundle() (agg-selection: insertion-ordered typed refs) and renders each via renderBundleMarkdown -> renderItemMarkdown, dispatching to buildNodeContext / buildFlowContext / buildHotspotContext (agg-model) with source excerpts via readSource -> ext-source-fs, joined by '---'. Empty bundle yields a '_No items_' placeholder. Same projection served to the SPA over GET /api/context.",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 95,
+            "symbol": "selected-nodes",
+            "note": "resource: state.getBundle() -> renderBundleMarkdown"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 158,
+            "symbol": "renderBundleMarkdown",
+            "note": "renders each typed item grounded, joined by ---"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 20,
+            "symbol": "getBundle",
+            "note": "insertion-ordered typed refs read here"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "claude-mcp-read",
+      "name": "A connected Claude session reads the live model/selection/bundle over MCP",
+      "tier": 1,
+      "kind": "read",
+      "status": "live",
+      "summary": "A Claude session that has registered the es-view MCP server reads the live domain model to ground a refactor. Over the streamable-HTTP /mcp transport it calls tools (get_current_selection, get_node, get_flow, list_model, list_data_model) and reads the event-storming://selected-nodes resource. Each projection is served from the SAME in-memory state the human drives in the SPA: the selection/bundle (agg-selection) and the merged model (agg-model). The grounded projections pull REAL source excerpts from the filesystem behind each anchor, so Claude sees actual code, not just labels. Nothing is written: this is a pure read that lets Claude act on 'the selected node' or 'the gathered context'.",
+      "trigger": "A connected Claude session (registered via `claude mcp add` and initialized over /mcp) calls an MCP tool (get_current_selection / get_node / get_flow / list_model / list_data_model) or reads the `event-storming://selected-nodes` resource.",
+      "steps": [
+        "actor-claude",
+        "ext-claude-mcp-client",
+        "rm-current-selection",
+        "rm-node-context",
+        "rm-flow-context",
+        "rm-model-index",
+        "rm-data-model",
+        "rm-context-bundle",
+        "agg-selection",
+        "agg-model",
+        "ext-source-fs"
+      ],
+      "edges": [
+        {
+          "from": "actor-claude",
+          "to": "ext-claude-mcp-client",
+          "verb": "calls"
+        },
+        {
+          "from": "ext-claude-mcp-client",
+          "to": "rm-current-selection",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp-client",
+          "to": "rm-node-context",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp-client",
+          "to": "rm-flow-context",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp-client",
+          "to": "rm-model-index",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp-client",
+          "to": "rm-data-model",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp-client",
+          "to": "rm-context-bundle",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "agg-selection",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "ext-source-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-node-context",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-node-context",
+          "to": "ext-source-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-flow-context",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-flow-context",
+          "to": "ext-source-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-model-index",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-data-model",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "agg-selection",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "ext-source-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "tbl-flows-json",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-node-context",
+          "to": "tbl-flows-json",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-flow-context",
+          "to": "tbl-flows-json",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-data-model",
+          "to": "tbl-flows-json",
+          "verb": "projects from"
+        }
+      ],
+      "hotspots": [
+        "hot-selection-never-cleared",
+        "hot-mcp-name-mismatch"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-mcp-name-mismatch",
+      "label": "MCP server self-name 'event-storming-recovery' vs registration alias 'event-storming'",
+      "description": "The McpServer identifies itself to clients as 'event-storming-recovery', but the app registers itself into the user's Claude config under the name 'event-storming' (the name shown in the connect-UI success message and used in the `claude mcp add` command). Human question: is this two-name split intentional (a short connection alias vs the server's product name), or a bug that will confuse tool namespacing / which name the user types after /mcp? A mismatch can make the registered server hard to find or address.",
+      "tactical": {
+        "explanation": "mcp.mjs: `new McpServer({ name: 'event-storming-recovery', version: '0.1.0' })`. server.mjs: `export const MCP_NAME = 'event-storming'`, used to build `claude mcp add --transport http event-storming <url>` (GET /api/mcp/info) and passed to claudeMcpAdd on POST /api/mcp/register; ConnectClaude.jsx surfaces the same 'event-storming' name to the user. The resource uri scheme `event-storming://selected-nodes` matches the registration alias, not the server self-name.",
+        "anchors": [
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 20,
+            "symbol": "buildMcpServer",
+            "note": "McpServer name 'event-storming-recovery'"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 24,
+            "symbol": "MCP_NAME",
+            "note": "registration alias 'event-storming' used in claude mcp add"
+          },
+          {
+            "path": "src/web/components/ConnectClaude.jsx",
+            "line": 26,
+            "symbol": "ConnectClaude",
+            "note": "success message surfaces 'event-storming' to the user"
+          }
+        ]
+      }
+    }
+  ]
+}

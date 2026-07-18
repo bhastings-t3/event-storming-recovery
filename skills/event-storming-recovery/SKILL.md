@@ -91,5 +91,6 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
   protocol every sub-agent inherits).
 - `docs/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
 - `tools/merge-flows.js`, `tools/generate-views.js` — merge+validate, and render DOT+explorer.
-- `examples/toy-shop/` — a tiny synthetic model you can build in seconds to see the output shape:
-  `node tools/merge-flows.js examples/toy-shop/traces examples/toy-shop/model/flows.json && node tools/generate-views.js examples/toy-shop/model/flows.json examples/toy-shop/model --title "Toy Shop Event Storming"`
+- `examples/event-storming-recovery/` — the bundled example (this tool's own recovered self-model);
+  rebuild it in seconds to see the output shape: `npm run demo`. A small synthetic fixture also lives
+  at `tests/fixtures/toy-shop/` if you want the minimal shape.

@@ -12,7 +12,7 @@ import { mergeTraceDocs, mergeTracesDir } from '../src/lib/merge.mjs';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const merge = join(root, 'tools', 'merge-flows.js');
 const generate = join(root, 'tools', 'generate-views.js');
-const toyTraces = join(root, 'examples', 'toy-shop', 'traces');
+const toyTraces = join(root, 'tests', 'fixtures', 'toy-shop', 'traces');
 
 test('merge validates the toy-shop traces and emits the expected model', () => {
   const out = mkdtempSync(join(tmpdir(), 'es-'));

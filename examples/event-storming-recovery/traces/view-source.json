@@ -1,0 +1,107 @@
+{
+  "nodes": [
+    {
+      "id": "actor-viewer",
+      "type": "actor",
+      "label": "Viewer",
+      "inferred": true,
+      "description": "The human viewing the explorer SPA. They navigate flows, open a node/hotspot detail, and curate the context bundle. In this flow they click a source anchor to ground a sticky in the real code behind it, either inline (view source) or by jumping to their editor."
+    },
+    {
+      "id": "cmd-view-source",
+      "type": "command",
+      "label": "ViewSource",
+      "inferred": true,
+      "kind": "read",
+      "description": "Fetch the REAL code behind an anchor so the viewer can ground a command/aggregate/event/etc. sticky in the actual implementation. Given an anchor's { path, line }, return a small windowed excerpt (line +/- 8) read from the target repo, sandboxed to the repo root.",
+      "tactical": {
+        "explanation": "Read flow, no state change. Click path: the Anchor component's `view source` button toggles a lazy expander (Detail.jsx:100-104 toggle) that calls fetchSource(a.path, a.line) (src/web/api.js:35). fetchSource builds `GET /api/source?path&line&ctx` (api.js:37). The route handler (server.mjs:165) parses path/line/ctx, 400s if no path, else calls readSource(resolved.repoRoot, relPath, line, ctx) (src/server/source.mjs:13) and returns the result verbatim as JSON. readSource resolves abs = path.resolve(root, relPath), then reads the file and slices lines [ln-ctx .. ln+ctx] (ctx defaults to 8). SANDBOX GUARD (source.mjs:18): `if (abs !== root && !abs.startsWith(root + path.sep)) return { exists:false, error:'path escapes repo root' }` -- this prefix check is the ONLY thing stopping a caller from reading arbitrary files via ../ escapes; path.resolve normalizes ../ so plain traversal and absolute paths are caught. Note the guard uses path.resolve, not fs.realpath, so a symlink that lives inside repoRoot but points outside it would pass the check and be read (see notes). repoRoot is resolved once at boot by resolve-model.mjs (explicit --repo-root > model.meta.repoRoot > the model file's own tree > cwd) and frozen into `resolved`. There is NO authentication on this endpoint (or any /api route).",
+        "anchors": [
+          { "path": "src/web/components/Detail.jsx", "line": 103, "symbol": "Anchor/toggle", "note": "view source button -> fetchSource(a.path, a.line)" },
+          { "path": "src/web/api.js", "line": 35, "symbol": "fetchSource", "note": "builds GET /api/source?path&line&ctx" },
+          { "path": "src/server/server.mjs", "line": 165, "symbol": "createServer", "note": "GET /api/source route -> readSource(resolved.repoRoot, ...)" },
+          { "path": "src/server/source.mjs", "line": 13, "symbol": "readSource", "note": "resolve abs, sandbox-check, read file, slice +/-ctx window" }
+        ]
+      }
+    },
+    {
+      "id": "ext-source-fs",
+      "type": "externalSystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process boundary. Holds the target-repo source files (and the model/trace JSONs). In this flow it is the store the view-source read reaches into: node:fs reads the anchored file, sandboxed to the resolved repo root, to return a windowed code excerpt.",
+      "tactical": {
+        "explanation": "Reached via node:fs in readSource: fs.existsSync(abs) + fs.statSync(abs).isFile() gate, then fs.readFileSync(abs, 'utf8').split(/\\r?\\n/) to line-split, and the requested window is sliced out. The absolute path is derived from resolved.repoRoot (set at boot by resolve-model.mjs) joined with the anchor's repo-relative path.",
+        "anchors": [
+          { "path": "src/server/source.mjs", "line": 20, "symbol": "readSource", "note": "fs.existsSync/statSync/readFileSync of the anchored file" }
+        ]
+      }
+    },
+    {
+      "id": "ext-editor",
+      "type": "externalSystem",
+      "label": "Editor (VS Code)",
+      "inferred": false,
+      "description": "The OS/editor outside the process boundary that handles vscode://file/... deep links. The sibling grounding path: instead of the inline excerpt, the viewer clicks the anchor's <a> href, and the OS hands the vscode:// URL to the editor, which opens the real file at the given line straight from the filesystem.",
+      "tactical": {
+        "explanation": "The anchor renders `<a className=\"anchor\" href={anchorUrl(repoRoot, a)}>` (Detail.jsx:107). anchorUrl (src/web/model.js:43) builds `vscode://file/<repoRoot>/<a.path>:<a.line>`. Clicking it leaves the app entirely: the browser/OS launches the registered vscode:// handler, which opens the file from disk. This path does NOT go through the server or the sandbox guard -- it dereferences repoRoot on the OS side.",
+        "anchors": [
+          { "path": "src/web/model.js", "line": 43, "symbol": "anchorUrl", "note": "builds vscode://file/<repoRoot>/<path>:<line>" },
+          { "path": "src/web/components/Detail.jsx", "line": 107, "symbol": "Anchor", "note": "<a href={anchorUrl(...)}> jump-to-editor deep link" }
+        ]
+      }
+    },
+    {
+      "id": "rm-source-excerpt",
+      "type": "readModel",
+      "label": "Source excerpt",
+      "inferred": true,
+      "description": "The windowed code the viewer reads to ground a sticky: { path, exists, line, startLine, endLine, code } where code is the anchored line +/- 8 lines. Returned by GET /api/source and rendered inline under the anchor (or, on failure, a 'source not found' note).",
+      "tactical": {
+        "explanation": "Shaped entirely by readSource's return (source.mjs:24): on success { path, exists:true, line, startLine, endLine, code } with code = lines.slice(startLine-1, endLine).join('\\n'); on rejection/miss { path, exists:false, error } (error one of 'no path' / 'path escapes repo root' / 'not found'). server.mjs:170 sends it verbatim as JSON. The Anchor component renders <pre className=\"src-code\"> with src.code when exists, else a 'source not found at repo root (<error>)' note (Detail.jsx:113-115). This projection is computed fresh per click and never cached.",
+        "anchors": [
+          { "path": "src/server/source.mjs", "line": 24, "symbol": "readSource", "note": "the returned { path, exists, line, startLine, endLine, code } excerpt" },
+          { "path": "src/server/server.mjs", "line": 170, "symbol": "createServer", "note": "sends readSource(...) verbatim as the /api/source JSON body" },
+          { "path": "src/web/components/Detail.jsx", "line": 113, "symbol": "Anchor", "note": "renders src.code in <pre>, or a not-found note" }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "view-source",
+      "name": "Viewer grounds a sticky in the real code behind its anchor",
+      "tier": 2,
+      "kind": "read",
+      "status": "live",
+      "summary": "Every command/aggregate/event/etc. sticky in the explorer carries source anchors. When the viewer clicks an anchor's 'view source', the SPA calls GET /api/source?path&line&ctx; the server's readSource resolves the path against the frozen repo root, rejects anything escaping it, and returns a windowed excerpt (line +/- 8) read straight from the target repo's files. The excerpt renders inline beneath the anchor. A sibling grounding path skips the server entirely: the same anchor is an <a href='vscode://file/...'> deep link, so the OS/editor can open the real file at that line. Both paths turn an abstract sticky into the actual code, one inline (via the filesystem through the sandboxed API) and one by jumping to the editor.",
+      "trigger": "Viewer clicks 'view source' on an anchor in a node/hotspot detail (or clicks the anchor's vscode:// link to jump to their editor).",
+      "steps": ["actor-viewer", "cmd-view-source", "ext-source-fs", "rm-source-excerpt", "ext-editor"],
+      "edges": [
+        { "from": "actor-viewer", "to": "cmd-view-source", "verb": "issues" },
+        { "from": "cmd-view-source", "to": "ext-source-fs", "verb": "reads" },
+        { "from": "rm-source-excerpt", "to": "ext-source-fs", "verb": "projects from" },
+        { "from": "cmd-view-source", "to": "rm-source-excerpt", "verb": "returns" },
+        { "from": "actor-viewer", "to": "ext-editor", "verb": "calls" },
+        { "from": "ext-editor", "to": "ext-source-fs", "verb": "reads" }
+      ],
+      "hotspots": ["hot-source-api-network-exposed"],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-source-api-network-exposed",
+      "label": "Unauthenticated GET /api/source is an arbitrary-file-read primitive if bound to 0.0.0.0",
+      "description": "es-view binds to 127.0.0.1 by default, but --host accepts any address including 0.0.0.0. There is no authentication on any /api route, and GET /api/source reads an arbitrary repo-relative file and returns its contents. The ONLY thing scoping it is the path-escape prefix guard in readSource (abs must equal repoRoot or start with repoRoot + sep). Bound to 0.0.0.0, anyone on the network can read every file under repoRoot (source, .env, secrets committed in the tree, etc.). Two gaps widen it: (1) the guard uses path.resolve, not fs.realpath, so a symlink inside repoRoot pointing outside it would pass the check and leak files beyond the root; (2) repoRoot often IS the user's whole working tree (default cwd). Human question: should es-view refuse --host 0.0.0.0 (or any non-loopback bind) without an explicit opt-in / auth token, and should readSource realpath-check to defeat symlink escapes? Or is this strictly a localhost dev tool where a non-loopback bind is user-accepted risk?",
+      "tactical": {
+        "explanation": "No auth exists on the server: createServer routes /api/* with zero credential checks (server.mjs:100-190). --host flows unmodified from parseArgs (bin/es-view.mjs:38) into startServer's server.listen(pnum, host, ...) (server.mjs:202). GET /api/source (server.mjs:165) calls readSource(resolved.repoRoot, relPath, line, ctx). The sandbox is the single guard at source.mjs:18: `if (abs !== root && !abs.startsWith(root + path.sep)) return { exists:false, error:'path escapes repo root' }`. path.resolve normalizes ../ and absolute paths (both caught), but does not resolve symlinks, so an in-root symlink to an out-of-root target is read. repoRoot defaults to cwd (resolve-model.mjs:99-102).",
+        "anchors": [
+          { "path": "src/server/source.mjs", "line": 18, "symbol": "readSource", "note": "the sole guard: prefix check, no realpath/symlink resolution" },
+          { "path": "src/server/server.mjs", "line": 165, "symbol": "createServer", "note": "GET /api/source: no auth, returns file contents" },
+          { "path": "bin/es-view.mjs", "line": 38, "symbol": "parseArgs", "note": "--host accepts 0.0.0.0; default 127.0.0.1" }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,406 @@
+{
+  "nodes": [
+    {
+      "id": "rm-node-context",
+      "type": "readModel",
+      "label": "Grounded node context",
+      "tactical": {
+        "explanation": "Data-mapping re-statement: fields[] enumerate what buildNodeContext returns for one node id, projected from the model (col-flows-nodes / col-flows-flows) and grounded with live source (ext-source-fs).",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext", "note": "assembles the grounded node context returned here" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "label",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The ubiquitous-language label of the node, looked up by id in the in-memory model via indexes.nodeById.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "lookup", "note": "node.label by id" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/server/context.mjs", "line": 63, "symbol": "buildNodeContext", "note": "returns id/type/label/description off the resolved node" }
+          ]
+        },
+        {
+          "name": "type",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The node's event-storming type (actor/command/aggregate/.../table/column), taken from the resolved node.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "lookup", "note": "node.type by id" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "description",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The 1-3 sentence domain description of the node, taken from the resolved node.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "lookup", "note": "node.description by id" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "fields",
+          "conceptual": true,
+          "dataType": "array<field>",
+          "derivation": "The node's own conceptual fields[] (read-model/aggregate lineage). Each field's storage sources[].ref that looks like a physical id is resolved via nodeById to the column's label for display.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "transformation", "note": "n.fields mapped; each sources[].ref resolved to a column label via nodeById" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/server/context.mjs", "line": 30, "symbol": "buildNodeContext", "note": "maps fields with resolved source labels" }
+          ]
+        },
+        {
+          "name": "breadcrumb",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "For a physical data node, the containment chain [server, ..., node] built by walking the node's parent pointer to the root; null for behavioral nodes.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "lookup", "note": "parentChain over parent pointers" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/lib/selectors.mjs", "line": 54, "symbol": "parentChain", "note": "walks parent to root" }
+          ]
+        },
+        {
+          "name": "columns",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "For a table node, its child column nodes (id, label, dataType); null otherwise. A filter over the flat node list.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "filtered-by", "transform": "filter", "note": "nodes where type=column and parent=this table" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "usedBy",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "For a table node, the behavioral nodes that consume it (via flow edges to the table) with the verb; for a column node, the read-model/aggregate fields whose sources[].ref points at the column.",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "joined-on", "transform": "join", "note": "tableConsumers walks flow edges to the table" },
+            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "join", "note": "columnConsumers scans fields[].sources[].ref across nodes" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/lib/selectors.mjs", "line": 83, "symbol": "tableConsumers", "note": "behavioral nodes touching a table via edges" }
+          ]
+        },
+        {
+          "name": "storage",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "For a behavioral node, the physical tables it writes/reads/projects, resolved from its outgoing flow edges whose target is a data node, with the storage verb.",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "derived-from", "transform": "join", "note": "nodeStorageLinks over flow edges to data nodes" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/lib/selectors.mjs", "line": 107, "symbol": "nodeStorageLinks", "note": "tables a node writes/reads/projects via edges" }
+          ]
+        },
+        {
+          "name": "flows",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "The flows the node appears in (membership by steps + both ends of every edge), each projected to { id, name, status, kind }.",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "grouped-by", "transform": "aggregation", "note": "nodeFlows scans steps + edge endpoints across all flows" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/lib/selectors.mjs", "line": 16, "symbol": "nodeFlows", "note": "flows whose steps/edges reference the node" }
+          ]
+        },
+        {
+          "name": "related",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "The invariant enforces relation: for an aggregate, the invariants it enforces; for an invariant, the aggregates that enforce it. Gathered across every flow's aggregate--enforces-->invariant edges; null for other node types.",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "joined-on", "transform": "join", "note": "enforcesRelation over enforces edges" },
+            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "join", "note": "resolve related ids to {type,label}" }
+          ],
+          "confidence": "medium",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/lib/selectors.mjs", "line": 23, "symbol": "enforcesRelation", "note": "aggregate<->invariant cross-reference via edges" }
+          ]
+        },
+        {
+          "name": "anchors",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "Each source anchor { path, line, symbol, note, flow } from the node's tactical/usages, EACH paired with the real code excerpt (anchored line +/- 8) read live from disk. The grounding that turns a label into actual code.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "lookup", "note": "anchor metadata from node.tactical.anchors / usages" },
+            { "ref": "ext-source-fs", "role": "derived-from", "transform": "lookup", "note": "code excerpt read LIVE via readSource(repoRoot, path, line); not persisted in flows.json" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/server/context.mjs", "line": 54, "symbol": "buildNodeContext", "note": "per-anchor readSource grounding loop" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-flow-context",
+      "type": "readModel",
+      "label": "Grounded flow (with Mermaid graph)",
+      "tactical": {
+        "explanation": "Data-mapping re-statement: fields[] enumerate what buildFlowContext returns for one flow, projected from col-flows-flows (+ col-flows-nodes for labels/grounding) and grounded via ext-source-fs.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 164, "symbol": "buildFlowContext", "note": "assembles the grounded flow context returned here" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "meta",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "Flow identity + metadata handed back verbatim: id, name, status (default live), kind, summary, trigger, supersededBy.",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "derived-from", "transform": "identity", "note": "flow fields off model.flows" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "edges",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "The flow's edges as labeled verbs; each end's id is resolved to the node's label (fromLabel/toLabel) for readable rendering.",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "derived-from", "transform": "transformation", "note": "f.edges mapped to {from,to,verb}" },
+            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "join", "note": "resolve from/to ids to labels via nodeById" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "hotspots",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "The flow's hotspots (open questions) projected to { id, label, description }, resolved from the flow's hotspot ids.",
+          "sources": [
+            { "ref": "col-flows-hotspots", "role": "joined-on", "transform": "lookup", "note": "hotspotById lookup per f.hotspots id" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "nodes",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "Every node the flow touches (steps + edge endpoints), each fully grounded via the node-context projection (fields/breadcrumb/anchors with live source).",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "transformation", "note": "buildNodeContext per flowNodeIds" },
+            { "ref": "ext-source-fs", "role": "derived-from", "transform": "lookup", "note": "each node's anchors grounded with live source excerpts" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "mermaid",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "A palette-colored `flowchart LR` Mermaid string of the flow graph (exact node labels + verb-labeled edges, no OCR) so a model sees the structure. A computed string, never persisted.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "notes": "Assembled by flowMermaid from the flow's edges + node labels + PALETTE colors; derived at request time, not stored.",
+          "evidence": [
+            { "path": "src/server/context.mjs", "line": 187, "symbol": "flowMermaid", "note": "colored flowchart LR of the flow graph" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-data-model",
+      "type": "readModel",
+      "label": "Recovered data model",
+      "tactical": {
+        "explanation": "Data-mapping re-statement: fields[] enumerate what renderDataModelMarkdown returns, derived from the physical nodes in the model (col-flows-nodes) and their consumers (col-flows-flows) via selectors.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 238, "symbol": "renderDataModelMarkdown", "note": "renders the physical data-model tree returned here" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "containmentTree",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "The server > database > table > column containment forest built from the flat physical node list by following parent pointers, each table carrying its child columns (label + dataType). Nodes with a missing parent are re-homed under a synthetic (unattached) bucket so nothing is silently dropped.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "filtered-by", "transform": "filter", "note": "physical nodes (srv/db/tbl/col) grouped via dataModelTree over parent pointers" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/lib/selectors.mjs", "line": 64, "symbol": "dataModelTree", "note": "server>db>table>column forest from parent pointers" }
+          ]
+        },
+        {
+          "name": "tableConsumers",
+          "conceptual": true,
+          "dataType": "array<object>",
+          "derivation": "Per table, the behavioral nodes that write/read/project it and the storage verb, gathered from every flow's edges pointing at that table (deduped by node+verb).",
+          "sources": [
+            { "ref": "col-flows-flows", "role": "joined-on", "transform": "join", "note": "tableConsumers walks flow edges to each table" },
+            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "join", "note": "resolve consumer ids to {type,label}" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "evidence": [
+            { "path": "src/server/context.mjs", "line": 244, "symbol": "renderDataModelMarkdown", "note": "per-table consumers listed under each table" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rm-item-markdown",
+      "type": "readModel",
+      "label": "Grounded item markdown",
+      "tactical": {
+        "explanation": "Data-mapping re-statement: fields[] enumerate what renderItemMarkdown returns (a computed markdown string + label), projected from col-flows-nodes and grounded with live source (ext-source-fs).",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 151, "symbol": "renderItemMarkdown", "note": "dispatches node/flow/hotspot to the matching renderer" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "markdown",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The ready-to-paste grounded markdown for one item (a node, a whole flow with a Mermaid graph, or a hotspot) or for the whole bundle joined by ---. Assembled by renderItemMarkdown dispatching to renderNodeContextMarkdown / renderFlowMarkdown / renderHotspotMarkdown; a computed string, never persisted, whose only sink is the browser clipboard.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["orm-mapping"],
+          "notes": "Computed from the item's grounded context (col-flows-nodes via buildNodeContext/buildFlowContext/buildHotspotContext) plus live source excerpts (ext-source-fs); not stored.",
+          "evidence": [
+            { "path": "src/server/context.mjs", "line": 88, "symbol": "renderNodeContextMarkdown", "note": "node markdown incl. fenced source" },
+            { "path": "src/server/context.mjs", "line": 269, "symbol": "renderFlowMarkdown", "note": "flow markdown incl. Mermaid graph" }
+          ]
+        },
+        {
+          "name": "label",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The item's display label returned alongside the markdown ({ type, id, label, markdown }) so the caller can title the paste.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "lookup", "note": "node/flow/hotspot label by id" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        }
+      ]
+    },
+    {
+      "id": "rm-source-excerpt",
+      "type": "readModel",
+      "label": "Source excerpt",
+      "tactical": {
+        "explanation": "Data-mapping re-statement: fields[] enumerate the { path, startLine, endLine, code } excerpt readSource returns, read LIVE from the analyzed repo under repoRoot; not a persisted store of this tool.",
+        "anchors": [
+          { "path": "src/server/source.mjs", "line": 24, "symbol": "readSource", "note": "the returned { path, exists, line, startLine, endLine, code } excerpt" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "path",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The repo-relative anchor path, echoed back verbatim in the result.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["assumed"],
+          "notes": "Read live from the analyzed repo under repoRoot via node:fs; not a persisted store of this tool (the target codebase is external, ext-source-fs)."
+        },
+        {
+          "name": "startLine",
+          "conceptual": true,
+          "dataType": "int",
+          "derivation": "Lower bound of the returned window: max(1, line - ctx), where ctx defaults to 8. Computed fresh per request against the target file's length.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["assumed"],
+          "notes": "Read live from the analyzed repo under repoRoot; not persisted."
+        },
+        {
+          "name": "endLine",
+          "conceptual": true,
+          "dataType": "int",
+          "derivation": "Upper bound of the returned window: min(fileLineCount, line + ctx), ctx default 8. Computed fresh per request.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["assumed"],
+          "notes": "Read live from the analyzed repo under repoRoot; not persisted."
+        },
+        {
+          "name": "code",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The windowed source excerpt (anchored line +/- 8) read live from disk via node:fs, sandboxed to repoRoot; absent (exists:false with an error) when the path is missing, not a file, or escapes the repo root.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["assumed"],
+          "notes": "Read LIVE from the analyzed repo under repoRoot via readSource; not a persisted store of this tool. The target codebase is external (ext-source-fs), so no table is minted for it."
+        }
+      ]
+    },
+    {
+      "id": "rm-current-selection",
+      "type": "readModel",
+      "label": "Current selection (grounded)",
+      "tactical": {
+        "explanation": "Data-mapping re-statement: fields[] enumerate what get_current_selection returns: the live selection pointer (agg-selection, in-memory) plus the grounded context of the selected node (col-flows-nodes + ext-source-fs).",
+        "anchors": [
+          { "path": "src/server/mcp.mjs", "line": 29, "symbol": "get_current_selection", "note": "reads state.getSelection() then grounds the node" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "selection",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "The current selection pointer { nodeId, at } (the node the human last clicked in the SPA), or null when nothing is selected. Reflects the LIVE in-memory selection and can be stale: the SPA never clears it (see hot-selection-never-cleared).",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "notes": "Held in process memory, state.mjs `selection`; no file/db backs it. May be stale per the stale-selection hotspot."
+        },
+        {
+          "name": "groundedNode",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "The full grounded context of the selected node (the same projection as get_node): label/type/description/fields/breadcrumb/flows/enforces plus anchors with live source. A friendly 'ask the user to click a node' message when nothing is selected, or a 'no longer in the model' note when the selected id is stale.",
+          "sources": [
+            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "transformation", "note": "buildNodeContext(sel.nodeId) from the model" },
+            { "ref": "ext-source-fs", "role": "derived-from", "transform": "lookup", "note": "anchors grounded with live source excerpts" }
+          ],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        }
+      ]
+    }
+  ],
+  "flows": []
+}

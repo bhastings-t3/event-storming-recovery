@@ -29,7 +29,44 @@
       "tactical": {
         "explanation": "expressCheckout inserted the order without the stock invariant the standard placeOrder enforces — the reason it was retired.",
         "anchors": [{ "path": "src/services/OrderService.ts", "line": 96, "symbol": "expressCheckout" }]
-      }
+      },
+      "fields": [
+        {
+          "name": "orderId",
+          "conceptual": false,
+          "dataType": "int",
+          "derivation": "Database-assigned identity of the orders row, returned to the caller.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "status",
+          "dataType": "string",
+          "derivation": "Lifecycle state of the order; set to 'Placed' on successful checkout.",
+          "sources": [{ "ref": "col-orders-status", "role": "derived-from", "transform": "identity" }],
+          "confidence": "high",
+          "provenance": ["sql-literal"]
+        },
+        {
+          "name": "total",
+          "dataType": "money",
+          "derivation": "Order total charged to the customer, stored in cents.",
+          "sources": [{ "ref": "col-orders-total", "role": "derived-from", "transform": "identity" }],
+          "confidence": "medium",
+          "provenance": ["sql-literal"]
+        },
+        {
+          "name": "placedAt",
+          "conceptual": true,
+          "dataType": "timestamp",
+          "derivation": "When the order was committed; not stored on the row, taken as the transaction time.",
+          "sources": [],
+          "confidence": "low",
+          "provenance": ["assumed"],
+          "notes": "No dedicated column; inferred from commit ordering."
+        }
+      ]
     },
     {
       "id": "evt-order-placed",

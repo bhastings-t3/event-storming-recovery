@@ -16,7 +16,37 @@
       "tactical": {
         "explanation": "CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.",
         "anchors": [{ "path": "src/web/CartPage.tsx", "line": 42, "symbol": "CartPage", "note": "cart review surface" }]
-      }
+      },
+      "fields": [
+        {
+          "name": "lineItems",
+          "conceptual": true,
+          "dataType": "array",
+          "derivation": "The cart lines the customer added, projected from persisted order-item rows.",
+          "sources": [{ "ref": "col-order-items-amount", "role": "derived-from", "transform": "identity", "note": "one entry per line" }],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "quantity",
+          "dataType": "int",
+          "derivation": "Units requested per line.",
+          "sources": [{ "ref": "col-order-items-qty", "role": "derived-from", "transform": "identity" }],
+          "confidence": "high",
+          "provenance": ["sql-literal"]
+        },
+        {
+          "name": "runningTotal",
+          "conceptual": true,
+          "dataType": "money",
+          "derivation": "Sum of each line's amount; computed for display and never persisted for the cart itself.",
+          "sources": [{ "ref": "col-order-items-amount", "role": "derived-from", "transform": "aggregation", "note": "SUM over lines" }],
+          "expression": "SUM(li.amount_cents)",
+          "confidence": "low",
+          "provenance": ["sql-literal"],
+          "notes": "Client-side sum; no server aggregate confirms it."
+        }
+      ]
     },
     {
       "id": "cmd-place-order",
@@ -41,7 +71,44 @@
       "tactical": {
         "explanation": "OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.",
         "anchors": [{ "path": "src/services/OrderService.ts", "line": 31, "symbol": "placeOrder" }]
-      }
+      },
+      "fields": [
+        {
+          "name": "orderId",
+          "conceptual": false,
+          "dataType": "int",
+          "derivation": "Database-assigned identity of the orders row, returned to the caller.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["orm-mapping"]
+        },
+        {
+          "name": "status",
+          "dataType": "string",
+          "derivation": "Lifecycle state of the order; set to 'Placed' on successful checkout.",
+          "sources": [{ "ref": "col-orders-status", "role": "derived-from", "transform": "identity" }],
+          "confidence": "high",
+          "provenance": ["sql-literal"]
+        },
+        {
+          "name": "total",
+          "dataType": "money",
+          "derivation": "Order total charged to the customer, stored in cents.",
+          "sources": [{ "ref": "col-orders-total", "role": "derived-from", "transform": "identity" }],
+          "confidence": "medium",
+          "provenance": ["sql-literal"]
+        },
+        {
+          "name": "placedAt",
+          "conceptual": true,
+          "dataType": "timestamp",
+          "derivation": "When the order was committed; not stored on the row, taken as the transaction time.",
+          "sources": [],
+          "confidence": "low",
+          "provenance": ["assumed"],
+          "notes": "No dedicated column; inferred from commit ordering."
+        }
+      ]
     },
     {
       "id": "inv-stock-available",
@@ -119,7 +186,25 @@
       "tactical": {
         "explanation": "inventory table keyed by sku; reserve() is the only write path in this flow.",
         "anchors": [{ "path": "src/services/InventoryService.ts", "line": 20, "symbol": "reserve" }]
-      }
+      },
+      "fields": [
+        {
+          "name": "sku",
+          "dataType": "string",
+          "derivation": "Stock-keeping unit identifying the product line.",
+          "sources": [{ "ref": "col-inventory-sku", "role": "derived-from", "transform": "identity" }],
+          "confidence": "high",
+          "provenance": ["sql-literal"]
+        },
+        {
+          "name": "onHand",
+          "dataType": "int",
+          "derivation": "Units currently available; decremented when an order reserves stock.",
+          "sources": [{ "ref": "col-inventory-onhand", "role": "derived-from", "transform": "identity" }],
+          "confidence": "high",
+          "provenance": ["sql-literal"]
+        }
+      ]
     },
     {
       "id": "evt-stock-reserved",
@@ -131,6 +216,129 @@
         "explanation": "Aftermath of the inventory update; nothing subscribes downstream in this toy model.",
         "anchors": [{ "path": "src/services/InventoryService.ts", "line": 26, "symbol": "reserve" }]
       }
+    },
+    {
+      "id": "srv-shop",
+      "type": "server",
+      "label": "app-sql-01",
+      "inferred": false,
+      "engine": "sqlserver",
+      "host": "app-sql-01.internal,1433",
+      "description": "Primary OLTP SQL Server instance backing the shop.",
+      "provenance": ["connection-string"],
+      "tactical": {
+        "explanation": "The Default connection string in config names this server/instance; every repository connects through it.",
+        "anchors": [{ "path": "src/config/database.ts", "line": 3, "symbol": "connectionString", "note": "Server=app-sql-01.internal,1433" }]
+      }
+    },
+    {
+      "id": "db-shop",
+      "type": "database",
+      "label": "shop",
+      "parent": "srv-shop",
+      "inferred": false,
+      "ownedBy": null,
+      "description": "The shop application database (orders, order lines, inventory).",
+      "provenance": ["connection-string"]
+    },
+    {
+      "id": "tbl-orders",
+      "type": "table",
+      "label": "orders",
+      "parent": "db-shop",
+      "schema": "dbo",
+      "kind": "table",
+      "inferred": false,
+      "description": "Order headers: one row per placed order.",
+      "provenance": ["sql-literal"],
+      "tactical": {
+        "explanation": "placeOrder issues INSERT INTO orders (status, total_cents) inside the checkout transaction.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 55, "symbol": "placeOrder", "note": "INSERT INTO orders" }]
+      }
+    },
+    {
+      "id": "tbl-order-items",
+      "type": "table",
+      "label": "order_items",
+      "parent": "db-shop",
+      "schema": "dbo",
+      "kind": "table",
+      "inferred": false,
+      "description": "Order lines: one row per item on an order.",
+      "provenance": ["sql-literal"],
+      "tactical": {
+        "explanation": "placeOrder bulk-inserts order_items (qty, amount_cents) for each cart line in the same transaction.",
+        "anchors": [{ "path": "src/services/OrderService.ts", "line": 58, "symbol": "placeOrder", "note": "INSERT INTO order_items" }]
+      }
+    },
+    {
+      "id": "tbl-inventory",
+      "type": "table",
+      "label": "inventory",
+      "parent": "db-shop",
+      "schema": "dbo",
+      "kind": "table",
+      "inferred": false,
+      "description": "On-hand stock keyed by sku.",
+      "provenance": ["sql-literal"],
+      "tactical": {
+        "explanation": "reserve() runs UPDATE inventory SET on_hand = on_hand - @qty WHERE sku = @sku per line.",
+        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 22, "symbol": "reserve", "note": "UPDATE inventory" }]
+      }
+    },
+    {
+      "id": "col-orders-status",
+      "type": "column",
+      "label": "status",
+      "parent": "tbl-orders",
+      "dataType": "varchar",
+      "nullable": false,
+      "inferred": false
+    },
+    {
+      "id": "col-orders-total",
+      "type": "column",
+      "label": "total_cents",
+      "parent": "tbl-orders",
+      "dataType": "int",
+      "nullable": false,
+      "inferred": false
+    },
+    {
+      "id": "col-order-items-amount",
+      "type": "column",
+      "label": "amount_cents",
+      "parent": "tbl-order-items",
+      "dataType": "int",
+      "nullable": false,
+      "inferred": false
+    },
+    {
+      "id": "col-order-items-qty",
+      "type": "column",
+      "label": "qty",
+      "parent": "tbl-order-items",
+      "dataType": "int",
+      "nullable": false,
+      "inferred": false
+    },
+    {
+      "id": "col-inventory-sku",
+      "type": "column",
+      "label": "sku",
+      "parent": "tbl-inventory",
+      "dataType": "varchar",
+      "nullable": false,
+      "inferred": false
+    },
+    {
+      "id": "col-inventory-onhand",
+      "type": "column",
+      "label": "on_hand",
+      "parent": "tbl-inventory",
+      "dataType": "int",
+      "nullable": false,
+      "inferred": false
     }
   ],
   "flows": [
@@ -154,7 +362,11 @@
         { "from": "evt-order-placed", "to": "pol-reserve-stock", "verb": "triggers" },
         { "from": "pol-reserve-stock", "to": "cmd-reserve-stock", "verb": "issues" },
         { "from": "cmd-reserve-stock", "to": "agg-inventory", "verb": "handled by" },
-        { "from": "agg-inventory", "to": "evt-stock-reserved", "verb": "emits" }
+        { "from": "agg-inventory", "to": "evt-stock-reserved", "verb": "emits" },
+        { "from": "agg-order", "to": "tbl-orders", "verb": "persists to" },
+        { "from": "agg-order", "to": "tbl-order-items", "verb": "persists to" },
+        { "from": "rm-cart", "to": "tbl-order-items", "verb": "projects from" },
+        { "from": "agg-inventory", "to": "tbl-inventory", "verb": "persists to" }
       ],
       "hotspots": ["hot-reserve-not-atomic"],
       "instances": []

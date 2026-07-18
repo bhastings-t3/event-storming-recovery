@@ -242,12 +242,78 @@
   .ctx-title:hover { color: #fff; text-decoration: underline; }
   .ctx-kind { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 2px 8px; text-decoration: none; }
   .ctx-lane { position: relative; }
+  /* detail panel: conceptual field rows (read-model "Data returned" / aggregate "State & fields") */
+  .fieldrow { border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; margin-bottom: 8px; background: var(--card); }
+  .fr-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .fr-head .fr-name { font-size: 12.5px; font-weight: 650; color: var(--fg); overflow-wrap: anywhere; }
+  .fr-dtype { font: 10px/1.4 ui-monospace, Consolas, monospace; color: #9fbef0; background: var(--accent); border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  .fr-conf { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+  .fr-tag { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; }
+  .fr-tag.sensitive { color: #eda3a0; border-color: rgba(229,100,94,.4); }
+  .fr-deriv { font-size: 12px; color: var(--dim); line-height: 1.5; margin: 6px 0 4px; overflow-wrap: anywhere; }
+  .fr-src { font-size: 11px; color: var(--muted); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 2px 0; }
+  .fr-src.none { color: #6b6b78; font-style: italic; }
+  .fr-role { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 1px 7px; }
+  .fr-col { font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--dim); }
+  .fr-col.link { color: #7db2f5; cursor: pointer; }
+  .fr-col.link:hover { text-decoration: underline; }
+  .fr-col.addr { color: #8a8a96; word-break: break-all; }
+  .fr-xform { font-size: 9.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+  .fr-note { font-size: 10.5px; color: var(--muted); font-style: italic; }
+  /* physical-node containment breadcrumb (server ▸ database ▸ table ▸ column) */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; margin-bottom: 12px; }
+  .breadcrumb .bc-sep { color: #55555f; }
+  .breadcrumb .bc-link { color: #7db2f5; cursor: pointer; }
+  .breadcrumb .bc-link:hover { text-decoration: underline; }
+  .breadcrumb .bc-here { color: var(--dim); font-weight: 650; }
+  /* Data model tab: server ▸ database ▸ table cards, cross-linked to behavioral nodes */
+  #datamodel { flex: 1; min-width: 0; display: none; flex-direction: column; }
+  #datamodel.show { display: flex; }
+  .dm-head { padding: 16px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+  .dm-head h2 { margin: 0 0 8px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .dm-head h2 .count { font-size: 11px; font-weight: 700; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 2px 9px; letter-spacing: 0; }
+  .dm-sub { font-size: 12px; color: var(--muted); line-height: 1.55; max-width: 900px; }
+  .dm-body { flex: 1; overflow-y: auto; padding: 20px 24px 40px; }
+  .dm-empty { color: var(--muted); font-size: 13px; padding: 30px 2px; line-height: 1.6; }
+  .dm-empty-sm { color: #6b6b78; font-size: 11.5px; font-style: italic; padding: 4px 2px; }
+  .dm-server { margin-bottom: 26px; }
+  .dm-server-head { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 4px 2px; flex-wrap: wrap; }
+  .dm-server-head:hover .dm-sname { text-decoration: underline; }
+  .dm-badge { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; }
+  .dm-badge.dm-unattached { background: var(--accent-2); color: var(--muted); }
+  .dm-sname { font-size: 15px; font-weight: 650; color: var(--fg); }
+  .dm-host { font: 11px/1.5 ui-monospace, Consolas, monospace; color: #8a8a96; }
+  .dm-engine { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); background: var(--accent); border-radius: 99px; padding: 1px 8px; }
+  .dm-db { margin: 10px 0 4px 14px; padding-left: 16px; border-left: 1px solid var(--line); }
+  .dm-db-head { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 8px 2px 10px; flex-wrap: wrap; }
+  .dm-db-head:hover .dm-dname { text-decoration: underline; }
+  .dm-dname { font-size: 13.5px; font-weight: 650; color: var(--dim); }
+  .dm-owned { font-size: 10.5px; color: var(--muted); font-style: italic; }
+  .dm-tables { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .dm-table { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow); }
+  .dm-table-head { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; }
+  .dm-table-head:hover { filter: brightness(1.06); }
+  .dm-tt { font-size: 8.5px; font-weight: 800; letter-spacing: .08em; opacity: .7; }
+  .dm-tn { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+  .dm-cols { padding: 6px 4px; }
+  .dm-col { display: flex; align-items: baseline; gap: 8px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background .1s; }
+  .dm-col:hover { background: var(--accent); }
+  .dm-cn { font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--dim); overflow-wrap: anywhere; }
+  .dm-ct { font: 10px/1.4 ui-monospace, Consolas, monospace; color: #7db2f5; margin-left: auto; }
+  .dm-nn { font-size: 8px; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  .dm-consumers { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--line); }
+  .dm-consumer { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--dim); background: var(--input); border: 1px solid var(--line); border-radius: 99px; padding: 3px 9px; cursor: pointer; transition: background .1s, color .1s; }
+  .dm-consumer:hover { background: var(--accent-2); color: #fff; }
+  .dm-cdot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .dm-cverb { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .dm-consumer:hover .dm-cverb { color: #cfcfe0; }
 </style>
 </head>
 <body>
 <div id="tabbar">
   <button id="tab-flows" class="tab active">Flows</button>
   <button id="tab-gallery" class="tab">Gallery</button>
+  <button id="tab-datamodel" class="tab">Data model</button>
   <button id="tab-glossary" class="tab">Glossary</button>
   <button id="tab-overview" class="tab">Overview</button>
 </div>
@@ -268,17 +334,24 @@
   </div>
 </div>
 <section id="gallery"></section>
+<section id="datamodel"></section>
 <section id="glossary"></section>
 <section id="overview"><div id="ov-wrap"><div id="ov-canvas"></div><div id="ov-zoomctl" class="zoomctl"><button id="ov-zin" title="Zoom in">+</button><button id="ov-zout" title="Zoom out">&minus;</button><button id="ov-zfit" title="Fit to view">&#10530;</button></div></div></section>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
 </div>
 <script>
-const MODEL = {"version":1,"meta":{"generatedFrom":["express-checkout.json","place-order.json","shop-terms.glossary.json"],"counts":{"flows":2,"nodes":13,"hotspots":2,"terms":4,"unresolvedTerms":1,"byType":{"actor":1,"command":3,"aggregate":2,"event":2,"readModel":1,"invariant":2,"externalSystem":1,"policy":1}},"deadFlows":[{"id":"express-checkout","status":"dead","supersededBy":"place-order","name":"Customer checks out in one tap (retired)"}],"sharedGlossary":[{"id":"actor-customer","type":"actor","label":"Customer","description":"A shopper who has added items to their cart and checks out.","flowCount":2,"flows":["express-checkout","place-order"]},{"id":"agg-order","type":"aggregate","label":"Order","description":"A customer order: header plus line items, with status and total. Emits an event when placed.","flowCount":2,"flows":["express-checkout","place-order"]},{"id":"evt-order-placed","type":"event","label":"OrderPlaced","description":"An order existed in status Placed — but possibly for out-of-stock items in this retired path.","flowCount":2,"flows":["express-checkout","place-order"]}]},"nodes":[{"id":"actor-customer","type":"actor","label":"Customer","inferred":true,"description":"A shopper who has added items to their cart and checks out.","usages":[]},{"id":"cmd-express-checkout","type":"command","label":"ExpressCheckout","inferred":false,"description":"One-tap checkout that skipped the cart review and stock check, charging a saved card immediately.","tactical":{"explanation":"ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout","note":"orphaned — no caller since a1b2c3d"}]},"usages":[{"flow":"express-checkout","explanation":"ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout","note":"orphaned — no caller since a1b2c3d"}]}]},{"id":"agg-order","type":"aggregate","label":"Order","inferred":true,"description":"A customer order: header plus line items, with status and total. Emits an event when placed.","tactical":{"explanation":"OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.","anchors":[{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder"}]},"usages":[{"flow":"express-checkout","explanation":"expressCheckout inserted the order without the stock invariant the standard placeOrder enforces — the reason it was retired.","anchors":[{"path":"src/services/OrderService.ts","line":96,"symbol":"expressCheckout"}]},{"flow":"place-order","explanation":"OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.","anchors":[{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder"}]}]},{"id":"evt-order-placed","type":"event","label":"OrderPlaced","inferred":true,"description":"An order existed in status Placed — but possibly for out-of-stock items in this retired path.","tactical":{"explanation":"The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.","anchors":[{"path":"src/services/OrderService.ts","line":61,"symbol":"placeOrder","note":"commit + return"}]},"usages":[{"flow":"express-checkout","explanation":"Same event as the live flow; here reached without the stock guard.","anchors":[{"path":"src/services/OrderService.ts","line":99,"symbol":"expressCheckout"}]},{"flow":"place-order","explanation":"The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.","anchors":[{"path":"src/services/OrderService.ts","line":61,"symbol":"placeOrder","note":"commit + return"}]}]},{"id":"rm-cart","type":"readModel","label":"Cart summary","inferred":true,"description":"The line items, quantities, and running total the customer reviews before checkout.","tactical":{"explanation":"CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.","anchors":[{"path":"src/web/CartPage.tsx","line":42,"symbol":"CartPage","note":"cart review surface"}]},"usages":[{"flow":"place-order","explanation":"CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.","anchors":[{"path":"src/web/CartPage.tsx","line":42,"symbol":"CartPage","note":"cart review surface"}]}]},{"id":"cmd-place-order","type":"command","label":"PlaceOrder","inferred":false,"description":"Customer submits the cart as an order.","tactical":{"explanation":"Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.","anchors":[{"path":"src/web/CartPage.tsx","line":88,"symbol":"onCheckout","note":"UI call site"},{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder","note":"orchestrator entry"}]},"usages":[{"flow":"place-order","explanation":"Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.","anchors":[{"path":"src/web/CartPage.tsx","line":88,"symbol":"onCheckout","note":"UI call site"},{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder","note":"orchestrator entry"}]}]},{"id":"inv-stock-available","type":"invariant","label":"Every line must have stock available","inferred":true,"description":"An order is rejected if any line item's requested quantity exceeds on-hand stock.","tactical":{"explanation":"placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) \u003c qty, before any write.","anchors":[{"path":"src/services/OrderService.ts","line":40,"symbol":"placeOrder","note":"stock guard"}]},"usages":[{"flow":"place-order","explanation":"placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) \u003c qty, before any write.","anchors":[{"path":"src/services/OrderService.ts","line":40,"symbol":"placeOrder","note":"stock guard"}]}]},{"id":"inv-payment-authorized","type":"invariant","label":"Payment must authorize before the order is created","inferred":true,"description":"The order is only written after the payment gateway authorizes the charge.","tactical":{"explanation":"placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.","anchors":[{"path":"src/services/OrderService.ts","line":52,"symbol":"placeOrder","note":"auth gate"}]},"usages":[{"flow":"place-order","explanation":"placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.","anchors":[{"path":"src/services/OrderService.ts","line":52,"symbol":"placeOrder","note":"auth gate"}]}]},{"id":"ext-payments","type":"externalSystem","label":"Payment gateway","inferred":false,"description":"Third-party payment processor. Authorizes and captures card charges over HTTPS.","tactical":{"explanation":"PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.","anchors":[{"path":"src/services/PaymentGateway.ts","line":12,"symbol":"authorize"}]},"usages":[{"flow":"place-order","explanation":"PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.","anchors":[{"path":"src/services/PaymentGateway.ts","line":12,"symbol":"authorize"}]}]},{"id":"pol-reserve-stock","type":"policy","label":"Whenever an order is placed, reserve its stock","inferred":true,"synchronous":true,"description":"Placing an order immediately decrements on-hand stock for each line so the same unit can't be sold twice.","tactical":{"explanation":"Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder","note":"post-commit reserve"}]},"usages":[{"flow":"place-order","explanation":"Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder","note":"post-commit reserve"}]}]},{"id":"cmd-reserve-stock","type":"command","label":"ReserveStock","inferred":true,"description":"Decrement on-hand stock for each ordered line.","tactical":{"explanation":"InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]}]},{"id":"agg-inventory","type":"aggregate","label":"Inventory","inferred":true,"description":"On-hand stock per SKU. Decremented when an order reserves stock.","tactical":{"explanation":"inventory table keyed by sku; reserve() is the only write path in this flow.","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"inventory table keyed by sku; reserve() is the only write path in this flow.","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]}]},{"id":"evt-stock-reserved","type":"event","label":"StockReserved","inferred":true,"description":"On-hand stock has been decremented for the order's lines.","tactical":{"explanation":"Aftermath of the inventory update; nothing subscribes downstream in this toy model.","anchors":[{"path":"src/services/InventoryService.ts","line":26,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"Aftermath of the inventory update; nothing subscribes downstream in this toy model.","anchors":[{"path":"src/services/InventoryService.ts","line":26,"symbol":"reserve"}]}]}],"flows":[{"id":"express-checkout","name":"Customer checks out in one tap (retired)","tier":1,"kind":"write","status":"dead","supersededBy":"place-order","summary":"A one-tap express checkout that charged a saved card and created the order without a stock check. It oversold too often and its button was removed in commit a1b2c3d; the standard place-order flow (with a stock invariant) is the replacement. The service method still compiles but has no caller.","trigger":"Express-checkout button on the cart page (removed in commit a1b2c3d — currently unreachable)","steps":["actor-customer","cmd-express-checkout","agg-order","evt-order-placed"],"edges":[{"from":"actor-customer","to":"cmd-express-checkout","verb":"issues"},{"from":"cmd-express-checkout","to":"agg-order","verb":"handled by"},{"from":"agg-order","to":"evt-order-placed","verb":"emits"}],"hotspots":["hot-express-dead-code"],"instances":[]},{"id":"place-order","name":"Customer places an order","tier":1,"kind":"write","status":"live","summary":"The customer reviews their cart and checks out. The order is created only after stock is confirmed and the payment gateway authorizes the charge; on success, stock is reserved in a separate step whose failure does not roll back the order.","trigger":"Checkout button on the cart page","steps":["actor-customer","rm-cart","cmd-place-order","agg-order","evt-order-placed","ext-payments","pol-reserve-stock","cmd-reserve-stock","agg-inventory","evt-stock-reserved"],"edges":[{"from":"rm-cart","to":"actor-customer","verb":"read by"},{"from":"actor-customer","to":"cmd-place-order","verb":"issues"},{"from":"cmd-place-order","to":"agg-order","verb":"handled by"},{"from":"agg-order","to":"inv-stock-available","verb":"enforces"},{"from":"agg-order","to":"inv-payment-authorized","verb":"enforces"},{"from":"cmd-place-order","to":"ext-payments","verb":"calls"},{"from":"agg-order","to":"evt-order-placed","verb":"emits"},{"from":"evt-order-placed","to":"pol-reserve-stock","verb":"triggers"},{"from":"pol-reserve-stock","to":"cmd-reserve-stock","verb":"issues"},{"from":"cmd-reserve-stock","to":"agg-inventory","verb":"handled by"},{"from":"agg-inventory","to":"evt-stock-reserved","verb":"emits"}],"hotspots":["hot-reserve-not-atomic"],"instances":[]}],"hotspots":[{"id":"hot-express-dead-code","label":"Retired express-checkout code still ships","description":"expressCheckout is unreachable since commit a1b2c3d but still compiled and tested. Human question: delete it, or is express checkout planned to return with a stock guard?","tactical":{"explanation":"No caller of OrderService.expressCheckout anywhere in the tree; git show a1b2c3d removed the button.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout"}]}},{"id":"hot-reserve-not-atomic","label":"Stock reservation is not atomic with order creation","description":"Reservation runs after the order transaction commits, in a separate store, and its failure is only logged. An order can exist for stock that was never decremented, so the same unit can be oversold. Human question: should reserve() share the order transaction, or should a failed reservation cancel/flag the order?","tactical":{"explanation":"OrderService.placeOrder commits the order at line 61, then calls InventoryService.reserve at line 63 outside any transaction; reserve swallows failures (InventoryService.ts:31).","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder"}]}}],"terms":[{"id":"term-backorder","term":"Backorder","category":"jargon","definition":"Referenced in code comments as an alternate path when stock is unavailable, but no reachable handler was found.","status":"unresolved","openQuestion":"Is backorder a real supported flow or dead intent? No code path reserves against future stock; a human who knows the business should confirm whether backorder is expected to work."},{"id":"term-order","term":"Order","category":"concept","aka":["Cart checkout","Purchase"],"definition":"A customer's confirmed purchase: the aggregate that owns line items, totals, and the order lifecycle once checkout succeeds. It is created by PlaceOrder and is the root the rest of fulfilment hangs off.","relatedNodes":["agg-order"],"anchors":[{"path":"src/Orders/Order.cs","line":12,"symbol":"Order"}],"status":"resolved"},{"id":"term-sku","term":"SKU","category":"acronym","aka":["Stock Keeping Unit"],"definition":"The per-variant product identifier stock is tracked against. Reservation and availability checks key off the SKU, not the product.","status":"resolved"},{"id":"term-reserve","term":"Stock reservation","category":"concept","definition":"A soft hold placed on inventory for a SKU while an order is being placed, released if payment fails.","relatedNodes":["agg-inventory"],"status":"resolved"}]};
+const MODEL = {"version":1,"meta":{"generatedFrom":["express-checkout.json","place-order.json","shop-terms.glossary.json"],"counts":{"flows":2,"nodes":24,"hotspots":2,"terms":4,"unresolvedTerms":1,"byType":{"actor":1,"command":3,"aggregate":2,"event":2,"readModel":1,"invariant":2,"externalSystem":1,"policy":1,"server":1,"database":1,"table":3,"column":6}},"deadFlows":[{"id":"express-checkout","status":"dead","supersededBy":"place-order","name":"Customer checks out in one tap (retired)"}],"sharedGlossary":[{"id":"actor-customer","type":"actor","label":"Customer","description":"A shopper who has added items to their cart and checks out.","flowCount":2,"flows":["express-checkout","place-order"]},{"id":"agg-order","type":"aggregate","label":"Order","description":"A customer order: header plus line items, with status and total. Emits an event when placed.","flowCount":2,"flows":["express-checkout","place-order"]},{"id":"evt-order-placed","type":"event","label":"OrderPlaced","description":"An order existed in status Placed — but possibly for out-of-stock items in this retired path.","flowCount":2,"flows":["express-checkout","place-order"]}]},"nodes":[{"id":"actor-customer","type":"actor","label":"Customer","inferred":true,"description":"A shopper who has added items to their cart and checks out.","usages":[]},{"id":"cmd-express-checkout","type":"command","label":"ExpressCheckout","inferred":false,"description":"One-tap checkout that skipped the cart review and stock check, charging a saved card immediately.","tactical":{"explanation":"ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout","note":"orphaned — no caller since a1b2c3d"}]},"usages":[{"flow":"express-checkout","explanation":"ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout","note":"orphaned — no caller since a1b2c3d"}]}]},{"id":"agg-order","type":"aggregate","label":"Order","inferred":true,"description":"A customer order: header plus line items, with status and total. Emits an event when placed.","tactical":{"explanation":"OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.","anchors":[{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder"}]},"fields":[{"name":"orderId","conceptual":false,"dataType":"int","derivation":"Database-assigned identity of the orders row, returned to the caller.","sources":[],"confidence":"high","provenance":["orm-mapping"]},{"name":"status","dataType":"string","derivation":"Lifecycle state of the order; set to 'Placed' on successful checkout.","sources":[{"ref":"col-orders-status","role":"derived-from","transform":"identity"}],"confidence":"high","provenance":["sql-literal"]},{"name":"total","dataType":"money","derivation":"Order total charged to the customer, stored in cents.","sources":[{"ref":"col-orders-total","role":"derived-from","transform":"identity"}],"confidence":"medium","provenance":["sql-literal"]},{"name":"placedAt","conceptual":true,"dataType":"timestamp","derivation":"When the order was committed; not stored on the row, taken as the transaction time.","sources":[],"confidence":"low","provenance":["assumed"],"notes":"No dedicated column; inferred from commit ordering."}],"usages":[{"flow":"express-checkout","explanation":"expressCheckout inserted the order without the stock invariant the standard placeOrder enforces — the reason it was retired.","anchors":[{"path":"src/services/OrderService.ts","line":96,"symbol":"expressCheckout"}]},{"flow":"place-order","explanation":"OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.","anchors":[{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder"}]}]},{"id":"evt-order-placed","type":"event","label":"OrderPlaced","inferred":true,"description":"An order existed in status Placed — but possibly for out-of-stock items in this retired path.","tactical":{"explanation":"The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.","anchors":[{"path":"src/services/OrderService.ts","line":61,"symbol":"placeOrder","note":"commit + return"}]},"usages":[{"flow":"express-checkout","explanation":"Same event as the live flow; here reached without the stock guard.","anchors":[{"path":"src/services/OrderService.ts","line":99,"symbol":"expressCheckout"}]},{"flow":"place-order","explanation":"The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.","anchors":[{"path":"src/services/OrderService.ts","line":61,"symbol":"placeOrder","note":"commit + return"}]}]},{"id":"rm-cart","type":"readModel","label":"Cart summary","inferred":true,"description":"The line items, quantities, and running total the customer reviews before checkout.","tactical":{"explanation":"CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.","anchors":[{"path":"src/web/CartPage.tsx","line":42,"symbol":"CartPage","note":"cart review surface"}]},"fields":[{"name":"lineItems","conceptual":true,"dataType":"array","derivation":"The cart lines the customer added, projected from persisted order-item rows.","sources":[{"ref":"col-order-items-amount","role":"derived-from","transform":"identity","note":"one entry per line"}],"confidence":"high","provenance":["orm-mapping"]},{"name":"quantity","dataType":"int","derivation":"Units requested per line.","sources":[{"ref":"col-order-items-qty","role":"derived-from","transform":"identity"}],"confidence":"high","provenance":["sql-literal"]},{"name":"runningTotal","conceptual":true,"dataType":"money","derivation":"Sum of each line's amount; computed for display and never persisted for the cart itself.","sources":[{"ref":"col-order-items-amount","role":"derived-from","transform":"aggregation","note":"SUM over lines"}],"expression":"SUM(li.amount_cents)","confidence":"low","provenance":["sql-literal"],"notes":"Client-side sum; no server aggregate confirms it."}],"usages":[{"flow":"place-order","explanation":"CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.","anchors":[{"path":"src/web/CartPage.tsx","line":42,"symbol":"CartPage","note":"cart review surface"}]}]},{"id":"cmd-place-order","type":"command","label":"PlaceOrder","inferred":false,"description":"Customer submits the cart as an order.","tactical":{"explanation":"Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.","anchors":[{"path":"src/web/CartPage.tsx","line":88,"symbol":"onCheckout","note":"UI call site"},{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder","note":"orchestrator entry"}]},"usages":[{"flow":"place-order","explanation":"Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.","anchors":[{"path":"src/web/CartPage.tsx","line":88,"symbol":"onCheckout","note":"UI call site"},{"path":"src/services/OrderService.ts","line":31,"symbol":"placeOrder","note":"orchestrator entry"}]}]},{"id":"inv-stock-available","type":"invariant","label":"Every line must have stock available","inferred":true,"description":"An order is rejected if any line item's requested quantity exceeds on-hand stock.","tactical":{"explanation":"placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) \u003c qty, before any write.","anchors":[{"path":"src/services/OrderService.ts","line":40,"symbol":"placeOrder","note":"stock guard"}]},"usages":[{"flow":"place-order","explanation":"placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) \u003c qty, before any write.","anchors":[{"path":"src/services/OrderService.ts","line":40,"symbol":"placeOrder","note":"stock guard"}]}]},{"id":"inv-payment-authorized","type":"invariant","label":"Payment must authorize before the order is created","inferred":true,"description":"The order is only written after the payment gateway authorizes the charge.","tactical":{"explanation":"placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.","anchors":[{"path":"src/services/OrderService.ts","line":52,"symbol":"placeOrder","note":"auth gate"}]},"usages":[{"flow":"place-order","explanation":"placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.","anchors":[{"path":"src/services/OrderService.ts","line":52,"symbol":"placeOrder","note":"auth gate"}]}]},{"id":"ext-payments","type":"externalSystem","label":"Payment gateway","inferred":false,"description":"Third-party payment processor. Authorizes and captures card charges over HTTPS.","tactical":{"explanation":"PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.","anchors":[{"path":"src/services/PaymentGateway.ts","line":12,"symbol":"authorize"}]},"usages":[{"flow":"place-order","explanation":"PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.","anchors":[{"path":"src/services/PaymentGateway.ts","line":12,"symbol":"authorize"}]}]},{"id":"pol-reserve-stock","type":"policy","label":"Whenever an order is placed, reserve its stock","inferred":true,"synchronous":true,"description":"Placing an order immediately decrements on-hand stock for each line so the same unit can't be sold twice.","tactical":{"explanation":"Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder","note":"post-commit reserve"}]},"usages":[{"flow":"place-order","explanation":"Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder","note":"post-commit reserve"}]}]},{"id":"cmd-reserve-stock","type":"command","label":"ReserveStock","inferred":true,"description":"Decrement on-hand stock for each ordered line.","tactical":{"explanation":"InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]}]},{"id":"agg-inventory","type":"aggregate","label":"Inventory","inferred":true,"description":"On-hand stock per SKU. Decremented when an order reserves stock.","tactical":{"explanation":"inventory table keyed by sku; reserve() is the only write path in this flow.","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]},"fields":[{"name":"sku","dataType":"string","derivation":"Stock-keeping unit identifying the product line.","sources":[{"ref":"col-inventory-sku","role":"derived-from","transform":"identity"}],"confidence":"high","provenance":["sql-literal"]},{"name":"onHand","dataType":"int","derivation":"Units currently available; decremented when an order reserves stock.","sources":[{"ref":"col-inventory-onhand","role":"derived-from","transform":"identity"}],"confidence":"high","provenance":["sql-literal"]}],"usages":[{"flow":"place-order","explanation":"inventory table keyed by sku; reserve() is the only write path in this flow.","anchors":[{"path":"src/services/InventoryService.ts","line":20,"symbol":"reserve"}]}]},{"id":"evt-stock-reserved","type":"event","label":"StockReserved","inferred":true,"description":"On-hand stock has been decremented for the order's lines.","tactical":{"explanation":"Aftermath of the inventory update; nothing subscribes downstream in this toy model.","anchors":[{"path":"src/services/InventoryService.ts","line":26,"symbol":"reserve"}]},"usages":[{"flow":"place-order","explanation":"Aftermath of the inventory update; nothing subscribes downstream in this toy model.","anchors":[{"path":"src/services/InventoryService.ts","line":26,"symbol":"reserve"}]}]},{"id":"srv-shop","type":"server","label":"app-sql-01","inferred":false,"engine":"sqlserver","host":"app-sql-01.internal,1433","description":"Primary OLTP SQL Server instance backing the shop.","provenance":["connection-string"],"tactical":{"explanation":"The Default connection string in config names this server/instance; every repository connects through it.","anchors":[{"path":"src/config/database.ts","line":3,"symbol":"connectionString","note":"Server=app-sql-01.internal,1433"}]},"usages":[{"flow":"place-order","explanation":"The Default connection string in config names this server/instance; every repository connects through it.","anchors":[{"path":"src/config/database.ts","line":3,"symbol":"connectionString","note":"Server=app-sql-01.internal,1433"}]}]},{"id":"db-shop","type":"database","label":"shop","parent":"srv-shop","inferred":false,"ownedBy":null,"description":"The shop application database (orders, order lines, inventory).","provenance":["connection-string"],"usages":[]},{"id":"tbl-orders","type":"table","label":"orders","parent":"db-shop","schema":"dbo","kind":"table","inferred":false,"description":"Order headers: one row per placed order.","provenance":["sql-literal"],"tactical":{"explanation":"placeOrder issues INSERT INTO orders (status, total_cents) inside the checkout transaction.","anchors":[{"path":"src/services/OrderService.ts","line":55,"symbol":"placeOrder","note":"INSERT INTO orders"}]},"usages":[{"flow":"place-order","explanation":"placeOrder issues INSERT INTO orders (status, total_cents) inside the checkout transaction.","anchors":[{"path":"src/services/OrderService.ts","line":55,"symbol":"placeOrder","note":"INSERT INTO orders"}]}]},{"id":"tbl-order-items","type":"table","label":"order_items","parent":"db-shop","schema":"dbo","kind":"table","inferred":false,"description":"Order lines: one row per item on an order.","provenance":["sql-literal"],"tactical":{"explanation":"placeOrder bulk-inserts order_items (qty, amount_cents) for each cart line in the same transaction.","anchors":[{"path":"src/services/OrderService.ts","line":58,"symbol":"placeOrder","note":"INSERT INTO order_items"}]},"usages":[{"flow":"place-order","explanation":"placeOrder bulk-inserts order_items (qty, amount_cents) for each cart line in the same transaction.","anchors":[{"path":"src/services/OrderService.ts","line":58,"symbol":"placeOrder","note":"INSERT INTO order_items"}]}]},{"id":"tbl-inventory","type":"table","label":"inventory","parent":"db-shop","schema":"dbo","kind":"table","inferred":false,"description":"On-hand stock keyed by sku.","provenance":["sql-literal"],"tactical":{"explanation":"reserve() runs UPDATE inventory SET on_hand = on_hand - @qty WHERE sku = @sku per line.","anchors":[{"path":"src/services/InventoryService.ts","line":22,"symbol":"reserve","note":"UPDATE inventory"}]},"usages":[{"flow":"place-order","explanation":"reserve() runs UPDATE inventory SET on_hand = on_hand - @qty WHERE sku = @sku per line.","anchors":[{"path":"src/services/InventoryService.ts","line":22,"symbol":"reserve","note":"UPDATE inventory"}]}]},{"id":"col-orders-status","type":"column","label":"status","parent":"tbl-orders","dataType":"varchar","nullable":false,"inferred":false,"usages":[]},{"id":"col-orders-total","type":"column","label":"total_cents","parent":"tbl-orders","dataType":"int","nullable":false,"inferred":false,"usages":[]},{"id":"col-order-items-amount","type":"column","label":"amount_cents","parent":"tbl-order-items","dataType":"int","nullable":false,"inferred":false,"usages":[]},{"id":"col-order-items-qty","type":"column","label":"qty","parent":"tbl-order-items","dataType":"int","nullable":false,"inferred":false,"usages":[]},{"id":"col-inventory-sku","type":"column","label":"sku","parent":"tbl-inventory","dataType":"varchar","nullable":false,"inferred":false,"usages":[]},{"id":"col-inventory-onhand","type":"column","label":"on_hand","parent":"tbl-inventory","dataType":"int","nullable":false,"inferred":false,"usages":[]}],"flows":[{"id":"express-checkout","name":"Customer checks out in one tap (retired)","tier":1,"kind":"write","status":"dead","supersededBy":"place-order","summary":"A one-tap express checkout that charged a saved card and created the order without a stock check. It oversold too often and its button was removed in commit a1b2c3d; the standard place-order flow (with a stock invariant) is the replacement. The service method still compiles but has no caller.","trigger":"Express-checkout button on the cart page (removed in commit a1b2c3d — currently unreachable)","steps":["actor-customer","cmd-express-checkout","agg-order","evt-order-placed"],"edges":[{"from":"actor-customer","to":"cmd-express-checkout","verb":"issues"},{"from":"cmd-express-checkout","to":"agg-order","verb":"handled by"},{"from":"agg-order","to":"evt-order-placed","verb":"emits"}],"hotspots":["hot-express-dead-code"],"instances":[]},{"id":"place-order","name":"Customer places an order","tier":1,"kind":"write","status":"live","summary":"The customer reviews their cart and checks out. The order is created only after stock is confirmed and the payment gateway authorizes the charge; on success, stock is reserved in a separate step whose failure does not roll back the order.","trigger":"Checkout button on the cart page","steps":["actor-customer","rm-cart","cmd-place-order","agg-order","evt-order-placed","ext-payments","pol-reserve-stock","cmd-reserve-stock","agg-inventory","evt-stock-reserved"],"edges":[{"from":"rm-cart","to":"actor-customer","verb":"read by"},{"from":"actor-customer","to":"cmd-place-order","verb":"issues"},{"from":"cmd-place-order","to":"agg-order","verb":"handled by"},{"from":"agg-order","to":"inv-stock-available","verb":"enforces"},{"from":"agg-order","to":"inv-payment-authorized","verb":"enforces"},{"from":"cmd-place-order","to":"ext-payments","verb":"calls"},{"from":"agg-order","to":"evt-order-placed","verb":"emits"},{"from":"evt-order-placed","to":"pol-reserve-stock","verb":"triggers"},{"from":"pol-reserve-stock","to":"cmd-reserve-stock","verb":"issues"},{"from":"cmd-reserve-stock","to":"agg-inventory","verb":"handled by"},{"from":"agg-inventory","to":"evt-stock-reserved","verb":"emits"},{"from":"agg-order","to":"tbl-orders","verb":"persists to"},{"from":"agg-order","to":"tbl-order-items","verb":"persists to"},{"from":"rm-cart","to":"tbl-order-items","verb":"projects from"},{"from":"agg-inventory","to":"tbl-inventory","verb":"persists to"}],"hotspots":["hot-reserve-not-atomic"],"instances":[]}],"hotspots":[{"id":"hot-express-dead-code","label":"Retired express-checkout code still ships","description":"expressCheckout is unreachable since commit a1b2c3d but still compiled and tested. Human question: delete it, or is express checkout planned to return with a stock guard?","tactical":{"explanation":"No caller of OrderService.expressCheckout anywhere in the tree; git show a1b2c3d removed the button.","anchors":[{"path":"src/services/OrderService.ts","line":90,"symbol":"expressCheckout"}]}},{"id":"hot-reserve-not-atomic","label":"Stock reservation is not atomic with order creation","description":"Reservation runs after the order transaction commits, in a separate store, and its failure is only logged. An order can exist for stock that was never decremented, so the same unit can be oversold. Human question: should reserve() share the order transaction, or should a failed reservation cancel/flag the order?","tactical":{"explanation":"OrderService.placeOrder commits the order at line 61, then calls InventoryService.reserve at line 63 outside any transaction; reserve swallows failures (InventoryService.ts:31).","anchors":[{"path":"src/services/OrderService.ts","line":63,"symbol":"placeOrder"}]}}],"terms":[{"id":"term-backorder","term":"Backorder","category":"jargon","definition":"Referenced in code comments as an alternate path when stock is unavailable, but no reachable handler was found.","status":"unresolved","openQuestion":"Is backorder a real supported flow or dead intent? No code path reserves against future stock; a human who knows the business should confirm whether backorder is expected to work."},{"id":"term-order","term":"Order","category":"concept","aka":["Cart checkout","Purchase"],"definition":"A customer's confirmed purchase: the aggregate that owns line items, totals, and the order lifecycle once checkout succeeds. It is created by PlaceOrder and is the root the rest of fulfilment hangs off.","relatedNodes":["agg-order"],"anchors":[{"path":"src/Orders/Order.cs","line":12,"symbol":"Order"}],"status":"resolved"},{"id":"term-sku","term":"SKU","category":"acronym","aka":["Stock Keeping Unit"],"definition":"The per-variant product identifier stock is tracked against. Reservation and availability checks key off the SKU, not the product.","status":"resolved"},{"id":"term-reserve","term":"Stock reservation","category":"concept","definition":"A soft hold placed on inventory for a SKU while an order is being placed, released if payment fails.","relatedNodes":["agg-inventory"],"status":"resolved"}]};
 const REPO_ROOT = ".";
-const PALETTE = {"event":{"fill":"#E9A23B","edge":"#a56a14","text":"#4a2c02","name":"Domain Event"},"command":{"fill":"#6BA3E8","edge":"#2f68b0","text":"#123252","name":"Command"},"actor":{"fill":"#D2A63A","edge":"#98741a","text":"#432f03","name":"Actor"},"aggregate":{"fill":"#E3D68A","edge":"#a89a4a","text":"#4c4212","name":"Aggregate"},"policy":{"fill":"#BF9BE0","edge":"#8058b0","text":"#3a2160","name":"Policy"},"readModel":{"fill":"#6FC993","edge":"#358a5a","text":"#124a2c","name":"Read Model"},"externalSystem":{"fill":"#E68DAF","edge":"#b05378","text":"#59213b","name":"External System"},"invariant":{"fill":"#26262e","edge":"#42424e","text":"#b7b7c2","name":"Invariant"},"hotspot":{"fill":"#E5645E","edge":"#a83530","text":"#4c110e","name":"Hotspot"}};
+const PALETTE = {"event":{"fill":"#E9A23B","edge":"#a56a14","text":"#4a2c02","name":"Domain Event"},"command":{"fill":"#6BA3E8","edge":"#2f68b0","text":"#123252","name":"Command"},"actor":{"fill":"#D2A63A","edge":"#98741a","text":"#432f03","name":"Actor"},"aggregate":{"fill":"#E3D68A","edge":"#a89a4a","text":"#4c4212","name":"Aggregate"},"policy":{"fill":"#BF9BE0","edge":"#8058b0","text":"#3a2160","name":"Policy"},"readModel":{"fill":"#6FC993","edge":"#358a5a","text":"#124a2c","name":"Read Model"},"externalSystem":{"fill":"#E68DAF","edge":"#b05378","text":"#59213b","name":"External System"},"invariant":{"fill":"#26262e","edge":"#42424e","text":"#b7b7c2","name":"Invariant"},"server":{"fill":"#2b323c","edge":"#464f5d","text":"#a5b2c4","name":"Server"},"database":{"fill":"#3c4a5a","edge":"#5a6d84","text":"#b6c4d6","name":"Database"},"table":{"fill":"#6f92b3","edge":"#3f5a76","text":"#16293c","name":"Table"},"column":{"fill":"#c3d3e2","edge":"#7f96ab","text":"#2c3e50","name":"Column"},"hotspot":{"fill":"#E5645E","edge":"#a83530","text":"#4c110e","name":"Hotspot"}};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
 let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 'tier';
+
+// Physical storage node types (server > database > table > column) — a substrate the behavioral
+// model anchors into. Kept out of the flow board; surfaced in the Data model tab + detail panel.
+const DATA_TYPE_SET = new Set(['server', 'database', 'table', 'column']);
+const isDataNode = n => n && DATA_TYPE_SET.has(n.type);
+const CONF_COLOR = { high: '#6FC993', medium: '#E9A23B', low: '#E5645E' };
 
 // types present in the model, in palette order (drives the gallery filter chips + sort)
 const galleryTypes = Object.keys(PALETTE).filter(t => t !== 'hotspot' && MODEL.nodes.some(n => n.type === t));
@@ -387,6 +460,11 @@ const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9
 function renderFlowInto(f, lane) {
   lane.innerHTML = '';
   lane.style.position = 'relative';
+  // Physical storage nodes (server/database/table/column) are a substrate, not steps in the
+  // behavioral lane. Drop them and any edge touching them so the flow board stays behavioral;
+  // the links survive in the model for the Data-model tab and the detail panel.
+  const isData = id => { const n = nodeById.get(id); return n && DATA_TYPE_SET.has(n.type); };
+  f = { ...f, steps: (f.steps || []).filter(id => !isData(id)), edges: (f.edges || []).filter(e => !isData(e.from) && !isData(e.to)) };
   const flowIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
   const stepIdx = {}; (f.steps || []).forEach((id, i) => (stepIdx[id] = i));
   const isRM = n => n && n.type === 'readModel';
@@ -883,18 +961,174 @@ function renderGlossary() {
   glSyncChips();
   renderGlossaryList();
 }
+// ---- Data model layer: pure selectors (mirrors src/lib/selectors.mjs) ----
+// Walk a node's parent chain to the root, returning [root, ..., node] (containment breadcrumb).
+function parentChain(node) {
+  const chain = [], seen = new Set(); let cur = node;
+  while (cur && !seen.has(cur.id)) { seen.add(cur.id); chain.unshift(cur); cur = cur.parent ? nodeById.get(cur.parent) : null; }
+  return chain;
+}
+// Behavioral nodes that touch a given table, via flow edges. Returns [{ node, verb }] deduped.
+function tableConsumers(tableId) {
+  const seen = new Set(), out = [];
+  for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+    if (e.to !== tableId) continue;
+    const from = nodeById.get(e.from);
+    if (!from || isDataNode(from)) continue;
+    const key = e.from + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
+    out.push({ node: from, verb: e.verb });
+  }
+  return out;
+}
+// Read-model/aggregate fields that draw from a given column. Returns [{ node, field }].
+function columnConsumers(columnId) {
+  const out = [];
+  for (const n of MODEL.nodes) for (const fld of (n.fields || [])) {
+    if ((fld.sources || []).some(s => s.ref === columnId)) out.push({ node: n, field: fld });
+  }
+  return out;
+}
+// Tables a behavioral node writes/reads/projects, via its flow edges. Returns [{ node: table, verb }].
+function nodeStorageLinks(nodeId) {
+  const seen = new Set(), out = [];
+  for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+    if (e.from !== nodeId) continue;
+    const to = nodeById.get(e.to);
+    if (!to || !isDataNode(to)) continue;
+    const key = e.to + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
+    out.push({ node: to, verb: e.verb });
+  }
+  return out;
+}
+// Build the server > database > table > column containment forest from the flat node list.
+function dataModelTree() {
+  const childrenOf = (id, type) => MODEL.nodes.filter(n => n.type === type && n.parent === id);
+  const wrapTable = t => ({ node: t, columns: childrenOf(t.id, 'column') });
+  const wrapDb = d => ({ node: d, tables: childrenOf(d.id, 'table').map(wrapTable) });
+  const wrapServer = s => ({ node: s, databases: childrenOf(s.id, 'database').map(wrapDb) });
+  const servers = MODEL.nodes.filter(n => n.type === 'server').map(wrapServer);
+  const orphanDbs = MODEL.nodes.filter(n => n.type === 'database' && (!n.parent || !nodeById.has(n.parent))).map(wrapDb);
+  const orphanTables = MODEL.nodes.filter(n => n.type === 'table' && (!n.parent || !nodeById.has(n.parent))).map(wrapTable);
+  const orphanCols = MODEL.nodes.filter(n => n.type === 'column' && (!n.parent || !nodeById.has(n.parent)));
+  const unattached = (orphanDbs.length || orphanTables.length || orphanCols.length)
+    ? { databases: orphanDbs, tables: orphanTables, columns: orphanCols } : null;
+  return { servers, unattached };
+}
+
+// ---- Data model tab: server ▸ database ▸ table cards, cross-linked to behavioral nodes ----
+let dataModelBuilt = false;
+// A table card: columns (click-through to the column node) + the behavioral nodes that write /
+// read / project it (click-through to the sticky).
+function dmTableCard(table, columns) {
+  const p = PALETTE.table || PALETTE.invariant;
+  const card = el('div', { class: 'dm-table', style: 'border-color:' + p.edge });
+  card.append(el('div', { class: 'dm-table-head', style: 'background:' + p.fill + ';color:' + p.text, onclick: () => openDetail(table.id) },
+    el('span', { class: 'dm-tt' }, table.kind === 'view' ? 'VIEW' : 'TABLE'),
+    el('span', { class: 'dm-tn' }, table.schema ? table.schema + '.' + table.label : table.label)));
+  if (columns.length) {
+    const cols = el('div', { class: 'dm-cols' });
+    for (const c of columns) {
+      const col = el('div', { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) }, el('span', { class: 'dm-cn' }, c.label));
+      if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
+      if (c.nullable === false) col.append(el('span', { class: 'dm-nn' }, 'NN'));
+      cols.append(col);
+    }
+    card.append(cols);
+  }
+  const consumers = tableConsumers(table.id);
+  if (consumers.length) {
+    const cons = el('div', { class: 'dm-consumers' });
+    for (const c of consumers) {
+      const cp = PALETTE[c.node.type] || PALETTE.invariant;
+      cons.append(el('span', { class: 'dm-consumer', style: 'border-color:' + cp.edge, title: cp.name + ' — ' + c.verb, onclick: () => openDetail(c.node.id) },
+        el('span', { class: 'dm-cdot', style: 'background:' + cp.fill }),
+        el('span', { class: 'dm-cverb' }, c.verb),
+        c.node.label));
+    }
+    card.append(cons);
+  }
+  return card;
+}
+function dmServerBlock(server, databases) {
+  const sp = PALETTE.server || PALETTE.invariant;
+  const dp = PALETTE.database || PALETTE.invariant;
+  const block = el('div', { class: 'dm-server' });
+  const shead = el('div', { class: 'dm-server-head', onclick: () => openDetail(server.id) },
+    el('span', { class: 'dm-badge', style: 'background:' + sp.fill + ';color:' + sp.text }, 'SERVER'),
+    el('span', { class: 'dm-sname' }, server.label));
+  if (server.host) shead.append(el('span', { class: 'dm-host' }, server.host));
+  if (server.engine) shead.append(el('span', { class: 'dm-engine' }, server.engine));
+  block.append(shead);
+  for (const { node: db, tables } of databases) {
+    const dbEl = el('div', { class: 'dm-db' });
+    const dhead = el('div', { class: 'dm-db-head', onclick: () => openDetail(db.id) },
+      el('span', { class: 'dm-badge', style: 'background:' + dp.fill + ';color:' + dp.text }, 'DATABASE'),
+      el('span', { class: 'dm-dname' }, db.label));
+    if (db.ownedBy) dhead.append(el('span', { class: 'dm-owned' }, 'owned by ' + db.ownedBy));
+    dbEl.append(dhead);
+    const tablesEl = el('div', { class: 'dm-tables' });
+    if (!tables.length) tablesEl.append(el('div', { class: 'dm-empty-sm' }, 'no tables recovered for this database yet'));
+    for (const { node: t, columns } of tables) tablesEl.append(dmTableCard(t, columns));
+    dbEl.append(tablesEl);
+    block.append(dbEl);
+  }
+  return block;
+}
+function buildDataModel() {
+  const g = document.getElementById('datamodel'); g.innerHTML = '';
+  const { servers, unattached } = dataModelTree();
+  const dataCount = MODEL.nodes.filter(n => DATA_TYPE_SET.has(n.type)).length;
+  const head = el('div', { class: 'dm-head' });
+  head.append(el('h2', {}, 'Data model ', el('span', { class: 'count' }, String(dataCount))));
+  head.append(el('div', { class: 'dm-sub' }, 'The storage the code actually touches, recovered from SQL and connection strings. Servers ▸ databases ▸ tables ▸ columns, cross-linked to the behavioral nodes that write and read them. Demand-driven: only the columns a read model or aggregate references appear.'));
+  g.append(head);
+  const body = el('div', { class: 'dm-body' });
+  if (dataCount === 0) body.append(el('div', { class: 'dm-empty' }, 'No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate servers, tables, columns, and field lineage.'));
+  for (const { node: s, databases } of servers) body.append(dmServerBlock(s, databases));
+  if (unattached && (unattached.databases.length || unattached.tables.length)) {
+    const block = el('div', { class: 'dm-server' });
+    block.append(el('div', { class: 'dm-server-head' },
+      el('span', { class: 'dm-badge dm-unattached' }, 'UNATTACHED'),
+      el('span', { class: 'dm-sname' }, 'no server/connection recovered')));
+    for (const { node: db, tables } of unattached.databases) {
+      const dbEl = el('div', { class: 'dm-db' });
+      dbEl.append(el('div', { class: 'dm-db-head', onclick: () => openDetail(db.id) },
+        el('span', { class: 'dm-badge dm-unattached' }, 'DATABASE'),
+        el('span', { class: 'dm-dname' }, db.label)));
+      const t1 = el('div', { class: 'dm-tables' });
+      for (const { node: t, columns } of tables) t1.append(dmTableCard(t, columns));
+      dbEl.append(t1);
+      block.append(dbEl);
+    }
+    if (unattached.tables.length) {
+      const dbEl = el('div', { class: 'dm-db' });
+      const tablesEl = el('div', { class: 'dm-tables' });
+      for (const { node: t, columns } of unattached.tables) tablesEl.append(dmTableCard(t, columns));
+      dbEl.append(tablesEl);
+      block.append(dbEl);
+    }
+    body.append(block);
+  }
+  g.append(body);
+  dataModelBuilt = true;
+}
+function renderDataModel() { if (!dataModelBuilt) buildDataModel(); }
+
 function setMode(m) {
   currentMode = m;
   document.getElementById('tab-flows').classList.toggle('active', m === 'flows');
   document.getElementById('tab-gallery').classList.toggle('active', m === 'gallery');
+  document.getElementById('tab-datamodel').classList.toggle('active', m === 'datamodel');
   document.getElementById('tab-glossary').classList.toggle('active', m === 'glossary');
   document.getElementById('tab-overview').classList.toggle('active', m === 'overview');
   document.getElementById('sidebar').style.display = m === 'flows' ? '' : 'none';
   document.getElementById('main').style.display = m === 'flows' ? '' : 'none';
   document.getElementById('gallery').classList.toggle('show', m === 'gallery');
+  document.getElementById('datamodel').classList.toggle('show', m === 'datamodel');
   document.getElementById('glossary').classList.toggle('show', m === 'glossary');
   document.getElementById('overview').classList.toggle('show', m === 'overview');
   if (m === 'gallery') renderGallery();
+  else if (m === 'datamodel') renderDataModel();
   else if (m === 'glossary') renderGlossary();
   else if (m === 'overview') renderOverview();
 }
@@ -959,6 +1193,89 @@ function openDetail(id) {
   if (n.synchronous) chips.append(el('span', { class: 'chip' }, 'synchronous inline reaction'));
   inner.append(chips);
   inner.append(el('div', { class: 'desc' }, n.description || ''));
+
+  // Physical node (server/database/table/column): containment breadcrumb + columns + "Used by"
+  // back-references. Mirrors StorageSection in src/web/components/Detail.jsx.
+  if (isDataNode(n)) {
+    const chain = parentChain(n);
+    if (chain.length > 1) {
+      const bc = el('div', { class: 'breadcrumb' });
+      chain.forEach((c, i) => {
+        if (i > 0) bc.append(el('span', { class: 'bc-sep' }, '▸'));
+        if (c.id === n.id) bc.append(el('span', { class: 'bc-here' }, c.label));
+        else bc.append(el('span', { class: 'bc-link', onclick: () => openDetail(c.id) }, c.label));
+      });
+      inner.append(bc);
+    }
+    if (n.type === 'table') {
+      const columns = MODEL.nodes.filter(x => x.type === 'column' && x.parent === n.id);
+      if (columns.length) {
+        inner.append(el('h4', {}, columns.length + ' column' + (columns.length > 1 ? 's' : '')));
+        for (const c of columns) {
+          const lbl = el('div', { class: 'rlabel' }, c.label);
+          if (c.dataType) lbl.append(el('span', { class: 'fr-dtype' }, c.dataType));
+          inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
+        }
+      }
+    }
+    const consumers = n.type === 'table' ? tableConsumers(n.id)
+      : n.type === 'column' ? columnConsumers(n.id).map(c => ({ node: c.node, verb: 'field ' + c.field.name }))
+      : [];
+    if (consumers.length) {
+      inner.append(el('h4', {}, 'Used by ' + consumers.length));
+      for (const c of consumers) {
+        const lbl = el('div', { class: 'rlabel' }, c.node.label);
+        lbl.append(el('span', { class: 'fr-role' }, c.verb));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.node.id) }, lbl));
+      }
+    }
+  }
+
+  // Conceptual fields: read model "Data returned" / aggregate "State & fields", each with its
+  // derivation prose, confidence dot, tags, and 0..N storage sources. Mirrors FieldsSection.
+  if (n.fields && n.fields.length) {
+    const heading = n.type === 'readModel' ? 'Data returned' : n.type === 'aggregate' ? 'State & fields' : 'Fields';
+    inner.append(el('h4', {}, heading));
+    for (const field of n.fields) {
+      const fr = el('div', { class: 'fieldrow' });
+      const fhead = el('div', { class: 'fr-head' }, el('span', { class: 'fr-name' }, field.name));
+      if (field.dataType) fhead.append(el('span', { class: 'fr-dtype' }, field.dataType));
+      const conf = field.confidence && CONF_COLOR[field.confidence];
+      if (conf) fhead.append(el('span', { class: 'fr-conf', style: 'background:' + conf, title: 'derivation confidence: ' + field.confidence }));
+      if (field.conceptual) fhead.append(el('span', { class: 'fr-tag' }, 'conceptual'));
+      if (field.sensitive) fhead.append(el('span', { class: 'fr-tag sensitive' }, 'sensitive'));
+      fr.append(fhead);
+      if (field.derivation) fr.append(el('div', { class: 'fr-deriv' }, field.derivation));
+      const sources = field.sources || [];
+      if (sources.length) {
+        for (const s of sources) {
+          const col = /^(col|tbl|db|srv)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+          const src = el('div', { class: 'fr-src' }, el('span', { class: 'fr-role' }, s.role || 'from'));
+          if (col) src.append(el('span', { class: 'fr-col link', onclick: () => openDetail(col.id) }, col.label));
+          else src.append(el('span', { class: 'fr-col addr' }, s.ref || '(unresolved)'));
+          if (s.transform) src.append(el('span', { class: 'fr-xform' }, s.transform));
+          if (s.note) src.append(el('span', { class: 'fr-note' }, '— ' + s.note));
+          fr.append(src);
+        }
+      } else {
+        fr.append(el('div', { class: 'fr-src none' }, 'computed / no direct source'));
+      }
+      inner.append(fr);
+    }
+  }
+
+  // Behavioral node -> the storage tables it writes/reads/projects. Mirrors the "Storage" block.
+  if (!isDataNode(n)) {
+    const storageLinks = nodeStorageLinks(n.id);
+    if (storageLinks.length) {
+      inner.append(el('h4', {}, 'Storage'));
+      for (const s of storageLinks) {
+        const lbl = el('div', { class: 'rlabel' }, s.node.label);
+        lbl.append(el('span', { class: 'fr-role' }, s.verb));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(s.node.id) }, lbl));
+      }
+    }
+  }
 
   // aggregate <-> invariant cross-reference. The "enforces" relationship lives on flow edges
   // (aggregate --enforces--> invariant); surface the full set here regardless of the flow you
@@ -1061,6 +1378,7 @@ document.querySelectorAll('#groupby .gb').forEach(b => b.addEventListener('click
 }));
 document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
 document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
+document.getElementById('tab-datamodel').addEventListener('click', () => setMode('datamodel'));
 document.getElementById('tab-glossary').addEventListener('click', () => setMode('glossary'));
 document.getElementById('tab-overview').addEventListener('click', () => setMode('overview'));
 

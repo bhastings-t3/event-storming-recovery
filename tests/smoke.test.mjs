@@ -128,8 +128,8 @@ test('data-model layer: fields[], physical parents, and the new verbs validate c
           tactical: { explanation: 'e', anchors: [{ path: 'a', line: 1, symbol: 's' }] },
           fields: [{ name: 'total', derivation: 'Sum of the lines.', conceptual: true, confidence: 'medium', sources: [{ ref: refId, role: 'derived-from', transform: 'aggregation' }] }]
         },
-        { id: 'col-y', type: 'column', label: 'y', parent: 'tbl-z' },
-        { id: 'tbl-z', type: 'table', label: 'z' },
+        { id: 'fld-y', type: 'field', label: 'y', fieldKind: 'key', parent: 'ds-z' },
+        { id: 'ds-z', type: 'datastore', label: 'z', storeKind: 'file' },
         ...extraNodes
       ],
       flows: [{ id: 'f', name: 'F', tier: 1, kind: 'read', status: 'live', steps: ['rm-x'], edges, hotspots: [] }],
@@ -138,40 +138,40 @@ test('data-model layer: fields[], physical parents, and the new verbs validate c
   }];
 
   // (a) a well-formed fields[] whose ref resolves merges with no errors...
-  const ok = mergeTraceDocs(doc('col-y', [], [{ from: 'rm-x', to: 'tbl-z', verb: 'persists to' }]));
+  const ok = mergeTraceDocs(doc('fld-y', [], [{ from: 'rm-x', to: 'ds-z', verb: 'persists to' }]));
   assert.equal(ok.errors.length, 0, 'well-formed fields[] + resolvable ref => no errors');
   // (d) ...and the new verb does not draw a nonstandard-verb warning
   assert.ok(!ok.warnings.some((w) => /nonstandard edge verb/.test(w)), "'persists to' is a standard verb");
 
-  // (b) a dangling column ref in a field source is an error
-  const bad = mergeTraceDocs(doc('col-does-not-exist'));
-  assert.ok(bad.errors.some((e) => /field 'total' source ref 'col-does-not-exist' not in nodes/.test(e)), 'dangling field source ref errors');
+  // (b) a dangling field ref in a field source is an error
+  const bad = mergeTraceDocs(doc('fld-does-not-exist'));
+  assert.ok(bad.errors.some((e) => /field 'total' source ref 'fld-does-not-exist' not in nodes/.test(e)), 'dangling field source ref errors');
 
   // (c) an unknown parent is an error
-  const orphanParent = mergeTraceDocs(doc('col-y', [{ id: 'tbl-bad', type: 'table', label: 'bad', parent: 'db-missing' }]));
-  assert.ok(orphanParent.errors.some((e) => /node tbl-bad: parent 'db-missing' not in nodes/.test(e)), 'unknown parent errors');
+  const orphanParent = mergeTraceDocs(doc('fld-y', [{ id: 'ds-bad', type: 'datastore', label: 'bad', parent: 'ds-missing' }]));
+  assert.ok(orphanParent.errors.some((e) => /node ds-bad: parent 'ds-missing' not in nodes/.test(e)), 'unknown parent errors');
 
-  // (e) the real toy-shop model still merges with zero errors after the data-model additions
+  // (e) the real toy-shop fixture still merges with zero errors after the data-model additions
   const toy = mergeTracesDir(toyTraces);
   assert.equal(toy.errors.length, 0, `toy-shop merges clean, got: ${toy.errors.join('; ')}`);
-  assert.ok((toy.model.meta.counts.byType.table || 0) >= 3, 'physical table nodes are counted in byType');
+  assert.ok((toy.model.meta.counts.byType.datastore || 0) >= 3, 'datastore nodes are counted in byType');
 });
 
 test('data-model integrity: parent cycles error, wrong-level parents warn, fields union across files', () => {
   // A parent cycle (a -> b -> a) is rejected, not left to produce a garbage breadcrumb.
   const cyc = mergeTraceDocs([{ name: 'c.json', doc: { nodes: [
-    { id: 'tbl-a', type: 'table', label: 'a', parent: 'tbl-b' },
-    { id: 'tbl-b', type: 'table', label: 'b', parent: 'tbl-a' },
+    { id: 'ds-a', type: 'datastore', label: 'a', parent: 'ds-b' },
+    { id: 'ds-b', type: 'datastore', label: 'b', parent: 'ds-a' },
   ], flows: [] } }]);
   assert.ok(cyc.errors.some((e) => /parent chain has a cycle/.test(e)), 'a parent cycle is an error');
 
-  // A wrong-level parent (column under a database) warns but does not error (forgiving, but flagged
-  // because it would drop the node from the containment tree).
+  // A wrong-level parent (a datastore parented to a field) warns but does not error (forgiving, but
+  // flagged because it would drop the node from the containment tree).
   const wl = mergeTraceDocs([{ name: 'w.json', doc: { nodes: [
-    { id: 'db-x', type: 'database', label: 'x' },
-    { id: 'col-a', type: 'column', label: 'a', parent: 'db-x' },
+    { id: 'fld-x', type: 'field', label: 'x' },
+    { id: 'ds-a', type: 'datastore', label: 'a', parent: 'fld-x' },
   ], flows: [] } }]);
-  assert.ok(wl.warnings.some((w) => /should be a table, not a database/.test(w)), 'wrong-level parent warns');
+  assert.ok(wl.warnings.some((w) => /must be a datastore .* not a field/.test(w)), 'wrong-level parent warns');
   assert.ok(!wl.errors.some((e) => /parent/.test(e)), 'wrong-level parent is not an error');
 
   // fields[] added in a LATER file (the data-mapping phase) union onto a node the trace phase made.

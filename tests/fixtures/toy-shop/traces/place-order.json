@@ -15,7 +15,14 @@
       "description": "The line items, quantities, and running total the customer reviews before checkout.",
       "tactical": {
         "explanation": "CartPage renders the session cart from CartService.GetCart(); the checkout button is disabled while the cart is empty.",
-        "anchors": [{ "path": "src/web/CartPage.tsx", "line": 42, "symbol": "CartPage", "note": "cart review surface" }]
+        "anchors": [
+          {
+            "path": "src/web/CartPage.tsx",
+            "line": 42,
+            "symbol": "CartPage",
+            "note": "cart review surface"
+          }
+        ]
       },
       "fields": [
         {
@@ -23,27 +30,53 @@
           "conceptual": true,
           "dataType": "array",
           "derivation": "The cart lines the customer added, projected from persisted order-item rows.",
-          "sources": [{ "ref": "col-order-items-amount", "role": "derived-from", "transform": "identity", "note": "one entry per line" }],
+          "sources": [
+            {
+              "ref": "fld-col-order-items-amount",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "one entry per line"
+            }
+          ],
           "confidence": "high",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         },
         {
           "name": "quantity",
           "dataType": "int",
           "derivation": "Units requested per line.",
-          "sources": [{ "ref": "col-order-items-qty", "role": "derived-from", "transform": "identity" }],
+          "sources": [
+            {
+              "ref": "fld-col-order-items-qty",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
           "confidence": "high",
-          "provenance": ["sql-literal"]
+          "provenance": [
+            "sql-literal"
+          ]
         },
         {
           "name": "runningTotal",
           "conceptual": true,
           "dataType": "money",
           "derivation": "Sum of each line's amount; computed for display and never persisted for the cart itself.",
-          "sources": [{ "ref": "col-order-items-amount", "role": "derived-from", "transform": "aggregation", "note": "SUM over lines" }],
+          "sources": [
+            {
+              "ref": "fld-col-order-items-amount",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "SUM over lines"
+            }
+          ],
           "expression": "SUM(li.amount_cents)",
           "confidence": "low",
-          "provenance": ["sql-literal"],
+          "provenance": [
+            "sql-literal"
+          ],
           "notes": "Client-side sum; no server aggregate confirms it."
         }
       ]
@@ -57,8 +90,18 @@
       "tactical": {
         "explanation": "Checkout button calls OrderService.placeOrder(cart, customerId), which validates stock and payment before creating the order.",
         "anchors": [
-          { "path": "src/web/CartPage.tsx", "line": 88, "symbol": "onCheckout", "note": "UI call site" },
-          { "path": "src/services/OrderService.ts", "line": 31, "symbol": "placeOrder", "note": "orchestrator entry" }
+          {
+            "path": "src/web/CartPage.tsx",
+            "line": 88,
+            "symbol": "onCheckout",
+            "note": "UI call site"
+          },
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 31,
+            "symbol": "placeOrder",
+            "note": "orchestrator entry"
+          }
         ]
       }
     },
@@ -70,7 +113,13 @@
       "description": "A customer order: header plus line items, with status and total. Emits an event when placed.",
       "tactical": {
         "explanation": "OrderService.placeOrder inserts an orders row and order_items rows in one transaction, status='Placed', then returns the order id.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 31, "symbol": "placeOrder" }]
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 31,
+            "symbol": "placeOrder"
+          }
+        ]
       },
       "fields": [
         {
@@ -80,23 +129,41 @@
           "derivation": "Database-assigned identity of the orders row, returned to the caller.",
           "sources": [],
           "confidence": "high",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         },
         {
           "name": "status",
           "dataType": "string",
           "derivation": "Lifecycle state of the order; set to 'Placed' on successful checkout.",
-          "sources": [{ "ref": "col-orders-status", "role": "derived-from", "transform": "identity" }],
+          "sources": [
+            {
+              "ref": "fld-col-orders-status",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
           "confidence": "high",
-          "provenance": ["sql-literal"]
+          "provenance": [
+            "sql-literal"
+          ]
         },
         {
           "name": "total",
           "dataType": "money",
           "derivation": "Order total charged to the customer, stored in cents.",
-          "sources": [{ "ref": "col-orders-total", "role": "derived-from", "transform": "identity" }],
+          "sources": [
+            {
+              "ref": "fld-col-orders-total",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
           "confidence": "medium",
-          "provenance": ["sql-literal"]
+          "provenance": [
+            "sql-literal"
+          ]
         },
         {
           "name": "placedAt",
@@ -105,7 +172,9 @@
           "derivation": "When the order was committed; not stored on the row, taken as the transaction time.",
           "sources": [],
           "confidence": "low",
-          "provenance": ["assumed"],
+          "provenance": [
+            "assumed"
+          ],
           "notes": "No dedicated column; inferred from commit ordering."
         }
       ]
@@ -118,7 +187,14 @@
       "description": "An order is rejected if any line item's requested quantity exceeds on-hand stock.",
       "tactical": {
         "explanation": "placeOrder loops items and throws OutOfStockError when InventoryRepo.onHand(sku) < qty, before any write.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 40, "symbol": "placeOrder", "note": "stock guard" }]
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 40,
+            "symbol": "placeOrder",
+            "note": "stock guard"
+          }
+        ]
       }
     },
     {
@@ -129,7 +205,14 @@
       "description": "The order is only written after the payment gateway authorizes the charge.",
       "tactical": {
         "explanation": "placeOrder awaits PaymentGateway.authorize(total); a declined result throws PaymentDeclinedError before the insert.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 52, "symbol": "placeOrder", "note": "auth gate" }]
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 52,
+            "symbol": "placeOrder",
+            "note": "auth gate"
+          }
+        ]
       }
     },
     {
@@ -140,7 +223,14 @@
       "description": "A new order now exists in status Placed with an authorized payment.",
       "tactical": {
         "explanation": "The committed orders + order_items write; placeOrder returns the order and the UI navigates to the confirmation page.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 61, "symbol": "placeOrder", "note": "commit + return" }]
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 61,
+            "symbol": "placeOrder",
+            "note": "commit + return"
+          }
+        ]
       }
     },
     {
@@ -151,7 +241,13 @@
       "description": "Third-party payment processor. Authorizes and captures card charges over HTTPS.",
       "tactical": {
         "explanation": "PaymentGateway wraps the processor's REST API; authorize() places a hold, capture() settles it after fulfillment.",
-        "anchors": [{ "path": "src/services/PaymentGateway.ts", "line": 12, "symbol": "authorize" }]
+        "anchors": [
+          {
+            "path": "src/services/PaymentGateway.ts",
+            "line": 12,
+            "symbol": "authorize"
+          }
+        ]
       }
     },
     {
@@ -163,7 +259,14 @@
       "description": "Placing an order immediately decrements on-hand stock for each line so the same unit can't be sold twice.",
       "tactical": {
         "explanation": "Inline after commit, placeOrder calls InventoryService.reserve(items) — a separate store (inventory) with its own failure window, hence a policy-issued command.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 63, "symbol": "placeOrder", "note": "post-commit reserve" }]
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 63,
+            "symbol": "placeOrder",
+            "note": "post-commit reserve"
+          }
+        ]
       }
     },
     {
@@ -174,7 +277,13 @@
       "description": "Decrement on-hand stock for each ordered line.",
       "tactical": {
         "explanation": "InventoryService.reserve updates inventory.on_hand per sku; failures are logged and do not roll back the order (a hotspot).",
-        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 20, "symbol": "reserve" }]
+        "anchors": [
+          {
+            "path": "src/services/InventoryService.ts",
+            "line": 20,
+            "symbol": "reserve"
+          }
+        ]
       }
     },
     {
@@ -185,24 +294,46 @@
       "description": "On-hand stock per SKU. Decremented when an order reserves stock.",
       "tactical": {
         "explanation": "inventory table keyed by sku; reserve() is the only write path in this flow.",
-        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 20, "symbol": "reserve" }]
+        "anchors": [
+          {
+            "path": "src/services/InventoryService.ts",
+            "line": 20,
+            "symbol": "reserve"
+          }
+        ]
       },
       "fields": [
         {
           "name": "sku",
           "dataType": "string",
           "derivation": "Stock-keeping unit identifying the product line.",
-          "sources": [{ "ref": "col-inventory-sku", "role": "derived-from", "transform": "identity" }],
+          "sources": [
+            {
+              "ref": "fld-col-inventory-sku",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
           "confidence": "high",
-          "provenance": ["sql-literal"]
+          "provenance": [
+            "sql-literal"
+          ]
         },
         {
           "name": "onHand",
           "dataType": "int",
           "derivation": "Units currently available; decremented when an order reserves stock.",
-          "sources": [{ "ref": "col-inventory-onhand", "role": "derived-from", "transform": "identity" }],
+          "sources": [
+            {
+              "ref": "fld-col-inventory-onhand",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
           "confidence": "high",
-          "provenance": ["sql-literal"]
+          "provenance": [
+            "sql-literal"
+          ]
         }
       ]
     },
@@ -214,131 +345,180 @@
       "description": "On-hand stock has been decremented for the order's lines.",
       "tactical": {
         "explanation": "Aftermath of the inventory update; nothing subscribes downstream in this toy model.",
-        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 26, "symbol": "reserve" }]
+        "anchors": [
+          {
+            "path": "src/services/InventoryService.ts",
+            "line": 26,
+            "symbol": "reserve"
+          }
+        ]
       }
     },
     {
-      "id": "srv-shop",
-      "type": "server",
+      "id": "ds-srv-shop",
+      "type": "datastore",
       "label": "app-sql-01",
       "inferred": false,
       "engine": "sqlserver",
       "host": "app-sql-01.internal,1433",
       "description": "Primary OLTP SQL Server instance backing the shop.",
-      "provenance": ["connection-string"],
+      "provenance": [
+        "connection-string"
+      ],
       "tactical": {
         "explanation": "The Default connection string in config names this server/instance; every repository connects through it.",
-        "anchors": [{ "path": "src/config/database.ts", "line": 3, "symbol": "connectionString", "note": "Server=app-sql-01.internal,1433" }]
-      }
+        "anchors": [
+          {
+            "path": "src/config/database.ts",
+            "line": 3,
+            "symbol": "connectionString",
+            "note": "Server=app-sql-01.internal,1433"
+          }
+        ]
+      },
+      "storeKind": "server"
     },
     {
-      "id": "db-shop",
-      "type": "database",
+      "id": "ds-db-shop",
+      "type": "datastore",
       "label": "shop",
-      "parent": "srv-shop",
+      "parent": "ds-srv-shop",
       "inferred": false,
       "ownedBy": null,
       "description": "The shop application database (orders, order lines, inventory).",
-      "provenance": ["connection-string"]
+      "provenance": [
+        "connection-string"
+      ],
+      "storeKind": "database"
     },
     {
-      "id": "tbl-orders",
-      "type": "table",
+      "id": "ds-tbl-orders",
+      "type": "datastore",
       "label": "orders",
-      "parent": "db-shop",
-      "schema": "dbo",
-      "kind": "table",
+      "parent": "ds-db-shop",
       "inferred": false,
       "description": "Order headers: one row per placed order.",
-      "provenance": ["sql-literal"],
+      "provenance": [
+        "sql-literal"
+      ],
       "tactical": {
         "explanation": "placeOrder issues INSERT INTO orders (status, total_cents) inside the checkout transaction.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 55, "symbol": "placeOrder", "note": "INSERT INTO orders" }]
-      }
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 55,
+            "symbol": "placeOrder",
+            "note": "INSERT INTO orders"
+          }
+        ]
+      },
+      "storeKind": "table"
     },
     {
-      "id": "tbl-order-items",
-      "type": "table",
+      "id": "ds-tbl-order-items",
+      "type": "datastore",
       "label": "order_items",
-      "parent": "db-shop",
-      "schema": "dbo",
-      "kind": "table",
+      "parent": "ds-db-shop",
       "inferred": false,
       "description": "Order lines: one row per item on an order.",
-      "provenance": ["sql-literal"],
+      "provenance": [
+        "sql-literal"
+      ],
       "tactical": {
         "explanation": "placeOrder bulk-inserts order_items (qty, amount_cents) for each cart line in the same transaction.",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 58, "symbol": "placeOrder", "note": "INSERT INTO order_items" }]
-      }
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 58,
+            "symbol": "placeOrder",
+            "note": "INSERT INTO order_items"
+          }
+        ]
+      },
+      "storeKind": "table"
     },
     {
-      "id": "tbl-inventory",
-      "type": "table",
+      "id": "ds-tbl-inventory",
+      "type": "datastore",
       "label": "inventory",
-      "parent": "db-shop",
-      "schema": "dbo",
-      "kind": "table",
+      "parent": "ds-db-shop",
       "inferred": false,
       "description": "On-hand stock keyed by sku.",
-      "provenance": ["sql-literal"],
+      "provenance": [
+        "sql-literal"
+      ],
       "tactical": {
         "explanation": "reserve() runs UPDATE inventory SET on_hand = on_hand - @qty WHERE sku = @sku per line.",
-        "anchors": [{ "path": "src/services/InventoryService.ts", "line": 22, "symbol": "reserve", "note": "UPDATE inventory" }]
-      }
+        "anchors": [
+          {
+            "path": "src/services/InventoryService.ts",
+            "line": 22,
+            "symbol": "reserve",
+            "note": "UPDATE inventory"
+          }
+        ]
+      },
+      "storeKind": "table"
     },
     {
-      "id": "col-orders-status",
-      "type": "column",
+      "id": "fld-col-orders-status",
+      "type": "field",
       "label": "status",
-      "parent": "tbl-orders",
+      "parent": "ds-tbl-orders",
       "dataType": "varchar",
       "nullable": false,
-      "inferred": false
+      "inferred": false,
+      "fieldKind": "column"
     },
     {
-      "id": "col-orders-total",
-      "type": "column",
+      "id": "fld-col-orders-total",
+      "type": "field",
       "label": "total_cents",
-      "parent": "tbl-orders",
+      "parent": "ds-tbl-orders",
       "dataType": "int",
       "nullable": false,
-      "inferred": false
+      "inferred": false,
+      "fieldKind": "column"
     },
     {
-      "id": "col-order-items-amount",
-      "type": "column",
+      "id": "fld-col-order-items-amount",
+      "type": "field",
       "label": "amount_cents",
-      "parent": "tbl-order-items",
+      "parent": "ds-tbl-order-items",
       "dataType": "int",
       "nullable": false,
-      "inferred": false
+      "inferred": false,
+      "fieldKind": "column"
     },
     {
-      "id": "col-order-items-qty",
-      "type": "column",
+      "id": "fld-col-order-items-qty",
+      "type": "field",
       "label": "qty",
-      "parent": "tbl-order-items",
+      "parent": "ds-tbl-order-items",
       "dataType": "int",
       "nullable": false,
-      "inferred": false
+      "inferred": false,
+      "fieldKind": "column"
     },
     {
-      "id": "col-inventory-sku",
-      "type": "column",
+      "id": "fld-col-inventory-sku",
+      "type": "field",
       "label": "sku",
-      "parent": "tbl-inventory",
+      "parent": "ds-tbl-inventory",
       "dataType": "varchar",
       "nullable": false,
-      "inferred": false
+      "inferred": false,
+      "fieldKind": "column"
     },
     {
-      "id": "col-inventory-onhand",
-      "type": "column",
+      "id": "fld-col-inventory-onhand",
+      "type": "field",
       "label": "on_hand",
-      "parent": "tbl-inventory",
+      "parent": "ds-tbl-inventory",
       "dataType": "int",
       "nullable": false,
-      "inferred": false
+      "inferred": false,
+      "fieldKind": "column"
     }
   ],
   "flows": [
@@ -350,25 +530,98 @@
       "status": "live",
       "summary": "The customer reviews their cart and checks out. The order is created only after stock is confirmed and the payment gateway authorizes the charge; on success, stock is reserved in a separate step whose failure does not roll back the order.",
       "trigger": "Checkout button on the cart page",
-      "steps": ["actor-customer", "rm-cart", "cmd-place-order", "agg-order", "evt-order-placed", "ext-payments", "pol-reserve-stock", "cmd-reserve-stock", "agg-inventory", "evt-stock-reserved"],
-      "edges": [
-        { "from": "rm-cart", "to": "actor-customer", "verb": "read by" },
-        { "from": "actor-customer", "to": "cmd-place-order", "verb": "issues" },
-        { "from": "cmd-place-order", "to": "agg-order", "verb": "handled by" },
-        { "from": "agg-order", "to": "inv-stock-available", "verb": "enforces" },
-        { "from": "agg-order", "to": "inv-payment-authorized", "verb": "enforces" },
-        { "from": "cmd-place-order", "to": "ext-payments", "verb": "calls" },
-        { "from": "agg-order", "to": "evt-order-placed", "verb": "emits" },
-        { "from": "evt-order-placed", "to": "pol-reserve-stock", "verb": "triggers" },
-        { "from": "pol-reserve-stock", "to": "cmd-reserve-stock", "verb": "issues" },
-        { "from": "cmd-reserve-stock", "to": "agg-inventory", "verb": "handled by" },
-        { "from": "agg-inventory", "to": "evt-stock-reserved", "verb": "emits" },
-        { "from": "agg-order", "to": "tbl-orders", "verb": "persists to" },
-        { "from": "agg-order", "to": "tbl-order-items", "verb": "persists to" },
-        { "from": "rm-cart", "to": "tbl-order-items", "verb": "projects from" },
-        { "from": "agg-inventory", "to": "tbl-inventory", "verb": "persists to" }
+      "steps": [
+        "actor-customer",
+        "rm-cart",
+        "cmd-place-order",
+        "agg-order",
+        "evt-order-placed",
+        "ext-payments",
+        "pol-reserve-stock",
+        "cmd-reserve-stock",
+        "agg-inventory",
+        "evt-stock-reserved"
       ],
-      "hotspots": ["hot-reserve-not-atomic"],
+      "edges": [
+        {
+          "from": "rm-cart",
+          "to": "actor-customer",
+          "verb": "read by"
+        },
+        {
+          "from": "actor-customer",
+          "to": "cmd-place-order",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-place-order",
+          "to": "agg-order",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-order",
+          "to": "inv-stock-available",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-order",
+          "to": "inv-payment-authorized",
+          "verb": "enforces"
+        },
+        {
+          "from": "cmd-place-order",
+          "to": "ext-payments",
+          "verb": "calls"
+        },
+        {
+          "from": "agg-order",
+          "to": "evt-order-placed",
+          "verb": "emits"
+        },
+        {
+          "from": "evt-order-placed",
+          "to": "pol-reserve-stock",
+          "verb": "triggers"
+        },
+        {
+          "from": "pol-reserve-stock",
+          "to": "cmd-reserve-stock",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-reserve-stock",
+          "to": "agg-inventory",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-inventory",
+          "to": "evt-stock-reserved",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-order",
+          "to": "ds-tbl-orders",
+          "verb": "persists to"
+        },
+        {
+          "from": "agg-order",
+          "to": "ds-tbl-order-items",
+          "verb": "persists to"
+        },
+        {
+          "from": "rm-cart",
+          "to": "ds-tbl-order-items",
+          "verb": "projects from"
+        },
+        {
+          "from": "agg-inventory",
+          "to": "ds-tbl-inventory",
+          "verb": "persists to"
+        }
+      ],
+      "hotspots": [
+        "hot-reserve-not-atomic"
+      ],
       "instances": []
     }
   ],
@@ -379,7 +632,13 @@
       "description": "Reservation runs after the order transaction commits, in a separate store, and its failure is only logged. An order can exist for stock that was never decremented, so the same unit can be oversold. Human question: should reserve() share the order transaction, or should a failed reservation cancel/flag the order?",
       "tactical": {
         "explanation": "OrderService.placeOrder commits the order at line 61, then calls InventoryService.reserve at line 63 outside any transaction; reserve swallows failures (InventoryService.ts:31).",
-        "anchors": [{ "path": "src/services/OrderService.ts", "line": 63, "symbol": "placeOrder" }]
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 63,
+            "symbol": "placeOrder"
+          }
+        ]
       }
     }
   ]

@@ -398,22 +398,22 @@
         },
         {
           "from": "rm-current-selection",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-node-context",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-flow-context",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-data-model",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         }
       ],

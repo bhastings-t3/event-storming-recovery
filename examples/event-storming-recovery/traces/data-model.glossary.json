@@ -4,12 +4,25 @@
       "id": "term-dm-field",
       "term": "Field",
       "category": "concept",
-      "aka": ["fields[]", "conceptual property"],
+      "aka": [
+        "fields[]",
+        "conceptual property"
+      ],
       "definition": "A conceptual property a read model or aggregate exposes (what a consumer sees), NOT a column alias. A field carries a prose derivation and 0..N storage sources; it may be assembled through joins and sums or computed and never stored at all, so a field with sources:[] is correct, not incomplete. Fields sit on top of what the code reveals and never force a one-to-one field-to-column mapping.",
-      "relatedNodes": ["rm-data-model"],
+      "relatedNodes": [
+        "rm-data-model"
+      ],
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 73, "symbol": "fields[] on readModel & aggregate nodes" },
-        { "path": "prompts/05-data-mapping.md", "line": 21, "symbol": "A field is a conceptual property" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 73,
+          "symbol": "fields[] on readModel & aggregate nodes"
+        },
+        {
+          "path": "prompts/05-data-mapping.md",
+          "line": 21,
+          "symbol": "A field is a conceptual property"
+        }
       ],
       "status": "resolved"
     },
@@ -17,11 +30,21 @@
       "id": "term-dm-derivation",
       "term": "Derivation",
       "category": "concept",
-      "aka": ["derivation"],
+      "aka": [
+        "derivation"
+      ],
       "definition": "The required prose sentence on every field saying HOW that field is produced (e.g. 'Sum of order_items.amount plus computed regional tax', or 'constant, hard-coded'). It is the human-readable lineage that stands even when there are zero machine-resolvable sources. In this tool's own self-model the stores are file-based / in-memory rather than SQL, so a derivation typically describes reading a JSON payload or an in-memory selector, not a column projection.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 83, "symbol": "derivation (prose, REQUIRED)" },
-        { "path": "prompts/05-data-mapping.md", "line": 26, "symbol": "Every field carries a prose derivation" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 83,
+          "symbol": "derivation (prose, REQUIRED)"
+        },
+        {
+          "path": "prompts/05-data-mapping.md",
+          "line": 26,
+          "symbol": "Every field carries a prose derivation"
+        }
       ],
       "status": "resolved"
     },
@@ -29,11 +52,22 @@
       "id": "term-dm-source",
       "term": "Source (field source)",
       "category": "concept",
-      "aka": ["sources[]", "sources entry"],
+      "aka": [
+        "sources[]",
+        "sources entry"
+      ],
       "definition": "One entry in a field's sources[] array wiring the field to a physical column (or a raw dotted address) it draws from, tagged with a role and a transform. Zero sources is valid and common (computed / constant / unresolved). A source ref that looks like a local node id (col- tbl- db- srv-) MUST resolve to a known node or the merge errors; a free-form address string is accepted as-is.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 84, "symbol": "sources[] 0..N" },
-        { "path": "src/lib/merge.mjs", "line": 52, "symbol": "source ref must resolve (LOCAL_REF)" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 84,
+          "symbol": "sources[] 0..N"
+        },
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 52,
+          "symbol": "source ref must resolve (LOCAL_REF)"
+        }
       ],
       "status": "resolved"
     },
@@ -41,11 +75,26 @@
       "id": "term-dm-source-role",
       "term": "Source role",
       "category": "jargon",
-      "aka": ["role", "derived-from", "filtered-by", "joined-on", "grouped-by", "constant"],
+      "aka": [
+        "role",
+        "derived-from",
+        "filtered-by",
+        "joined-on",
+        "grouped-by",
+        "constant"
+      ],
       "definition": "The enum on a field source saying HOW that column relates to the field: 'derived-from' when it populates the field, 'filtered-by' / 'joined-on' / 'grouped-by' when it only influences the field, 'constant' for a fixed value. Nonstandard values merge as warnings, not errors.",
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 25, "symbol": "FIELD_ROLES" },
-        { "path": "docs/flows-schema.md", "line": 99, "symbol": "role enum" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 25,
+          "symbol": "FIELD_ROLES"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 99,
+          "symbol": "role enum"
+        }
       ],
       "status": "resolved"
     },
@@ -53,11 +102,28 @@
       "id": "term-dm-transform",
       "term": "Transform",
       "category": "jargon",
-      "aka": ["transform", "identity", "aggregation", "join", "filter", "lookup", "constant", "transformation"],
+      "aka": [
+        "transform",
+        "identity",
+        "aggregation",
+        "join",
+        "filter",
+        "lookup",
+        "constant",
+        "transformation"
+      ],
       "definition": "The enum on a field source naming the OPERATION applied to the column on its way into the field: identity, transformation, aggregation, join, filter, lookup, or constant. It is orthogonal to role (role = why the column matters; transform = what is done to it). Nonstandard values merge as warnings.",
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 26, "symbol": "FIELD_TRANSFORMS" },
-        { "path": "docs/flows-schema.md", "line": 100, "symbol": "transform enum" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 26,
+          "symbol": "FIELD_TRANSFORMS"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 100,
+          "symbol": "transform enum"
+        }
       ],
       "status": "resolved"
     },
@@ -65,11 +131,23 @@
       "id": "term-dm-conceptual-vs-confidence",
       "term": "conceptual vs confidence",
       "category": "concept",
-      "aka": ["conceptual: true", "confidence: high|medium|low", "two independent signals"],
+      "aka": [
+        "conceptual: true",
+        "confidence: high|medium|low",
+        "two independent signals"
+      ],
       "definition": "Two independent per-field signals kept deliberately separate. 'conceptual' answers 'are we sure consumers see this field'; 'confidence' (high|medium|low) answers 'how sure are we of its derivation/sources'. A field can be conceptual and certain to exist yet still carry low source confidence, so the two must never be collapsed.",
       "anchors": [
-        { "path": "prompts/05-data-mapping.md", "line": 30, "symbol": "Keep two signals separate" },
-        { "path": "docs/flows-schema.md", "line": 104, "symbol": "conceptual and confidence are independent" }
+        {
+          "path": "prompts/05-data-mapping.md",
+          "line": 30,
+          "symbol": "Keep two signals separate"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 104,
+          "symbol": "conceptual and confidence are independent"
+        }
       ],
       "status": "resolved"
     },
@@ -77,11 +155,27 @@
       "id": "term-dm-provenance",
       "term": "Provenance",
       "category": "jargon",
-      "aka": ["provenance", "sql-literal", "connection-string", "orm-mapping", "migration", "inferred-from-dto", "assumed"],
+      "aka": [
+        "provenance",
+        "sql-literal",
+        "connection-string",
+        "orm-mapping",
+        "migration",
+        "inferred-from-dto",
+        "assumed"
+      ],
       "definition": "An append-only list on a field (and on physical nodes) recording HOW each piece of evidence was obtained: sql-literal, connection-string, orm-mapping, migration, inferred-from-dto, or assumed. Provenance appends, never overwrites, so a migration that corroborates a sql-literal finding raises confidence while the original code evidence stays. In this tool's own self-model, storage is recovered from file/in-memory reads rather than SQL, so its fields lean toward inferred-from-dto / assumed rather than sql-literal.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 89, "symbol": "provenance enum (append-only)" },
-        { "path": "docs/flows-schema.md", "line": 124, "symbol": "Provenance appends, never overwrites" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 89,
+          "symbol": "provenance enum (append-only)"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 124,
+          "symbol": "Provenance appends, never overwrites"
+        }
       ],
       "status": "resolved"
     },
@@ -89,12 +183,28 @@
       "id": "term-dm-physical-nodes",
       "term": "Physical node types (server / database / table / column)",
       "category": "concept",
-      "aka": ["srv-", "db-", "tbl-", "col-", "physical layer"],
+      "aka": [
+        "srv-",
+        "db-",
+        "tbl-",
+        "col-",
+        "physical layer"
+      ],
       "definition": "The four node types of the physical storage tier the behavioral model actually touches: server, database, table, and column (id prefixes srv- db- tbl- col-). Unlike behavioral stickies they default to inferred:false because the code literally names them, and they require a description but not an anchor. This is the vocabulary the tool RECOVERS FROM an analyzed codebase's SQL/ORM/config; the tool's OWN data layer is file-based/in-memory, so the self-model currently has no physical nodes.",
-      "relatedNodes": ["rm-data-model"],
+      "relatedNodes": [
+        "rm-data-model"
+      ],
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 107, "symbol": "Physical node types" },
-        { "path": "src/lib/merge.mjs", "line": 13, "symbol": "NODE_TYPES (server/database/table/column)" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 107,
+          "symbol": "Physical node types"
+        },
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 13,
+          "symbol": "NODE_TYPES (server/database/table/column)"
+        }
       ],
       "status": "resolved"
     },
@@ -102,11 +212,23 @@
       "id": "term-dm-parent-containment",
       "term": "parent containment",
       "category": "jargon",
-      "aka": ["parent", "PARENT_LEVEL", "containment tree"],
+      "aka": [
+        "parent",
+        "PARENT_LEVEL",
+        "containment tree"
+      ],
       "definition": "How the physical tier nests: a column points to its table, a table to its database, a database to its server, via a 'parent' pointer rather than a flow edge. The merge enforces the level (column->table->database->server) and rejects cycles; a node parented at the wrong level is warned and dropped from the data-model tree. A node reached only through parent (or through a field source ref) still counts as referenced, so cited columns never orphan-warn.",
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 24, "symbol": "PARENT_LEVEL" },
-        { "path": "src/lib/selectors.mjs", "line": 54, "symbol": "parentChain (containment breadcrumb)" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 24,
+          "symbol": "PARENT_LEVEL"
+        },
+        {
+          "path": "src/lib/selectors.mjs",
+          "line": 54,
+          "symbol": "parentChain (containment breadcrumb)"
+        }
       ],
       "status": "resolved"
     },
@@ -114,12 +236,28 @@
       "id": "term-dm-storage-verbs",
       "term": "Data-model edge verbs (persists to / projects from / writes / connects via)",
       "category": "jargon",
-      "aka": ["persists to", "projects from", "writes", "connects via", "STORAGE_VERBS"],
+      "aka": [
+        "persists to",
+        "projects from",
+        "writes",
+        "connects via",
+        "STORAGE_VERBS"
+      ],
       "definition": "The four new behavioral-to-physical edge verbs: aggregate 'persists to' table, read model 'projects from' table, command 'writes' table, and any of command/readModel/aggregate 'connects via' server (existing 'reads' is reused for read access). They are demand-driven satellites attached by edges only; physical nodes are NEVER added to a flow's steps lane, exactly like invariants.",
-      "relatedNodes": ["rm-data-model"],
+      "relatedNodes": [
+        "rm-data-model"
+      ],
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 14, "symbol": "EDGE_VERBS (persists to / projects from / writes / connects via)" },
-        { "path": "src/lib/selectors.mjs", "line": 50, "symbol": "STORAGE_VERBS" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 14,
+          "symbol": "EDGE_VERBS (persists to / projects from / writes / connects via)"
+        },
+        {
+          "path": "src/lib/selectors.mjs",
+          "line": 50,
+          "symbol": "STORAGE_VERBS"
+        }
       ],
       "status": "resolved"
     },
@@ -127,11 +265,23 @@
       "id": "term-dm-demand-driven",
       "term": "demand-driven",
       "category": "jargon",
-      "aka": ["demand-driven, not exhaustive", "no full-ERD dump", "only referenced columns"],
+      "aka": [
+        "demand-driven, not exhaustive",
+        "no full-ERD dump",
+        "only referenced columns"
+      ],
       "definition": "The stance that the data-model layer captures ONLY the servers/databases/tables/columns the behavioral model actually references, never a full-ERD dump. Only the columns a field references are added, never every column of a table. It keeps the layer strategic, the same spirit as 'prefer few, meaningful events', and answers 'what data does this read model/aggregate return and where does it come from' rather than describing the whole schema.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 68, "symbol": "Data model: demand-driven, not exhaustive" },
-        { "path": "prompts/05-data-mapping.md", "line": 91, "symbol": "Don't dump schemas" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 68,
+          "symbol": "Data model: demand-driven, not exhaustive"
+        },
+        {
+          "path": "prompts/05-data-mapping.md",
+          "line": 91,
+          "symbol": "Don't dump schemas"
+        }
       ],
       "status": "resolved"
     },
@@ -139,11 +289,22 @@
       "id": "term-dm-lineage",
       "term": "Lineage",
       "category": "concept",
-      "aka": ["data lineage", "fieldsSourcingColumn"],
+      "aka": [
+        "data lineage",
+        "fieldsSourcingColumn"
+      ],
       "definition": "The traceable chain from a conceptual field back to the physical columns it draws from, expressed through derivation prose plus sources[] refs. The explorer can walk it in reverse (which fields draw from a given column) to answer impact questions before a schema change. Lineage is intentionally partial: a field with strong derivation prose and zero resolvable sources is a legitimate lineage endpoint, not a gap.",
       "anchors": [
-        { "path": "src/lib/selectors.mjs", "line": 96, "symbol": "fieldsSourcingColumn (reverse lineage)" },
-        { "path": "docs/flows-schema.md", "line": 84, "symbol": "sources[] wiring ref to columns" }
+        {
+          "path": "src/lib/selectors.mjs",
+          "line": 96,
+          "symbol": "fieldsSourcingColumn (reverse lineage)"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 84,
+          "symbol": "sources[] wiring ref to columns"
+        }
       ],
       "status": "resolved"
     },
@@ -151,12 +312,24 @@
       "id": "term-dm-owned-by",
       "term": "ownedBy",
       "category": "jargon",
-      "aka": ["ownedBy"],
+      "aka": [
+        "ownedBy"
+      ],
       "definition": "An optional pointer on an aggregate (and, in the data layer, on a database/server) saying its state actually lives INSIDE a named external system the tool does not deploy. The data-mapping phase reconciles with the existing ownedBy rather than inventing a parallel physical representation. In this self-model, agg-mcp-registration is ownedBy ext-claude-cli: the registration record lives in the Claude CLI's own config, not in a store this tool owns.",
-      "relatedNodes": ["agg-mcp-registration"],
+      "relatedNodes": [
+        "agg-mcp-registration"
+      ],
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 27, "symbol": "ownedBy (aggregates only)" },
-        { "path": "prompts/05-data-mapping.md", "line": 68, "symbol": "Reconcile with ownedBy" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 27,
+          "symbol": "ownedBy (aggregates only)"
+        },
+        {
+          "path": "prompts/05-data-mapping.md",
+          "line": 68,
+          "symbol": "Reconcile with ownedBy"
+        }
       ],
       "status": "resolved"
     }

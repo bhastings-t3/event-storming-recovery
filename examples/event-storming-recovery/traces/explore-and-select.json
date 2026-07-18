@@ -23,10 +23,30 @@
       "tactical": {
         "explanation": "The SPA store's openDetail(id) sets React selection state AND calls pushSelection(id) (api.js) -- a fire-and-forget POST /api/selection { nodeId } whose response is ignored (.catch(() => null)). The server route validates the id against the model, then calls state.setSelection(nodeId). This is ONE command with MANY triggers: every surface that funnels through openDetail fires it -- the Flows board (Board.jsx onOpenDetail), the Overview map (Overview.jsx onOpenDetail), the Gallery cards (Gallery.jsx onClick), the Glossary entries (Glossary.jsx onClick), the Data-model tab (DataModel.jsx table/column/consumer/server/database rows), the Detail panel's own navigation rows (Detail.jsx breadcrumb, related, field-column and storage links), and the context-bundle rows (ContextBundle.jsx open). The click-to-server mirror is the same for all of them.",
         "anchors": [
-          { "path": "src/web/store.jsx", "line": 40, "symbol": "openDetail", "note": "sets React selection + calls pushSelection(id)" },
-          { "path": "src/web/store.jsx", "line": 43, "symbol": "openDetail", "note": "pushSelection(id) mirrors the click to the server" },
-          { "path": "src/web/api.js", "line": 17, "symbol": "pushSelection", "note": "POST /api/selection { nodeId }, response ignored" },
-          { "path": "src/server/server.mjs", "line": 128, "symbol": "createServer", "note": "POST /api/selection route handler" }
+          {
+            "path": "src/web/store.jsx",
+            "line": 40,
+            "symbol": "openDetail",
+            "note": "sets React selection + calls pushSelection(id)"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 43,
+            "symbol": "openDetail",
+            "note": "pushSelection(id) mirrors the click to the server"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 17,
+            "symbol": "pushSelection",
+            "note": "POST /api/selection { nodeId }, response ignored"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 128,
+            "symbol": "createServer",
+            "note": "POST /api/selection route handler"
+          }
         ]
       }
     },
@@ -39,9 +59,24 @@
       "tactical": {
         "explanation": "createState() (state.mjs) closes over `let selection = { nodeId, at } | null`. setSelection(nodeId) stamps it with Date.now() (or nulls it); getSelection() returns it live; clearSelection() resets it to null. There is NO persistence: the value lives only in this process's heap for the life of the run. The exact same state object is handed to both the API routes and createMcpHandler (server bootstrap), so the read side (MCP tools) and the write side (POST /api/selection) share one aggregate instance.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 9, "symbol": "createState", "note": "in-memory selection + bundle, non-persistent by design" },
-          { "path": "src/server/state.mjs", "line": 17, "symbol": "setSelection", "note": "selection = { nodeId, at: Date.now() }" },
-          { "path": "src/server/state.mjs", "line": 16, "symbol": "getSelection", "note": "returns the live selection, read by MCP + API" }
+          {
+            "path": "src/server/state.mjs",
+            "line": 9,
+            "symbol": "createState",
+            "note": "in-memory selection + bundle, non-persistent by design"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 17,
+            "symbol": "setSelection",
+            "note": "selection = { nodeId, at: Date.now() }"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 16,
+            "symbol": "getSelection",
+            "note": "returns the live selection, read by MCP + API"
+          }
         ]
       }
     },
@@ -54,8 +89,18 @@
       "tactical": {
         "explanation": "Realized when the POST /api/selection route calls state.setSelection(nodeId), replacing the in-memory selection with { nodeId, at: Date.now() } (state.mjs:17). Nothing is pushed to Claude here -- the fact simply becomes readable in shared memory. Claude observes it later by pulling (see rm-current-selection). The response the route returns to the browser (the freshly grounded selection context) is discarded by pushSelection's .catch, so the write is effectively fire-and-forget from the SPA's side.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 132, "symbol": "createServer", "note": "state.setSelection(nodeId) after validation" },
-          { "path": "src/server/state.mjs", "line": 17, "symbol": "setSelection", "note": "the in-memory fact: { nodeId, at }" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 132,
+            "symbol": "createServer",
+            "note": "state.setSelection(nodeId) after validation"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 17,
+            "symbol": "setSelection",
+            "note": "the in-memory fact: { nodeId, at }"
+          }
         ]
       }
     },
@@ -68,7 +113,12 @@
       "tactical": {
         "explanation": "ERROR-level guard at the top of the POST /api/selection handler: `if (nodeId && !services.indexes.nodeById.has(nodeId)) return sendJson(res, 404, { error: \\`unknown node '${nodeId}'\\` });`. services.indexes.nodeById is built from agg-model (the merged model) by buildServices/buildIndexes. Only after this check passes does state.setSelection run, so a stale or bogus id can never enter the shared state. The SPA never actually trips this (it only ever posts real node ids from openDetail), but any MCP/HTTP caller is held to it.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 131, "symbol": "createServer", "note": "unknown nodeId => 404, selection unchanged" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 131,
+            "symbol": "createServer",
+            "note": "unknown nodeId => 404, selection unchanged"
+          }
         ]
       }
     },
@@ -81,10 +131,30 @@
       "tactical": {
         "explanation": "Two read paths share one builder. The MCP tool get_current_selection reads state.getSelection() and, if set, returns renderNodeContextMarkdown(buildNodeContext(services, sel.nodeId)); if nothing is selected it tells Claude to ask the user to click a node. GET /api/selection does the same for the SPA (selResponse in server.mjs). buildNodeContext (context.mjs) assembles the node from the model (label/type/description, enforced invariants, flows) and hydrates each anchor with readSource against the target repo, so the projection is anchored to actual files, not just a label. Because it reads getSelection() live on every call, it reflects the latest click with no staleness -- except when the selection was never cleared (see hotspot).",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 30, "symbol": "get_current_selection", "note": "reads state.getSelection() live; grounds via buildNodeContext" },
-          { "path": "src/server/server.mjs", "line": 122, "symbol": "createServer", "note": "GET /api/selection selResponse (same builder for the SPA)" },
-          { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext", "note": "assemble grounded node context from model + source" },
-          { "path": "src/server/context.mjs", "line": 88, "symbol": "renderNodeContextMarkdown", "note": "render the projection as markdown for Claude/clipboard" }
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 30,
+            "symbol": "get_current_selection",
+            "note": "reads state.getSelection() live; grounds via buildNodeContext"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 122,
+            "symbol": "createServer",
+            "note": "GET /api/selection selResponse (same builder for the SPA)"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 18,
+            "symbol": "buildNodeContext",
+            "note": "assemble grounded node context from model + source"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 88,
+            "symbol": "renderNodeContextMarkdown",
+            "note": "render the projection as markdown for Claude/clipboard"
+          }
         ]
       }
     },
@@ -97,9 +167,24 @@
       "tactical": {
         "explanation": "Read-only use here. buildServices(resolved) builds indexes.nodeById from resolved.model once at startup. The POST /api/selection guard checks nodeById.has(nodeId) to validate a selection against the model, and buildNodeContext reads the selected node's label/type/description, its enforced invariants and its flows from the same indexes. No write to the model happens in this flow.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 86, "symbol": "buildServices", "note": "indexes.nodeById built from resolved.model" },
-          { "path": "src/server/server.mjs", "line": 131, "symbol": "createServer", "note": "nodeById.has(nodeId) validates the selection" },
-          { "path": "src/server/context.mjs", "line": 19, "symbol": "buildNodeContext", "note": "reads the node + relations from indexes.nodeById" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 86,
+            "symbol": "buildServices",
+            "note": "indexes.nodeById built from resolved.model"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 131,
+            "symbol": "createServer",
+            "note": "nodeById.has(nodeId) validates the selection"
+          },
+          {
+            "path": "src/server/context.mjs",
+            "line": 19,
+            "symbol": "buildNodeContext",
+            "note": "reads the node + relations from indexes.nodeById"
+          }
         ]
       }
     },
@@ -112,8 +197,18 @@
       "tactical": {
         "explanation": "Grounding source only. buildNodeContext calls readSource(repoRoot, a.path, a.line) for every anchor (context.mjs), and readSource (source.mjs) reads the file under repoRoot and returns the code excerpt shown to Claude. There is no write side in this flow.",
         "anchors": [
-          { "path": "src/server/context.mjs", "line": 57, "symbol": "buildNodeContext", "note": "readSource(repoRoot, a.path, a.line) hydrates each anchor" },
-          { "path": "src/server/source.mjs", "line": 13, "symbol": "readSource", "note": "reads target-repo source under repoRoot" }
+          {
+            "path": "src/server/context.mjs",
+            "line": 57,
+            "symbol": "buildNodeContext",
+            "note": "readSource(repoRoot, a.path, a.line) hydrates each anchor"
+          },
+          {
+            "path": "src/server/source.mjs",
+            "line": 13,
+            "symbol": "readSource",
+            "note": "reads target-repo source under repoRoot"
+          }
         ]
       }
     }
@@ -127,18 +222,59 @@
       "status": "live",
       "summary": "This is the selection bridge, the heart of the tool. The human opens any node's detail in the SPA (from the flows board, overview, gallery, glossary, data-model tab, a detail-panel nav row, or a bundle row), and the store's openDetail mirrors that node to the server via POST /api/selection. The server validates the id against the merged model and stores it in a purely in-memory Selection aggregate shared same-process with the MCP server. A connected Claude session then pulls the current selection through the get_current_selection MCP tool, which grounds it (invariants, flows, and the real source behind each anchor) via context.mjs. Push-on-click by the human, pull-on-call by Claude -- no poll, no subscription.",
       "trigger": "The human opens a node's detail anywhere in the SPA (openDetail), which posts it to /api/selection. It fires from the Flows board (Board.jsx), Overview (Overview.jsx), Gallery (Gallery.jsx), Glossary (Glossary.jsx), Data-model tab (DataModel.jsx), Detail-panel nav rows (Detail.jsx), and context-bundle rows (ContextBundle.jsx).",
-      "steps": ["actor-viewer", "cmd-select-node", "agg-selection", "evt-node-selected", "rm-current-selection", "actor-claude"],
-      "edges": [
-        { "from": "actor-viewer", "to": "cmd-select-node", "verb": "issues" },
-        { "from": "cmd-select-node", "to": "agg-selection", "verb": "handled by" },
-        { "from": "agg-selection", "to": "inv-selection-in-model", "verb": "enforces" },
-        { "from": "agg-selection", "to": "evt-node-selected", "verb": "emits" },
-        { "from": "rm-current-selection", "to": "agg-selection", "verb": "projects from" },
-        { "from": "rm-current-selection", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-current-selection", "to": "ext-source-fs", "verb": "projects from" },
-        { "from": "actor-claude", "to": "rm-current-selection", "verb": "reads" }
+      "steps": [
+        "actor-viewer",
+        "cmd-select-node",
+        "agg-selection",
+        "evt-node-selected",
+        "rm-current-selection",
+        "actor-claude"
       ],
-      "hotspots": ["hot-selection-never-cleared"],
+      "edges": [
+        {
+          "from": "actor-viewer",
+          "to": "cmd-select-node",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-select-node",
+          "to": "agg-selection",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-selection",
+          "to": "inv-selection-in-model",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-selection",
+          "to": "evt-node-selected",
+          "verb": "emits"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "agg-selection",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-current-selection",
+          "to": "ext-source-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "actor-claude",
+          "to": "rm-current-selection",
+          "verb": "reads"
+        }
+      ],
+      "hotspots": [
+        "hot-selection-never-cleared"
+      ],
       "instances": []
     }
   ],
@@ -150,10 +286,30 @@
       "tactical": {
         "explanation": "store.jsx closeDetail (line 46) = `setSelectedNodeId(null); setDetail(null)` only -- no api call. There is no DELETE /api/selection caller anywhere in src/web (grep: the only /api/selection reference in api.js is pushSelection's POST). Server-side, state.clearSelection() (state.mjs:18) is wired to DELETE /api/selection (server.mjs:135) but nothing invokes it. Meanwhile get_current_selection (mcp.mjs:30) reads state.getSelection() live, so it returns the last node set until the process ends or a new node is opened. The selection's `at` timestamp is captured (state.mjs:17) but never surfaced to Claude, so there is not even an age hint to detect the staleness.",
         "anchors": [
-          { "path": "src/web/store.jsx", "line": 46, "symbol": "closeDetail", "note": "clears React state only; no server call" },
-          { "path": "src/server/server.mjs", "line": 135, "symbol": "createServer", "note": "DELETE /api/selection -> clearSelection exists but the SPA never calls it" },
-          { "path": "src/server/state.mjs", "line": 18, "symbol": "clearSelection", "note": "server clear path, unreferenced by the UI" },
-          { "path": "src/server/mcp.mjs", "line": 30, "symbol": "get_current_selection", "note": "returns the last selection until overwritten" }
+          {
+            "path": "src/web/store.jsx",
+            "line": 46,
+            "symbol": "closeDetail",
+            "note": "clears React state only; no server call"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 135,
+            "symbol": "createServer",
+            "note": "DELETE /api/selection -> clearSelection exists but the SPA never calls it"
+          },
+          {
+            "path": "src/server/state.mjs",
+            "line": 18,
+            "symbol": "clearSelection",
+            "note": "server clear path, unreferenced by the UI"
+          },
+          {
+            "path": "src/server/mcp.mjs",
+            "line": 30,
+            "symbol": "get_current_selection",
+            "note": "returns the last selection until overwritten"
+          }
         ]
       }
     }

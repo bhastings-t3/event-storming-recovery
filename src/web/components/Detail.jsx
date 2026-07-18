@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import {
   enforcesRelation, nodeUsages, anchorUrl, flowNodeIds,
-  isDataNode, parentChain, tableConsumers, columnConsumers, nodeStorageLinks,
+  isDataNode, parentChain, datastoreConsumers, fieldConsumers, nodeStorageLinks,
 } from '../model.js';
 import { getItem, fetchSource } from '../api.js';
 
@@ -22,7 +22,7 @@ function FieldRow({ field, nodeById, openDetail }) {
       </div>
       {field.derivation && <div className="fr-deriv">{field.derivation}</div>}
       {(field.sources || []).map((s, i) => {
-        const col = /^(col|tbl|db|srv)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+        const col = /^(ds|fld)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
         return (
           <div className="fr-src" key={i}>
             <span className="fr-role">{s.role || 'from'}</span>
@@ -50,13 +50,16 @@ function FieldsSection({ node, nodeById, openDetail }) {
   );
 }
 
-// Physical node (server/database/table/column): containment breadcrumb + what depends on it.
+// Physical storage node (datastore or field): containment breadcrumb, what it contains, and what
+// depends on it. Technology-neutral — a datastore may be a server, a file, a queue, a cache, ...
 function StorageSection({ node, model, nodeById, openDetail }) {
   const chain = parentChain(nodeById, node);
-  const consumers = node.type === 'table' ? tableConsumers(model, nodeById, node.id)
-    : node.type === 'column' ? columnConsumers(model, node.id).map((c) => ({ node: c.node, verb: 'field ' + c.field.name }))
+  const subStores = node.type === 'datastore' ? model.nodes.filter((n) => n.type === 'datastore' && n.parent === node.id) : [];
+  const fields = node.type === 'datastore' ? model.nodes.filter((n) => n.type === 'field' && n.parent === node.id) : [];
+  const consumers = node.type === 'datastore' ? datastoreConsumers(model, nodeById, node.id)
+    : node.type === 'field' ? fieldConsumers(model, node.id).map((c) => ({ node: c.node, verb: 'field ' + c.field.name }))
     : [];
-  const columns = node.type === 'table' ? model.nodes.filter((n) => n.type === 'column' && n.parent === node.id) : [];
+  const relLabel = (n) => n.storeKind || n.fieldKind;
   return (
     <>
       {chain.length > 1 && (
@@ -70,12 +73,22 @@ function StorageSection({ node, model, nodeById, openDetail }) {
           ))}
         </div>
       )}
-      {columns.length > 0 && (
+      {subStores.length > 0 && (
         <>
-          <h4>{columns.length + ' column' + (columns.length > 1 ? 's' : '')}</h4>
-          {columns.map((c) => (
+          <h4>{subStores.length + ' data store' + (subStores.length > 1 ? 's' : '')}</h4>
+          {subStores.map((c) => (
             <div key={c.id} className="relrow" onClick={() => openDetail(c.id)}>
-              <div className="rlabel">{c.label}{c.dataType && <span className="fr-dtype">{c.dataType}</span>}</div>
+              <div className="rlabel">{c.label}{relLabel(c) && <span className="fr-role">{relLabel(c)}</span>}</div>
+            </div>
+          ))}
+        </>
+      )}
+      {fields.length > 0 && (
+        <>
+          <h4>{fields.length + ' field' + (fields.length > 1 ? 's' : '')}</h4>
+          {fields.map((c) => (
+            <div key={c.id} className="relrow" onClick={() => openDetail(c.id)}>
+              <div className="rlabel">{c.label}{c.dataType && <span className="fr-dtype">{c.dataType}</span>}{c.fieldKind && <span className="fr-role">{c.fieldKind}</span>}</div>
             </div>
           ))}
         </>
@@ -150,8 +163,9 @@ function NodeDetail({ node }) {
       <div className="chips">
         {node.inferred && <span className="chip">inferred from code</span>}
         {dataNode && node.inferred === false && <span className="chip">named in code</span>}
+        {node.storeKind && <span className="chip">{node.storeKind}</span>}
+        {node.fieldKind && <span className="chip">{node.fieldKind}</span>}
         {node.engine && <span className="chip">{node.engine}</span>}
-        {node.kind === 'view' && <span className="chip">view</span>}
         {node.ownedBy && <span className="chip">{'state owned by ' + node.ownedBy}</span>}
         {node.synchronous && <span className="chip">synchronous inline reaction</span>}
         {(node.provenance || []).map((pv) => <span key={pv} className="chip">{pv}</span>)}

@@ -1,138 +1,216 @@
 {
   "nodes": [
     {
-      "id": "srv-local-fs",
-      "type": "server",
+      "id": "ds-srv-local-fs",
+      "type": "datastore",
       "label": "localhost/fs",
       "inferred": false,
       "engine": "filesystem",
       "host": "localhost/fs",
-      "provenance": ["assumed"],
-      "description": "The local filesystem/host the es-merge, es-generate CLIs and the es-view server run on. This is NOT a networked database server: `engine: filesystem` marks that the durable store is plain files on disk reached through node:fs (readFileSync/writeFileSync), addressed by path rather than a connection string. 'localhost/fs' is a synthetic host label; there is no real host/instance to recover because there is no connection string."
+      "provenance": [
+        "assumed"
+      ],
+      "description": "The local filesystem/host the es-merge, es-generate CLIs and the es-view server run on. This is NOT a networked database server: `engine: filesystem` marks that the durable store is plain files on disk reached through node:fs (readFileSync/writeFileSync), addressed by path rather than a connection string. 'localhost/fs' is a synthetic host label; there is no real host/instance to recover because there is no connection string.",
+      "storeKind": "filesystem"
     },
     {
-      "id": "db-es-model-dir",
-      "type": "database",
+      "id": "ds-db-es-model-dir",
+      "type": "datastore",
       "label": "examples/event-storming-recovery/model",
-      "parent": "srv-local-fs",
+      "parent": "ds-srv-local-fs",
       "inferred": false,
       "ownedBy": null,
-      "provenance": ["assumed"],
+      "provenance": [
+        "assumed"
+      ],
       "description": "The model output directory: the on-disk 'database' whose 'tables' are the persisted model store (flows.json) and the two generated view artifacts (explorer.html, flows.dot). The concrete path is an operator-supplied argument (the outFile/outDir the merge and generator are pointed at); this node uses the self-model's own model dir as its label.",
       "tactical": {
         "explanation": "Written to by the merge CLI (tools/merge-flows.js writeFileSync of the outFile) and the generator (tools/generate-views.js writeFileSync of explorer.html + flows.dot into outDir). The es-view server reads from it via resolve-model.mjs (readModelFile / findFlowsFiles auto-discovery, which prefers `model/flows.json`).",
         "anchors": [
-          { "path": "tools/merge-flows.js", "line": 31, "symbol": "cli", "note": "writeFileSync(outFile) into the model dir" },
-          { "path": "src/server/resolve-model.mjs", "line": 20, "symbol": "findFlowsFiles", "note": "auto-discovery prefers model/flows.json under this dir" }
+          {
+            "path": "tools/merge-flows.js",
+            "line": 31,
+            "symbol": "cli",
+            "note": "writeFileSync(outFile) into the model dir"
+          },
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 20,
+            "symbol": "findFlowsFiles",
+            "note": "auto-discovery prefers model/flows.json under this dir"
+          }
         ]
-      }
+      },
+      "storeKind": "directory"
     },
     {
-      "id": "tbl-flows-json",
-      "type": "table",
+      "id": "ds-tbl-flows-json",
+      "type": "datastore",
       "label": "flows.json",
-      "parent": "db-es-model-dir",
-      "kind": "table",
+      "parent": "ds-db-es-model-dir",
       "inferred": false,
-      "provenance": ["orm-mapping", "migration"],
+      "provenance": [
+        "orm-mapping",
+        "migration"
+      ],
       "description": "The persisted canonical model store. A single JSON file assembled and written by the merge, then read back by the es-view server (in-memory) and by the generator. Its 'columns' are the top-level JSON keys: nodes, flows, hotspots, terms, meta (+ version). The authoritative structure is docs/flows-schema.md; the merge code maps the in-memory object onto it.",
       "tactical": {
         "explanation": "Assembled in mergeTraceDocs as { version, meta, nodes, flows, hotspots, terms } (src/lib/merge.mjs ~215-227) and written to disk by tools/merge-flows.js (writeFileSync of the outFile). Read via resolve-model.mjs readModelFile (JSON.parse + shape check that nodes/flows are arrays).",
         "anchors": [
-          { "path": "src/lib/merge.mjs", "line": 215, "symbol": "mergeTraceDocs", "note": "the assembled model object { version, meta, nodes, flows, hotspots, terms }" },
-          { "path": "tools/merge-flows.js", "line": 31, "symbol": "cli", "note": "writeFileSync(outFile=flows.json)" },
-          { "path": "docs/flows-schema.md", "line": 6, "symbol": "top-level", "note": "authoritative top-level shape (nodes/flows/hotspots/meta)" }
+          {
+            "path": "src/lib/merge.mjs",
+            "line": 215,
+            "symbol": "mergeTraceDocs",
+            "note": "the assembled model object { version, meta, nodes, flows, hotspots, terms }"
+          },
+          {
+            "path": "tools/merge-flows.js",
+            "line": 31,
+            "symbol": "cli",
+            "note": "writeFileSync(outFile=flows.json)"
+          },
+          {
+            "path": "docs/flows-schema.md",
+            "line": 6,
+            "symbol": "top-level",
+            "note": "authoritative top-level shape (nodes/flows/hotspots/meta)"
+          }
         ]
-      }
+      },
+      "storeKind": "file"
     },
     {
-      "id": "tbl-explorer-html",
-      "type": "table",
+      "id": "ds-tbl-explorer-html",
+      "type": "datastore",
       "label": "explorer.html",
-      "parent": "db-es-model-dir",
-      "kind": "view",
+      "parent": "ds-db-es-model-dir",
       "inferred": false,
-      "provenance": ["orm-mapping"],
+      "provenance": [
+        "orm-mapping"
+      ],
       "description": "A derived view artifact: the self-contained interactive explorer, a single HTML file with the whole model frozen inline as `const MODEL` plus a dependency-free SPA. A materialized VIEW of tbl-flows-json (the generator projects the model into it); it is a frozen static snapshot, not a live read of the store.",
       "tactical": {
         "explanation": "Built by tools/generate-views.js: the model is JSON.stringify'd (with `<` escaped to \\u003c), inlined at `const MODEL = ${modelJson}` (line 438), and the assembled template is written by writeFileSync(outDir/explorer.html) at line 1487.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 438, "symbol": "MODEL", "note": "entire model inlined (frozen snapshot)" },
-          { "path": "tools/generate-views.js", "line": 1487, "symbol": "html", "note": "writeFileSync(outDir/explorer.html)" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 438,
+            "symbol": "MODEL",
+            "note": "entire model inlined (frozen snapshot)"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 1487,
+            "symbol": "html",
+            "note": "writeFileSync(outDir/explorer.html)"
+          }
         ]
-      }
+      },
+      "storeKind": "file"
     },
     {
-      "id": "tbl-flows-dot",
-      "type": "table",
+      "id": "ds-tbl-flows-dot",
+      "type": "datastore",
       "label": "flows.dot",
-      "parent": "db-es-model-dir",
-      "kind": "view",
+      "parent": "ds-db-es-model-dir",
       "inferred": false,
-      "provenance": ["orm-mapping"],
+      "provenance": [
+        "orm-mapping"
+      ],
       "description": "A derived view artifact: the Graphviz digraph, one cluster per flow with event-storming-colored stickies and labeled edges, for offline rendering (`dot -Tsvg`). A materialized VIEW of tbl-flows-json with the physical-storage nodes (and any edge touching them) deliberately filtered out.",
       "tactical": {
-        "explanation": "Built by the DOT block in tools/generate-views.js (from line 64); server/database/table/column nodes are excluded via isDataId (37, 73-74). Written by writeFileSync(outDir/flows.dot) at line 91.",
+        "explanation": "Built by the DOT block in tools/generate-views.js (from line 64); datastore/field nodes are excluded via isDataId (37, 73-74). Written by writeFileSync(outDir/flows.dot) at line 91.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "per-flow subgraphs; isDataId filters physical nodes" },
-          { "path": "tools/generate-views.js", "line": 91, "symbol": "dot", "note": "writeFileSync(outDir/flows.dot)" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 64,
+            "symbol": "dot",
+            "note": "per-flow subgraphs; isDataId filters physical nodes"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 91,
+            "symbol": "dot",
+            "note": "writeFileSync(outDir/flows.dot)"
+          }
         ]
-      }
+      },
+      "storeKind": "file"
     },
     {
-      "id": "col-flows-nodes",
-      "type": "column",
+      "id": "fld-col-flows-nodes",
+      "type": "field",
       "label": "nodes",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<node>",
       "nullable": false,
       "inferred": false,
-      "provenance": ["orm-mapping", "migration"],
-      "description": "Top-level JSON key: the deduped array of sticky/physical nodes shared across flows. Assembled by the merge as [...nodes.values()] with transient _src stripped; structure per docs/flows-schema.md (Node)."
+      "provenance": [
+        "orm-mapping",
+        "migration"
+      ],
+      "description": "Top-level JSON key: the deduped array of sticky/physical nodes shared across flows. Assembled by the merge as [...nodes.values()] with transient _src stripped; structure per docs/flows-schema.md (Node).",
+      "fieldKind": "key"
     },
     {
-      "id": "col-flows-flows",
-      "type": "column",
+      "id": "fld-col-flows-flows",
+      "type": "field",
       "label": "flows",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<flow>",
       "nullable": false,
       "inferred": false,
-      "provenance": ["orm-mapping", "migration"],
-      "description": "Top-level JSON key: the array of flow objects (steps, edges, hotspots, instances). Assembled by the merge as [...flows.values()] with transient _sourceFile stripped; structure per docs/flows-schema.md (Flow)."
+      "provenance": [
+        "orm-mapping",
+        "migration"
+      ],
+      "description": "Top-level JSON key: the array of flow objects (steps, edges, hotspots, instances). Assembled by the merge as [...flows.values()] with transient _sourceFile stripped; structure per docs/flows-schema.md (Flow).",
+      "fieldKind": "key"
     },
     {
-      "id": "col-flows-hotspots",
-      "type": "column",
+      "id": "fld-col-flows-hotspots",
+      "type": "field",
       "label": "hotspots",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<hotspot>",
       "nullable": false,
       "inferred": false,
-      "provenance": ["orm-mapping", "migration"],
-      "description": "Top-level JSON key: the array of hotspot objects referenced from flows. Assembled by the merge as [...hotspots.values()]; structure per docs/flows-schema.md (Hotspot)."
+      "provenance": [
+        "orm-mapping",
+        "migration"
+      ],
+      "description": "Top-level JSON key: the array of hotspot objects referenced from flows. Assembled by the merge as [...hotspots.values()]; structure per docs/flows-schema.md (Hotspot).",
+      "fieldKind": "key"
     },
     {
-      "id": "col-flows-terms",
-      "type": "column",
+      "id": "fld-col-flows-terms",
+      "type": "field",
       "label": "terms",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<term>",
       "nullable": false,
       "inferred": false,
-      "provenance": ["orm-mapping", "migration"],
-      "description": "Top-level JSON key: the ubiquitous-language term array authored by the glossary-mining phase, sorted case-insensitively by term. Structure per docs/flows-schema.md (Term)."
+      "provenance": [
+        "orm-mapping",
+        "migration"
+      ],
+      "description": "Top-level JSON key: the ubiquitous-language term array authored by the glossary-mining phase, sorted case-insensitively by term. Structure per docs/flows-schema.md (Term).",
+      "fieldKind": "key"
     },
     {
-      "id": "col-flows-meta",
-      "type": "column",
+      "id": "fld-col-flows-meta",
+      "type": "field",
       "label": "meta",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "object",
       "nullable": false,
       "inferred": false,
-      "provenance": ["orm-mapping", "migration"],
-      "description": "Top-level JSON key: derived/regenerable metadata { generatedFrom, counts, deadFlows, sharedGlossary } computed at merge time (plus title/repoRoot fallbacks). Not hand-authored; recomputed on every merge."
+      "provenance": [
+        "orm-mapping",
+        "migration"
+      ],
+      "description": "Top-level JSON key: derived/regenerable metadata { generatedFrom, counts, deadFlows, sharedGlossary } computed at merge time (plus title/repoRoot fallbacks). Not hand-authored; recomputed on every merge.",
+      "fieldKind": "key"
     },
     {
       "id": "agg-model",
@@ -141,7 +219,12 @@
       "tactical": {
         "explanation": "Data-return view: the Model's conceptual fields (nodes/flows/hotspots/terms/meta) are assembled by the merge and persisted to tbl-flows-json.",
         "anchors": [
-          { "path": "src/lib/merge.mjs", "line": 215, "symbol": "mergeTraceDocs", "note": "assembled model object persisted to flows.json" }
+          {
+            "path": "src/lib/merge.mjs",
+            "line": 215,
+            "symbol": "mergeTraceDocs",
+            "note": "assembled model object persisted to flows.json"
+          }
         ]
       },
       "fields": [
@@ -149,15 +232,32 @@
           "name": "nodes",
           "conceptual": true,
           "dataType": "array<node>",
-          "derivation": "The deduped union of every trace's nodes keyed by global id. First occurrence seeds the node; on a re-seen id the merge keeps the longest description, unions fields[] by name (data-pass authoritative), appends provenance, carries physical attributes (parent/engine/host/kind/schema/dataType/nullable), and accumulates a per-flow `usages` entry. Transient `_src` is stripped on output.",
+          "derivation": "The deduped union of every trace's nodes keyed by global id. First occurrence seeds the node; on a re-seen id the merge keeps the longest description, unions fields[] by name (data-pass authoritative), appends provenance, carries physical attributes (parent/storeKind/fieldKind/dataType/host/nullable), and accumulates a per-flow `usages` entry. Transient `_src` is stripped on output.",
           "sources": [
-            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "aggregation", "note": "deduped union by id across all traces" }
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "deduped union by id across all traces"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 74, "symbol": "mergeTraceDocs", "note": "node dedup/union loop (74-111)" },
-            { "path": "src/lib/merge.mjs", "line": 223, "symbol": "mergeTraceDocs", "note": "[...nodes.values()] with _src stripped" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 74,
+              "symbol": "mergeTraceDocs",
+              "note": "node dedup/union loop (74-111)"
+            },
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 223,
+              "symbol": "mergeTraceDocs",
+              "note": "[...nodes.values()] with _src stripped"
+            }
           ]
         },
         {
@@ -166,12 +266,24 @@
           "dataType": "array<flow>",
           "derivation": "The accumulated flow objects across all traces, keyed by id, FIRST-WINS: a duplicate flow id is a merge ERROR (flows are never merged/unioned like nodes). Written verbatim minus the transient `_sourceFile` key.",
           "sources": [
-            { "ref": "col-flows-flows", "role": "derived-from", "transform": "aggregation", "note": "first-wins accumulation by id; duplicate = error" }
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "first-wins accumulation by id; duplicate = error"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 113, "symbol": "mergeTraceDocs", "note": "flows.set with duplicate-id rejected (114)" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 113,
+              "symbol": "mergeTraceDocs",
+              "note": "flows.set with duplicate-id rejected (114)"
+            }
           ]
         },
         {
@@ -180,12 +292,24 @@
           "dataType": "array<hotspot>",
           "derivation": "The union of hotspot objects by id across traces, first-wins (a duplicate id is a warning, first kept).",
           "sources": [
-            { "ref": "col-flows-hotspots", "role": "derived-from", "transform": "aggregation", "note": "first-wins union by id" }
+            {
+              "ref": "fld-col-flows-hotspots",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "first-wins union by id"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 118, "symbol": "mergeTraceDocs", "note": "hotspots.set, dup kept-first (119)" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 118,
+              "symbol": "mergeTraceDocs",
+              "note": "hotspots.set, dup kept-first (119)"
+            }
           ]
         },
         {
@@ -194,12 +318,24 @@
           "dataType": "array<term>",
           "derivation": "The union of ubiquitous-language terms by id (authored by the glossary-mining phase), first-wins on duplicate, then sorted case-insensitively by `term`.",
           "sources": [
-            { "ref": "col-flows-terms", "role": "derived-from", "transform": "aggregation", "note": "union by id then localeCompare sort" }
+            {
+              "ref": "fld-col-flows-terms",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "union by id then localeCompare sort"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 123, "symbol": "mergeTraceDocs", "note": "terms.set + termList sort (212)" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 123,
+              "symbol": "mergeTraceDocs",
+              "note": "terms.set + termList sort (212)"
+            }
           ]
         },
         {
@@ -208,13 +344,30 @@
           "dataType": "object",
           "derivation": "Regenerated tallies computed at merge time: { flows, nodes, hotspots, terms } sizes, unresolvedTerms, and a byType node-type histogram. Not stored input — recomputed from the assembled maps on every merge.",
           "sources": [
-            { "ref": "col-flows-nodes", "role": "derived-from", "transform": "aggregation", "note": "node count + byType histogram" },
-            { "ref": "col-flows-flows", "role": "derived-from", "transform": "aggregation", "note": "flow count" }
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "node count + byType histogram"
+            },
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "derived-from",
+              "transform": "aggregation",
+              "note": "flow count"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 210, "symbol": "mergeTraceDocs", "note": "typeCounts + counts object (210-219)" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 210,
+              "symbol": "mergeTraceDocs",
+              "note": "typeCounts + counts object (210-219)"
+            }
           ]
         },
         {
@@ -223,13 +376,30 @@
           "dataType": "array<object>",
           "derivation": "The cross-flow shared-concept index: nodes appearing in more than one flow, projected to { id, type, label, description, flowCount, flows } and sorted by flowCount descending. A join of per-flow membership (steps + edge endpoints) against the node set.",
           "sources": [
-            { "ref": "col-flows-flows", "role": "grouped-by", "transform": "aggregation", "note": "membership tally across flows" },
-            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "join", "note": "resolve id -> {type,label,description}" }
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "grouped-by",
+              "transform": "aggregation",
+              "note": "membership tally across flows"
+            },
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "joined-on",
+              "transform": "join",
+              "note": "resolve id -> {type,label,description}"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 199, "symbol": "mergeTraceDocs", "note": "appearIn tally + glossary projection (199-208)" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 199,
+              "symbol": "mergeTraceDocs",
+              "note": "appearIn tally + glossary projection (199-208)"
+            }
           ]
         },
         {
@@ -238,12 +408,24 @@
           "dataType": "array<object>",
           "derivation": "The dead/superseded-flow index: flows whose status is not 'live', projected to { id, status, supersededBy, name }.",
           "sources": [
-            { "ref": "col-flows-flows", "role": "filtered-by", "transform": "filter", "note": "status !== 'live'" }
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "filtered-by",
+              "transform": "filter",
+              "note": "status !== 'live'"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/lib/merge.mjs", "line": 209, "symbol": "mergeTraceDocs", "note": "deadFlows filter/projection" }
+            {
+              "path": "src/lib/merge.mjs",
+              "line": 209,
+              "symbol": "mergeTraceDocs",
+              "note": "deadFlows filter/projection"
+            }
           ]
         }
       ]
@@ -255,7 +437,12 @@
       "tactical": {
         "explanation": "Data-return view: GET /api/model hands back the whole resolved model verbatim; list_model exposes a compact projection.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "/api/model returns { model, meta }" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 114,
+            "symbol": "createServer",
+            "note": "/api/model returns { model, meta }"
+          }
         ]
       },
       "fields": [
@@ -265,13 +452,30 @@
           "dataType": "object",
           "derivation": "The entire agg-model object (nodes/flows/hotspots/terms/meta) handed back verbatim by GET /api/model. The server resolves it once at startup and holds it in memory; the payload is a straight passthrough of the resolved model, not a re-query. The MCP list_model tool exposes a compact projection of the same object (flows: id/name/status; nodes: id/label/type).",
           "sources": [
-            { "ref": "tbl-flows-json", "role": "derived-from", "transform": "identity", "note": "resolved from the file (or in-memory merge of --traces) and passed through" }
+            {
+              "ref": "ds-tbl-flows-json",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "resolved from the file (or in-memory merge of --traces) and passed through"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "/api/model builds { model, meta }" },
-            { "path": "src/server/mcp.mjs", "line": 70, "symbol": "list_model", "note": "compact id index projection of the same model" }
+            {
+              "path": "src/server/server.mjs",
+              "line": 114,
+              "symbol": "createServer",
+              "note": "/api/model builds { model, meta }"
+            },
+            {
+              "path": "src/server/mcp.mjs",
+              "line": 70,
+              "symbol": "list_model",
+              "note": "compact id index projection of the same model"
+            }
           ]
         },
         {
@@ -281,10 +485,17 @@
           "derivation": "Resolution provenance wrapped around the model: { source, sourcePath, repoRoot, warnings } describing which strategy resolved the model (--model / --traces / auto-discover / bundled example), the resolved path, the repoRoot, and any resolver warnings. Computed by resolveModel at boot, NOT read from flows.json.",
           "sources": [],
           "confidence": "high",
-          "provenance": ["inferred-from-dto"],
+          "provenance": [
+            "inferred-from-dto"
+          ],
           "notes": "Assembled in src/server/resolve-model.mjs (resolveModel) at process start; held in memory, never persisted.",
           "evidence": [
-            { "path": "src/server/resolve-model.mjs", "line": 65, "symbol": "resolveModel", "note": "returns { model, source, sourcePath, repoRoot, warnings }" }
+            {
+              "path": "src/server/resolve-model.mjs",
+              "line": 65,
+              "symbol": "resolveModel",
+              "note": "returns { model, source, sourcePath, repoRoot, warnings }"
+            }
           ]
         }
       ]
@@ -296,7 +507,12 @@
       "tactical": {
         "explanation": "Data-return view: the explorer inlines a frozen copy of the whole model as const MODEL and renders its tabs client-side.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 438, "symbol": "MODEL", "note": "entire model inlined as a frozen snapshot" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 438,
+            "symbol": "MODEL",
+            "note": "entire model inlined as a frozen snapshot"
+          }
         ]
       },
       "fields": [
@@ -306,13 +522,30 @@
           "dataType": "object",
           "derivation": "A frozen JSON.stringify copy of the entire agg-model inlined into the page as `const MODEL` (with `<` escaped to \\u003c so the inline <script> stays safe). The SPA reads ONLY from this constant, never fetching flows.json, so the artifact is a frozen snapshot that drifts once the store changes (see hot-frozen-explorer-snapshot).",
           "sources": [
-            { "ref": "tbl-flows-json", "role": "derived-from", "transform": "identity", "note": "serialized verbatim copy at generation time" }
+            {
+              "ref": "ds-tbl-flows-json",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "serialized verbatim copy at generation time"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "tools/generate-views.js", "line": 94, "symbol": "modelJson", "note": "JSON.stringify(model), < escaped" },
-            { "path": "tools/generate-views.js", "line": 438, "symbol": "MODEL", "note": "const MODEL = ${modelJson}" }
+            {
+              "path": "tools/generate-views.js",
+              "line": 94,
+              "symbol": "modelJson",
+              "note": "JSON.stringify(model), < escaped"
+            },
+            {
+              "path": "tools/generate-views.js",
+              "line": 438,
+              "symbol": "MODEL",
+              "note": "const MODEL = ${modelJson}"
+            }
           ]
         },
         {
@@ -321,11 +554,23 @@
           "dataType": "object",
           "derivation": "Flows tab: the sidebar (flows grouped by tier / pivoted by actor or aggregate) plus the pan/zoom board rendering the selected flow's sticky lane and edges. Derived client-side from the embedded model's flows + nodes.",
           "sources": [
-            { "ref": "col-flows-flows", "role": "derived-from", "transform": "transformation", "note": "grouped/pivoted for the sidebar + board" },
-            { "ref": "col-flows-nodes", "role": "joined-on", "transform": "join", "note": "resolve step/edge ids to stickies" }
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "derived-from",
+              "transform": "transformation",
+              "note": "grouped/pivoted for the sidebar + board"
+            },
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "joined-on",
+              "transform": "join",
+              "note": "resolve step/edge ids to stickies"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         },
         {
           "name": "gallery",
@@ -333,21 +578,35 @@
           "dataType": "object",
           "derivation": "Gallery tab: nodes grouped by type. Derived from the embedded model's node set.",
           "sources": [
-            { "ref": "col-flows-nodes", "role": "grouped-by", "transform": "transformation", "note": "galleryTypes(model) buckets nodes by type" }
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "grouped-by",
+              "transform": "transformation",
+              "note": "galleryTypes(model) buckets nodes by type"
+            }
           ],
           "confidence": "medium",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         },
         {
           "name": "dataModel",
           "conceptual": true,
           "dataType": "object",
-          "derivation": "Data model tab: the physical server/database/table/column containment tree plus the fields[] returned by each read model/aggregate. Derived from the embedded model's physical nodes and their parent chains and from field lineage.",
+          "derivation": "Data model tab: the physical datastore/field containment tree plus the fields[] returned by each read model/aggregate. Derived from the embedded model's physical nodes and their parent chains and from field lineage.",
           "sources": [
-            { "ref": "col-flows-nodes", "role": "filtered-by", "transform": "filter", "note": "physical nodes (srv/db/tbl/col) + fields[] on rm/agg nodes" }
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "filtered-by",
+              "transform": "filter",
+              "note": "physical nodes (datastore/field) + fields[] on rm/agg nodes"
+            }
           ],
           "confidence": "medium",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         },
         {
           "name": "glossary",
@@ -355,10 +614,17 @@
           "dataType": "object",
           "derivation": "Glossary tab: the ubiquitous-language terms, with flagged (partial/unresolved) terms rendered hotspot-style. Derived from the embedded model's terms.",
           "sources": [
-            { "ref": "col-flows-terms", "role": "derived-from", "transform": "identity", "note": "terms rendered as a glossary" }
+            {
+              "ref": "fld-col-flows-terms",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "terms rendered as a glossary"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         },
         {
           "name": "overview",
@@ -366,10 +632,17 @@
           "dataType": "object",
           "derivation": "Overview tab: headline counts and the shared-concept / dead-flow summaries. Derived from the embedded model's meta block.",
           "sources": [
-            { "ref": "col-flows-meta", "role": "derived-from", "transform": "identity", "note": "counts + sharedGlossary + deadFlows surfaced" }
+            {
+              "ref": "fld-col-flows-meta",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "counts + sharedGlossary + deadFlows surfaced"
+            }
           ],
           "confidence": "medium",
-          "provenance": ["orm-mapping"]
+          "provenance": [
+            "orm-mapping"
+          ]
         }
       ]
     },
@@ -380,7 +653,12 @@
       "tactical": {
         "explanation": "Data-return view: the DOT source projects the model's flows (physical nodes filtered out) into one cluster per flow.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "DOT build loop; isDataId drops physical nodes" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 64,
+            "symbol": "dot",
+            "note": "DOT build loop; isDataId drops physical nodes"
+          }
         ]
       },
       "fields": [
@@ -388,16 +666,38 @@
           "name": "dotDigraph",
           "conceptual": true,
           "dataType": "string",
-          "derivation": "The full Graphviz DOT source: one `subgraph cluster_<flowId>` per flow, node ids namespaced `<flowId>__<nodeId>`, stickies colored by type from PALETTE, edges labeled with their verb, and the first tactical anchor attached as a vscode:// URL. Dead/superseded flows render dashed with a [STATUS] suffix. Physical storage nodes (server/database/table/column) and any edge touching them are filtered out via isDataId, so the DOT view stays purely behavioral.",
+          "derivation": "The full Graphviz DOT source: one `subgraph cluster_<flowId>` per flow, node ids namespaced `<flowId>__<nodeId>`, stickies colored by type from PALETTE, edges labeled with their verb, and the first tactical anchor attached as a vscode:// URL. Dead/superseded flows render dashed with a [STATUS] suffix. Physical storage nodes (datastore/field) and any edge touching them are filtered out via isDataId, so the DOT view stays purely behavioral.",
           "sources": [
-            { "ref": "col-flows-flows", "role": "derived-from", "transform": "transformation", "note": "one cluster per flow; edges labeled by verb" },
-            { "ref": "col-flows-nodes", "role": "filtered-by", "transform": "filter", "note": "isDataId drops srv/db/tbl/col nodes" }
+            {
+              "ref": "fld-col-flows-flows",
+              "role": "derived-from",
+              "transform": "transformation",
+              "note": "one cluster per flow; edges labeled by verb"
+            },
+            {
+              "ref": "fld-col-flows-nodes",
+              "role": "filtered-by",
+              "transform": "filter",
+              "note": "isDataId drops datastore/field nodes"
+            }
           ],
           "confidence": "high",
-          "provenance": ["orm-mapping"],
+          "provenance": [
+            "orm-mapping"
+          ],
           "evidence": [
-            { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "DOT build loop over model.flows" },
-            { "path": "tools/generate-views.js", "line": 73, "symbol": "isDataId", "note": "physical nodes excluded" }
+            {
+              "path": "tools/generate-views.js",
+              "line": 64,
+              "symbol": "dot",
+              "note": "DOT build loop over model.flows"
+            },
+            {
+              "path": "tools/generate-views.js",
+              "line": 73,
+              "symbol": "isDataId",
+              "note": "physical nodes excluded"
+            }
           ]
         }
       ]
@@ -409,7 +709,12 @@
       "tactical": {
         "explanation": "Data-return view: a per-flow trace file the merge JSON.parses and iterates as raw material; structure defined by docs/flows-schema.md.",
         "anchors": [
-          { "path": "src/lib/merge.mjs", "line": 71, "symbol": "mergeTraceDocs", "note": "iterates each source doc's nodes/flows/hotspots/terms" }
+          {
+            "path": "src/lib/merge.mjs",
+            "line": 71,
+            "symbol": "mergeTraceDocs",
+            "note": "iterates each source doc's nodes/flows/hotspots/terms"
+          }
         ]
       },
       "fields": [
@@ -420,10 +725,17 @@
           "derivation": "The stickies/physical nodes a deep-trace (or data-mapping) agent authored for one flow. JSON.parsed from a *.json in the traces dir and iterated by the merge as raw material. Structure defined by docs/flows-schema.md (Node).",
           "sources": [],
           "confidence": "high",
-          "provenance": ["migration"],
+          "provenance": [
+            "migration"
+          ],
           "notes": "One *.json per flow on the local filesystem (reached via ext-source-fs); not modeled as its own physical table (see notes).",
           "evidence": [
-            { "path": "docs/flows-schema.md", "line": 21, "symbol": "Node", "note": "authoritative node shape" }
+            {
+              "path": "docs/flows-schema.md",
+              "line": 21,
+              "symbol": "Node",
+              "note": "authoritative node shape"
+            }
           ]
         },
         {
@@ -433,9 +745,16 @@
           "derivation": "The flow object(s) a trace agent authored for the flow: steps, edges, hotspots, instances. JSON.parsed and accumulated by the merge (first-wins by id). Structure per docs/flows-schema.md (Flow).",
           "sources": [],
           "confidence": "high",
-          "provenance": ["migration"],
+          "provenance": [
+            "migration"
+          ],
           "evidence": [
-            { "path": "docs/flows-schema.md", "line": 137, "symbol": "Flow", "note": "authoritative flow shape" }
+            {
+              "path": "docs/flows-schema.md",
+              "line": 137,
+              "symbol": "Flow",
+              "note": "authoritative flow shape"
+            }
           ]
         },
         {
@@ -445,7 +764,9 @@
           "derivation": "The hotspot object(s) authored for the flow (the human-question stickies). Parsed and unioned by the merge. Structure per docs/flows-schema.md (Hotspot).",
           "sources": [],
           "confidence": "high",
-          "provenance": ["migration"]
+          "provenance": [
+            "migration"
+          ]
         },
         {
           "name": "terms",
@@ -454,7 +775,9 @@
           "derivation": "Optional ubiquitous-language term entries carried in a trace/glossary file. Parsed and unioned by the merge. Structure per docs/flows-schema.md (Term).",
           "sources": [],
           "confidence": "high",
-          "provenance": ["migration"]
+          "provenance": [
+            "migration"
+          ]
         }
       ]
     }

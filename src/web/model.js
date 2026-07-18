@@ -6,7 +6,7 @@ import { flowNodeIds } from '../lib/selectors.mjs';
 export {
   buildIndexes, flowNodeIds, nodeFlows, enforcesRelation, nodeUsages,
   DATA_TYPES, DATA_TYPE_SET, isDataNode, STORAGE_VERBS,
-  parentChain, dataModelTree, tableConsumers, columnConsumers, nodeStorageLinks,
+  parentChain, dataModelTree, isRecordSet, fieldTree, datastoreConsumers, fieldConsumers, nodeStorageLinks,
 } from '../lib/selectors.mjs';
 
 // types present in the model, in palette order (drives gallery/glossary filter chips + sort)

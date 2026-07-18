@@ -118,19 +118,19 @@ stays uncertain with a specific `openQuestion` (the hotspot contract), and **wri
 ## Phase 5.5 — Data mapping (optional but recommended)
 
 With the merged model in hand, recover the **data model**: what each read model / aggregate returns
-and the physical storage (servers, databases, tables, columns) the code touches, cross-linked to the
-behavioral nodes. This is the layer the behavioral stickies deliberately abstract away, and it is what
-lets a developer answer "what does this read model return and where does it come from." Write the
-mapping briefing (`05-data-mapping.md`, filled with `{REPO_ROOT}`, `{EXCLUDE}`, the merged
-`flows.json` path, the **Data model** section of `docs/flows-schema.md`, and `{TRACES_DIR}`) and
+and the physical storage (datastore/field — whatever the storage actually is) the code touches,
+cross-linked to the behavioral nodes. This is the layer the behavioral stickies deliberately abstract
+away, and it is what lets a developer answer "what does this read model return and where does it come
+from." Write the mapping briefing (`05-data-mapping.md`, filled with `{REPO_ROOT}`, `{EXCLUDE}`, the
+merged `flows.json` path, the **Data model** section of `docs/flows-schema.md`, and `{TRACES_DIR}`) and
 dispatch a **wave of ~5-7 agents**, each owning a slice. Run **one pilot first**, read its
 schema-friction, then the rest. Each agent discovers storage from SQL literals + connection strings
-(corroborated by migrations when present), adds `server/database/table/column` nodes and `fields[]`
-with lineage, cross-links them with `persists to`/`projects from`/`writes` edges, **flags** dynamic
-SQL it can't pin down, and **writes its own `<area>.data.json` + `.notes.md`** into `{TRACES_DIR}`.
-Then **re-run the merge** — it folds the physical nodes in, unions `fields` onto existing nodes by
-name, and validates lineage refs + `parent` containment. Keep it demand-driven: only the columns a
-field references, never a full-schema dump.
+(corroborated by migrations when present), adds `datastore` (+`storeKind`) and `field` (+`fieldKind`)
+nodes and `fields[]` with lineage, cross-links them with `persists to`/`projects from`/`writes` edges,
+**flags** dynamic SQL it can't pin down, and **writes its own `<area>.data.json` + `.notes.md`** into
+`{TRACES_DIR}`. Then **re-run the merge** — it folds the physical nodes in, unions `fields` onto
+existing nodes by name, and validates lineage refs + `parent` containment. Keep it demand-driven: only
+the fields a conceptual field references, never a full-schema dump.
 
 ## Phase 6 — Generate & verify
 
@@ -138,8 +138,9 @@ field references, never a full-schema dump.
 emits `flows.dot` and the self-contained `explorer.html`. **Open the explorer in a browser and
 verify** it renders (sidebar lists flows, a flow renders a sticky lane, clicking a sticky opens
 the tactical panel, hotspot cards show, the **Glossary** tab lists the curated terms with flagged
-ones marked, and — if you ran Phase 5.5 — the **Data model** tab shows the server ▸ database ▸ table
-▸ column tree and read-model/aggregate detail panels list their **Data returned / State & fields**).
+ones marked, and — if you ran Phase 5.5 — the **Data model** tab shows the datastore tree
+(server▸database▸table, or filesystem▸directory▸file, …) and read-model/aggregate detail panels list
+their **Data returned / State & fields**).
 Write the deliverable README. Leave committing to the user.
 
 ## Principles

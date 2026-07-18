@@ -4,11 +4,23 @@
       "id": "term-mp-flow",
       "term": "Flow",
       "category": "concept",
-      "aka": ["flow", "flows[]"],
+      "aka": [
+        "flow",
+        "flows[]"
+      ],
       "definition": "The tool's unit of recovered behavior: one end-to-end path through the system, from a trigger, through commands/aggregates/events, to what the actor reads. A flow is a first-class object in flows.json (id, name, tier, kind, status, ordered steps, edges, hotspots, instances); a trace agent authors one flow per file and the merge accumulates them. Flows join into a single map only through shared node ids, not through direct flow-to-flow links.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 137, "symbol": "Flow" },
-        { "path": "src/lib/merge.mjs", "line": 110, "symbol": "mergeTraceDocs", "note": "flows deduped by id into the model" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 137,
+          "symbol": "Flow"
+        },
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 110,
+          "symbol": "mergeTraceDocs",
+          "note": "flows deduped by id into the model"
+        }
       ],
       "status": "resolved"
     },
@@ -16,12 +28,29 @@
       "id": "term-mp-trace",
       "term": "Trace",
       "category": "jargon",
-      "aka": ["per-flow trace", "per-flow trace JSON", "<flow-id>.json", "rm-trace"],
+      "aka": [
+        "per-flow trace",
+        "per-flow trace JSON",
+        "<flow-id>.json",
+        "rm-trace"
+      ],
       "definition": "A single per-flow trace document ({ nodes, flows, hotspots, terms }) that a deep-trace agent writes to the traces directory for one flow. Traces are the raw material of the model: the merge JSON-parses every *.json in the dir and folds them together. A parse failure skips just that file rather than aborting the whole merge.",
-      "relatedNodes": ["rm-trace"],
+      "relatedNodes": [
+        "rm-trace"
+      ],
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 244, "symbol": "mergeTracesDir", "note": "JSON.parse each *.json into a source doc" },
-        { "path": "prompts/03-trace-briefing.md", "line": 48, "symbol": "Output contract", "note": "each agent writes <flow-id>.json + .notes.md" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 244,
+          "symbol": "mergeTracesDir",
+          "note": "JSON.parse each *.json into a source doc"
+        },
+        {
+          "path": "prompts/03-trace-briefing.md",
+          "line": 48,
+          "symbol": "Output contract",
+          "note": "each agent writes <flow-id>.json + .notes.md"
+        }
       ],
       "status": "resolved"
     },
@@ -29,12 +58,29 @@
       "id": "term-mp-the-model",
       "term": "The Model (flows.json)",
       "category": "concept",
-      "aka": ["flows.json", "the canonical model", "agg-model", "MODEL"],
+      "aka": [
+        "flows.json",
+        "the canonical model",
+        "agg-model",
+        "MODEL"
+      ],
       "definition": "The canonical strategic Event Storming model: the deduped node set plus flows, hotspots, terms, and derived meta, assembled by the merge and serialized as flows.json. It is the single source of truth every view is generated from and the es-view server / MCP bridge read; views are disposable, flows.json is edited (via traces) and regenerated. Modeled in this self-model as the aggregate agg-model.",
-      "relatedNodes": ["agg-model"],
+      "relatedNodes": [
+        "agg-model"
+      ],
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 215, "symbol": "mergeTraceDocs", "note": "the assembled model object" },
-        { "path": "docs/flows-schema.md", "line": 1, "symbol": "flows.json schema", "note": "the canonical strategic model" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 215,
+          "symbol": "mergeTraceDocs",
+          "note": "the assembled model object"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 1,
+          "symbol": "flows.json schema",
+          "note": "the canonical strategic model"
+        }
       ],
       "status": "resolved"
     },
@@ -42,11 +88,24 @@
       "id": "term-mp-node",
       "term": "Node (sticky-node)",
       "category": "jargon",
-      "aka": ["node", "nodes[]", "sticky-node"],
+      "aka": [
+        "node",
+        "nodes[]",
+        "sticky-node"
+      ],
       "definition": "The data realization of a Sticky: one entry in the model's nodes[] with a globally unique, type-prefixed id (actor- cmd- agg- evt- pol- rm- ext- inv- srv- db- tbl- col-), a type, a label, and tactical anchors. Distinct from the method's Sticky (the wall concept): a Node is the deduped, id-keyed record the merge unions across flows. Node ids are global, so reusing the same id across flows is how flows join into one map.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 20, "symbol": "Node" },
-        { "path": "src/lib/merge.mjs", "line": 80, "symbol": "mergeTraceDocs", "note": "node union: seed new id / merge re-seen id" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 20,
+          "symbol": "Node"
+        },
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 80,
+          "symbol": "mergeTraceDocs",
+          "note": "node union: seed new id / merge re-seen id"
+        }
       ],
       "status": "resolved"
     },
@@ -54,11 +113,24 @@
       "id": "term-mp-shared-id-glossary",
       "term": "shared-id glossary",
       "category": "concept",
-      "aka": ["shared node ids", "shared-id convention"],
+      "aka": [
+        "shared node ids",
+        "shared-id convention"
+      ],
       "definition": "The set of agreed global node ids for a target system's recurring concepts (its core aggregates, external systems, and actor roles), handed to every trace agent before tracing so independent agents converge on the same ids (agg-order, not order / customer-order / orders-aggregate) instead of inventing synonyms. It is the input convention that makes the finished flows join into one map. Distinct from the derived meta.sharedGlossary (see meta), which is the merge's OUTPUT list of ids that ended up in more than one flow.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 62, "symbol": "Node ids are GLOBAL", "note": "agree a shared-id glossary before tracing a fleet of flows" },
-        { "path": "prompts/03-trace-briefing.md", "line": 39, "symbol": "Shared node ids", "note": "orchestrator injects the glossary into every briefing" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 62,
+          "symbol": "Node ids are GLOBAL",
+          "note": "agree a shared-id glossary before tracing a fleet of flows"
+        },
+        {
+          "path": "prompts/03-trace-briefing.md",
+          "line": 39,
+          "symbol": "Shared node ids",
+          "note": "orchestrator injects the glossary into every briefing"
+        }
       ],
       "status": "resolved"
     },
@@ -66,12 +138,30 @@
       "id": "term-mp-es-merge",
       "term": "Merge (es-merge)",
       "category": "concept",
-      "aka": ["es-merge", "merge-flows.js", "MergeTraces", "cmd-merge-traces", "mergeTraceDocs"],
+      "aka": [
+        "es-merge",
+        "merge-flows.js",
+        "MergeTraces",
+        "cmd-merge-traces",
+        "mergeTraceDocs"
+      ],
       "definition": "Phase 4: fold every per-flow trace into one canonical, validated model. Nodes are unioned by global id (first-seen type/label wins, longest description wins, tactical detail appended as per-flow usages), flows/hotspots/terms are accumulated, derived meta is computed, and all invariants are checked before the model is returned. Callers own IO: the CLI (merge-flows.js) writes flows.json and exits nonzero on errors; the server's --traces path throws on errors so it never serves an invalid model.",
-      "relatedNodes": ["cmd-merge-traces"],
+      "relatedNodes": [
+        "cmd-merge-traces"
+      ],
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 63, "symbol": "mergeTraceDocs", "note": "seed/union nodes, accumulate flows, validate, build model" },
-        { "path": "tools/merge-flows.js", "line": 24, "symbol": "cli", "note": "CLI front end: argv, writeFileSync, exit codes" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 63,
+          "symbol": "mergeTraceDocs",
+          "note": "seed/union nodes, accumulate flows, validate, build model"
+        },
+        {
+          "path": "tools/merge-flows.js",
+          "line": 24,
+          "symbol": "cli",
+          "note": "CLI front end: argv, writeFileSync, exit codes"
+        }
       ],
       "status": "resolved"
     },
@@ -79,12 +169,29 @@
       "id": "term-mp-es-generate",
       "term": "Generate (es-generate)",
       "category": "concept",
-      "aka": ["es-generate", "generate-views.js", "GenerateViews", "cmd-generate-views"],
+      "aka": [
+        "es-generate",
+        "generate-views.js",
+        "GenerateViews",
+        "cmd-generate-views"
+      ],
       "definition": "Phase 6: render the canonical flows.json into the two shipped views: a Graphviz flows.dot digraph (one cluster per flow, Event-Storming palette) and a self-contained interactive explorer.html with the whole model inlined. A pure read-render transform, never editing the model; you edit traces and regenerate, keeping the model diffable and the views disposable.",
-      "relatedNodes": ["cmd-generate-views"],
+      "relatedNodes": [
+        "cmd-generate-views"
+      ],
       "anchors": [
-        { "path": "tools/generate-views.js", "line": 19, "symbol": "args", "note": "flowsFile, outDir, --repo-root, --title" },
-        { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "build DOT then explorer.html template" }
+        {
+          "path": "tools/generate-views.js",
+          "line": 19,
+          "symbol": "args",
+          "note": "flowsFile, outDir, --repo-root, --title"
+        },
+        {
+          "path": "tools/generate-views.js",
+          "line": 64,
+          "symbol": "dot",
+          "note": "build DOT then explorer.html template"
+        }
       ],
       "status": "resolved"
     },
@@ -92,12 +199,28 @@
       "id": "term-mp-explorer-html",
       "term": "explorer.html",
       "category": "jargon",
-      "aka": ["the explorer", "interactive explorer", "rm-explorer"],
+      "aka": [
+        "the explorer",
+        "interactive explorer",
+        "rm-explorer"
+      ],
       "definition": "The self-contained interactive Event Storming explorer generate emits: a single HTML file with the entire model serialized inline (const MODEL = ...) and a dependency-free vanilla-JS/CSS SPA (Flows board, Gallery, Data model, Glossary, Overview tabs, detail panel with source anchors). Openable directly in a browser with no server or network. Because the model is embedded, it is a FROZEN snapshot that drifts from flows.json until regenerated (see hot-frozen-explorer-snapshot). Note: the live es-view server serves a React SPA of the same shape from the in-memory model rather than this static file.",
-      "relatedNodes": ["rm-explorer"],
+      "relatedNodes": [
+        "rm-explorer"
+      ],
       "anchors": [
-        { "path": "tools/generate-views.js", "line": 438, "symbol": "MODEL", "note": "entire model inlined as const MODEL (frozen snapshot)" },
-        { "path": "tools/generate-views.js", "line": 1487, "symbol": "html", "note": "writeFileSync(outDir/explorer.html)" }
+        {
+          "path": "tools/generate-views.js",
+          "line": 438,
+          "symbol": "MODEL",
+          "note": "entire model inlined as const MODEL (frozen snapshot)"
+        },
+        {
+          "path": "tools/generate-views.js",
+          "line": 1487,
+          "symbol": "html",
+          "note": "writeFileSync(outDir/explorer.html)"
+        }
       ],
       "status": "resolved"
     },
@@ -105,12 +228,29 @@
       "id": "term-mp-flows-dot",
       "term": "flows.dot (Graphviz DOT)",
       "category": "jargon",
-      "aka": ["flows.dot", "DOT", "Graphviz digraph", "rm-flows-dot"],
+      "aka": [
+        "flows.dot",
+        "DOT",
+        "Graphviz digraph",
+        "rm-flows-dot"
+      ],
       "definition": "The Graphviz digraph generate emits alongside explorer.html: one subgraph cluster per flow with Event-Storming-colored stickies and verb-labeled edges, rendered offline (e.g. dot -Tsvg) or in a Graphviz viewer to read the whole board at a glance. Physical data-model nodes (server/database/table/column) and any edge touching them are deliberately excluded; each node's first tactical anchor is attached as a vscode:// deep link; dead/superseded flows render dashed with a [STATUS] suffix.",
-      "relatedNodes": ["rm-flows-dot"],
+      "relatedNodes": [
+        "rm-flows-dot"
+      ],
       "anchors": [
-        { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "digraph header + per-flow subgraphs" },
-        { "path": "tools/generate-views.js", "line": 91, "symbol": "dot", "note": "writeFileSync(outDir/flows.dot)" }
+        {
+          "path": "tools/generate-views.js",
+          "line": 64,
+          "symbol": "dot",
+          "note": "digraph header + per-flow subgraphs"
+        },
+        {
+          "path": "tools/generate-views.js",
+          "line": 91,
+          "symbol": "dot",
+          "note": "writeFileSync(outDir/flows.dot)"
+        }
       ],
       "status": "resolved"
     },
@@ -118,11 +258,25 @@
       "id": "term-mp-tier",
       "term": "Tier-1 vs Tier-2 flow",
       "category": "jargon",
-      "aka": ["tier", "tier: 1", "tier: 2"],
+      "aka": [
+        "tier",
+        "tier: 1",
+        "tier: 2"
+      ],
       "definition": "A flow's coverage depth. Tier-1 is an individually traced domain flow (traced end to end on its own). Tier-2 is a pattern exemplar: one representative flow traced once, with the repetitive siblings (e.g. 30 near-identical CRUD/admin screens) listed as instances rather than traced individually. The triage phase decides which candidate flows are Tier-1 vs collapsed into a Tier-2 exemplar.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 141, "symbol": "tier", "note": "1 = traced flow; 2 = pattern exemplar with instances" },
-        { "path": "prompts/00-orchestrator.md", "line": 57, "symbol": "Phase 1", "note": "Tier-1 flows vs Tier-2 pattern families" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 141,
+          "symbol": "tier",
+          "note": "1 = traced flow; 2 = pattern exemplar with instances"
+        },
+        {
+          "path": "prompts/00-orchestrator.md",
+          "line": 57,
+          "symbol": "Phase 1",
+          "note": "Tier-1 flows vs Tier-2 pattern families"
+        }
       ],
       "status": "resolved"
     },
@@ -130,10 +284,18 @@
       "id": "term-mp-instance",
       "term": "Instance (tier-2 pattern instance)",
       "category": "jargon",
-      "aka": ["instances", "instances[]"],
+      "aka": [
+        "instances",
+        "instances[]"
+      ],
       "definition": "One member of a Tier-2 pattern family, listed on the exemplar flow's instances[] as { label, route, file } instead of being traced on its own. Instances let the model enumerate every repetitive screen/endpoint of a pattern (so nothing is missing from the map) without paying to deep-trace each. In this self-model every flow is a fully traced Tier-1 or a standalone Tier-2, so all instances[] are empty.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 152, "symbol": "instances", "note": "tier-2 only: [{ label, route, file }] per instance" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 152,
+          "symbol": "instances",
+          "note": "tier-2 only: [{ label, route, file }] per instance"
+        }
       ],
       "status": "resolved"
     },
@@ -141,11 +303,27 @@
       "id": "term-mp-flow-status",
       "term": "Flow status (live / dead / superseded)",
       "category": "state",
-      "aka": ["status", "live", "dead", "superseded", "supersededBy"],
+      "aka": [
+        "status",
+        "live",
+        "dead",
+        "superseded",
+        "supersededBy"
+      ],
       "definition": "A flow's reachability verdict from the deep-trace reachability check. live = the path is reachable and current; dead = an unreachable code path (no caller / unregistered route); superseded = replaced but still reachable, with supersededBy naming the flow id that replaced it. Dead and superseded flows are traced anyway, because the delta to their replacement is recovered intent. The merge indexes every non-live flow into meta.deadFlows; DOT/explorer render them dashed with a [STATUS] label.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 143, "symbol": "status", "note": "live | dead | superseded (+ supersededBy)" },
-        { "path": "src/lib/merge.mjs", "line": 209, "symbol": "mergeTraceDocs", "note": "deadFlows = flows whose status != live" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 143,
+          "symbol": "status",
+          "note": "live | dead | superseded (+ supersededBy)"
+        },
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 209,
+          "symbol": "mergeTraceDocs",
+          "note": "deadFlows = flows whose status != live"
+        }
       ],
       "status": "resolved"
     },
@@ -153,11 +331,24 @@
       "id": "term-mp-reachability",
       "term": "Reachability check",
       "category": "concept",
-      "aka": ["reachability", "verify reachability"],
+      "aka": [
+        "reachability",
+        "verify reachability"
+      ],
       "definition": "The first move of a deep-trace: confirm the entry point is actually wired (a caller exists, the route is registered, the button renders, DI is set up) before tracing it. When a caller is missing, chasing git log / git show recovers when and why it was removed, which is often the most valuable finding; the result sets the flow's status (live / dead / superseded). This is how dead and superseded flows get caught rather than modeled as if current.",
       "anchors": [
-        { "path": "prompts/03-trace-briefing.md", "line": 26, "symbol": "CHECK REACHABILITY", "note": "confirm the entry point is wired; git log/show when a caller is missing" },
-        { "path": "docs/METHOD.md", "line": 108, "symbol": "Phase 3", "note": "verifies reachability first" }
+        {
+          "path": "prompts/03-trace-briefing.md",
+          "line": 26,
+          "symbol": "CHECK REACHABILITY",
+          "note": "confirm the entry point is wired; git log/show when a caller is missing"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 108,
+          "symbol": "Phase 3",
+          "note": "verifies reachability first"
+        }
       ],
       "status": "resolved"
     },
@@ -165,11 +356,28 @@
       "id": "term-mp-meta",
       "term": "meta (derived fields)",
       "category": "jargon",
-      "aka": ["meta", "meta.sharedGlossary", "meta.deadFlows", "meta.counts", "byType", "generatedFrom"],
+      "aka": [
+        "meta",
+        "meta.sharedGlossary",
+        "meta.deadFlows",
+        "meta.counts",
+        "byType",
+        "generatedFrom"
+      ],
       "definition": "The top-level block the merge computes and stamps onto flows.json, mostly derived rather than authored. Its fields: generatedFrom (the trace file names folded in), counts (flows/nodes/hotspots/terms totals plus byType per node type and unresolvedTerms), deadFlows (every non-live flow with its status/supersededBy), and sharedGlossary (the OUTPUT list of nodes that appear in more than one flow, with each node's flow count). title/repoRoot may also live here as fallbacks for the generator's flags.",
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 217, "symbol": "mergeTraceDocs", "note": "meta: generatedFrom, counts, byType, deadFlows, sharedGlossary" },
-        { "path": "docs/flows-schema.md", "line": 16, "symbol": "meta", "note": "derived counts, glossary, dead-flow index" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 217,
+          "symbol": "mergeTraceDocs",
+          "note": "meta: generatedFrom, counts, byType, deadFlows, sharedGlossary"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 16,
+          "symbol": "meta",
+          "note": "derived counts, glossary, dead-flow index"
+        }
       ],
       "status": "resolved"
     },
@@ -177,11 +385,24 @@
       "id": "term-mp-usages",
       "term": "usages",
       "category": "jargon",
-      "aka": ["usages[]", "per-flow usages"],
+      "aka": [
+        "usages[]",
+        "per-flow usages"
+      ],
       "definition": "The per-flow tactical accumulation on a shared node. Because one node id can appear in many flows, the merge keeps a single deduped node but appends a usages entry per source flow, each carrying that flow's own tactical explanation + anchors. This is how the explorer shows flow-specific tactical detail for a node touched by several flows, while the node keeps one canonical description.",
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 63, "symbol": "mergeTraceDocs", "note": "each source's tactical detail appended as a per-flow usages entry" },
-        { "path": "docs/METHOD.md", "line": 136, "symbol": "Phase 4", "note": "unifies shared nodes, accumulating a per-flow usages entry on each" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 63,
+          "symbol": "mergeTraceDocs",
+          "note": "each source's tactical detail appended as a per-flow usages entry"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 136,
+          "symbol": "Phase 4",
+          "note": "unifies shared nodes, accumulating a per-flow usages entry on each"
+        }
       ],
       "status": "resolved"
     },
@@ -189,11 +410,25 @@
       "id": "term-mp-model-source",
       "term": "Model source (resolution provenance)",
       "category": "jargon",
-      "aka": ["source", "resolveModel source", "model | traces | discovered | example"],
+      "aka": [
+        "source",
+        "resolveModel source",
+        "model | traces | discovered | example"
+      ],
       "definition": "How es-view obtained the model it is serving, recorded as meta.source by resolveModel and shown as provenance in the boot banner and /api/model payload. Precedence highest-first: 'model' (an explicit --model flows.json), 'traces' (merge a --traces dir in memory), 'discovered' (auto-found flows.json under cwd), or 'example' (the bundled toy-shop fallback). Distinct from the data-model layer's field-level provenance[] (sql-literal / migration / ...), which is owned by the data-model glossary.",
       "anchors": [
-        { "path": "src/server/resolve-model.mjs", "line": 65, "symbol": "resolveModel", "note": "precedence: --model > --traces > auto-discover > bundled example" },
-        { "path": "src/server/resolve-model.mjs", "line": 72, "symbol": "resolveModel", "note": "source = 'model' | 'traces' | 'discovered' | 'example'" }
+        {
+          "path": "src/server/resolve-model.mjs",
+          "line": 65,
+          "symbol": "resolveModel",
+          "note": "precedence: --model > --traces > auto-discover > bundled example"
+        },
+        {
+          "path": "src/server/resolve-model.mjs",
+          "line": 72,
+          "symbol": "resolveModel",
+          "note": "source = 'model' | 'traces' | 'discovered' | 'example'"
+        }
       ],
       "status": "resolved"
     },
@@ -201,11 +436,25 @@
       "id": "term-mp-recovery-phases",
       "term": "Recovery phases",
       "category": "concept",
-      "aka": ["the six phases", "phase 1-6", "inventory / triage / deep-trace / merge / glossary mining / data mapping / generate"],
+      "aka": [
+        "the six phases",
+        "phase 1-6",
+        "inventory / triage / deep-trace / merge / glossary mining / data mapping / generate"
+      ],
       "definition": "The staged pipeline the orchestrator runs to recover a model from code: (1) Inventory (parallel scouts enumerate every entry point) -> (2) Triage (the one human checkpoint agreeing coverage tiers) -> (3) Deep-trace (a pilot, then waves of trace agents) -> (4) Merge & consistency -> (5) Ubiquitous-language / glossary mining -> (5.5) Data mapping (optional) -> (6) Generate & verify. Each later phase runs against the merged model and re-runs the merge to fold its output back in.",
       "anchors": [
-        { "path": "prompts/00-orchestrator.md", "line": 47, "symbol": "Phases", "note": "Phase 1 Inventory through Phase 6 Generate" },
-        { "path": "docs/METHOD.md", "line": 3, "symbol": "The method", "note": "the reasoning behind the six phases" }
+        {
+          "path": "prompts/00-orchestrator.md",
+          "line": 47,
+          "symbol": "Phases",
+          "note": "Phase 1 Inventory through Phase 6 Generate"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 3,
+          "symbol": "The method",
+          "note": "the reasoning behind the six phases"
+        }
       ],
       "status": "resolved"
     },
@@ -213,11 +462,24 @@
       "id": "term-mp-orchestrator",
       "term": "Orchestrator",
       "category": "role",
-      "aka": ["the orchestrator", "driver"],
+      "aka": [
+        "the orchestrator",
+        "driver"
+      ],
       "definition": "The top-level agent that runs the recovery: it never reads the whole codebase itself, but dispatches sub-agents, persists their structured returns to disk, runs the merge/generate CLIs, and makes the judgment calls (triage, consistency). Keeping only conclusions and anchors (never file dumps) is what keeps its context clean across a system with dozens of flows. Not to be conflated with the Operator actor (the human who runs the CLIs / launches es-view).",
       "anchors": [
-        { "path": "prompts/00-orchestrator.md", "line": 3, "symbol": "orchestrator", "note": "dispatches sub-agents, keeps durable artifacts, makes judgment calls" },
-        { "path": "docs/METHOD.md", "line": 22, "symbol": "Why orchestration", "note": "the orchestrator never reads the codebase itself" }
+        {
+          "path": "prompts/00-orchestrator.md",
+          "line": 3,
+          "symbol": "orchestrator",
+          "note": "dispatches sub-agents, keeps durable artifacts, makes judgment calls"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 22,
+          "symbol": "Why orchestration",
+          "note": "the orchestrator never reads the codebase itself"
+        }
       ],
       "status": "resolved"
     },
@@ -225,11 +487,24 @@
       "id": "term-mp-scout",
       "term": "Scout",
       "category": "role",
-      "aka": ["inventory scout", "the five scouts"],
+      "aka": [
+        "inventory scout",
+        "the five scouts"
+      ],
       "definition": "A Phase-1 sub-agent that enumerates one lane of entry points so nothing is missing from the map. Five run in parallel: UI, Automations/background, API/auth/protocol, External integrations, and Data layer & implied aggregates. Their combined output is the flow-candidate inventory plus the shared-id glossary. Briefed read-only (inventory, don't mutate) but spawned as a recursion-capable type so they can chase high-signal pathways.",
       "anchors": [
-        { "path": "prompts/00-orchestrator.md", "line": 49, "symbol": "Phase 1", "note": "spawn the five scouts concurrently, each briefed read-only" },
-        { "path": "docs/METHOD.md", "line": 71, "symbol": "Phase 1", "note": "five scouts, five lanes" }
+        {
+          "path": "prompts/00-orchestrator.md",
+          "line": 49,
+          "symbol": "Phase 1",
+          "note": "spawn the five scouts concurrently, each briefed read-only"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 71,
+          "symbol": "Phase 1",
+          "note": "five scouts, five lanes"
+        }
       ],
       "status": "resolved"
     },
@@ -237,11 +512,24 @@
       "id": "term-mp-deep-trace-agent",
       "term": "Deep-trace agent",
       "category": "role",
-      "aka": ["trace agent", "tracer"],
+      "aka": [
+        "trace agent",
+        "tracer"
+      ],
       "definition": "A Phase-3 sub-agent that recovers one flow end to end: it verifies reachability, distrusts its hints (contradictions are the best findings), traces the main spine itself, records invariants and hotspots, and writes its own <flow-id>.json + .notes.md to the traces dir, returning only a short summary. It is a recursion root, not a leaf: it spawns its own sub-agents to chase hubs, contradictions, and unfamiliar subsystems. A pilot trace runs first to tune the schema/briefing before the waves.",
       "anchors": [
-        { "path": "prompts/00-orchestrator.md", "line": 83, "symbol": "Phase 3", "note": "each agent is a recursion root; writes two files itself" },
-        { "path": "prompts/03-trace-briefing.md", "line": 21, "symbol": "Method", "note": "trace end to end, verify reachability, record invariants/hotspots" }
+        {
+          "path": "prompts/00-orchestrator.md",
+          "line": 83,
+          "symbol": "Phase 3",
+          "note": "each agent is a recursion root; writes two files itself"
+        },
+        {
+          "path": "prompts/03-trace-briefing.md",
+          "line": 21,
+          "symbol": "Method",
+          "note": "trace end to end, verify reachability, record invariants/hotspots"
+        }
       ],
       "status": "resolved"
     },
@@ -249,11 +537,25 @@
       "id": "term-mp-recursion-protocol",
       "term": "Recursion protocol",
       "category": "concept",
-      "aka": ["recursive-exploration", "recursion is the spine", "fan-out"],
+      "aka": [
+        "recursive-exploration",
+        "recursion is the spine",
+        "fan-out"
+      ],
       "definition": "The shared protocol every agent in the tree inherits (prompts/recursive-exploration.md): a sub-agent is not a flat leaf but a recursion root that spawns its own children when it hits a high-signal pathway (a hub, a contradiction, an unfamiliar subsystem, a model-forking branch), and those may recurse further. Depth and fan-out are aggressive; convergence (a child that returns without changing the model) is the brake. The return contract is fixed - artifacts to files, conclusions + anchors back - so a deep subtree still lands in the parent's context as a short summary. Requires spawning agents as a type carrying the Agent tool (general-purpose/claude), on Opus.",
       "anchors": [
-        { "path": "prompts/00-orchestrator.md", "line": 18, "symbol": "recursion protocol", "note": "every sub-agent inherits prompts/recursive-exploration.md" },
-        { "path": "docs/METHOD.md", "line": 34, "symbol": "Recursion is the spine", "note": "dynamic tree; depth follows the signal; return contract fixed" }
+        {
+          "path": "prompts/00-orchestrator.md",
+          "line": 18,
+          "symbol": "recursion protocol",
+          "note": "every sub-agent inherits prompts/recursive-exploration.md"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 34,
+          "symbol": "Recursion is the spine",
+          "note": "dynamic tree; depth follows the signal; return contract fixed"
+        }
       ],
       "status": "resolved"
     },
@@ -261,12 +563,29 @@
       "id": "term-mp-demo",
       "term": "demo (BuildExample)",
       "category": "jargon",
-      "aka": ["npm run demo", "build-example.mjs", "BuildExample", "cmd-build-example"],
+      "aka": [
+        "npm run demo",
+        "build-example.mjs",
+        "BuildExample",
+        "cmd-build-example"
+      ],
       "definition": "A thin convenience wrapper (npm run demo -> scripts/build-example.mjs) that synchronously chains the merge CLI then the generate CLI over the bundled toy-shop example, so the shipped default explorer stays in sync with its trace set. The two child processes are blocking and inherit exit status, so a merge validation failure (exit 1) aborts before regeneration. It issues no state of its own; it delegates to Merge then Generate. Note it overwrites the shipped fallback model in place (see hot-example-overwrite-in-place).",
-      "relatedNodes": ["cmd-build-example"],
+      "relatedNodes": [
+        "cmd-build-example"
+      ],
       "anchors": [
-        { "path": "scripts/build-example.mjs", "line": 11, "symbol": "run", "note": "execFileSync('node', args, { stdio:'inherit' }) - synchronous, blocking" },
-        { "path": "package.json", "line": 31, "symbol": "scripts.demo", "note": "\"demo\": \"node scripts/build-example.mjs\"" }
+        {
+          "path": "scripts/build-example.mjs",
+          "line": 11,
+          "symbol": "run",
+          "note": "execFileSync('node', args, { stdio:'inherit' }) - synchronous, blocking"
+        },
+        {
+          "path": "package.json",
+          "line": 31,
+          "symbol": "scripts.demo",
+          "note": "\"demo\": \"node scripts/build-example.mjs\""
+        }
       ],
       "status": "resolved"
     }

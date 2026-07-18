@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const NODE_TYPES = new Set(['actor', 'command', 'aggregate', 'event', 'policy', 'readModel', 'externalSystem', 'invariant', 'server', 'database', 'table', 'column']);
+export const NODE_TYPES = new Set(['actor', 'command', 'aggregate', 'event', 'policy', 'readModel', 'externalSystem', 'invariant', 'datastore', 'field']);
 export const EDGE_VERBS = new Set(['issues', 'handled by', 'emits', 'triggers', 'updates', 'read by', 'reads', 'raises', 'enforces', 'calls', 'returns', 'persists to', 'projects from', 'writes', 'connects via']);
 const ANCHOR_REQUIRED = new Set(['command', 'aggregate', 'event', 'policy', 'readModel', 'invariant']);
 const TERM_STATUS = new Set(['resolved', 'partial', 'unresolved']);
@@ -19,13 +19,15 @@ const TERM_CATEGORIES = new Set(['concept', 'jargon', 'acronym', 'role', 'system
 // Data-model field lineage enums (see docs/flows-schema.md). Nonstandard values are warnings, not
 // errors, mirroring the forgiving treatment of nonstandard edge verbs.
 const FIELD_CONFIDENCE = new Set(['high', 'medium', 'low']);
-// Physical-storage containment: the expected parent type for each data node type. A node parented
-// at the wrong level would silently vanish from the containment tree, so we warn on it.
-const PARENT_LEVEL = { column: 'table', table: 'database', database: 'server' };
+// Physical-storage containment (the data-model layer is technology-neutral): a `datastore` nests
+// inside another `datastore` (server ▸ database ▸ table, or filesystem ▸ directory ▸ file, …); a
+// `field` hangs off a datastore, or off another field for nested records. A node parented at the
+// wrong level would silently vanish from the containment tree, so we warn on it.
+const PARENT_LEVEL = { datastore: new Set(['datastore']), field: new Set(['datastore', 'field']) };
 const FIELD_ROLES = new Set(['derived-from', 'filtered-by', 'joined-on', 'grouped-by', 'constant']);
 const FIELD_TRANSFORMS = new Set(['identity', 'transformation', 'aggregation', 'join', 'filter', 'lookup', 'constant']);
 // A field source ref that looks like a local physical node id must resolve to a known node.
-const LOCAL_REF = /^(col|tbl|db|srv)-/;
+const LOCAL_REF = /^(ds|fld)-/;
 
 /**
  * Validate a node's `fields[]` (data-model layer). Pushes into the shared errors/warnings arrays.
@@ -97,7 +99,7 @@ export function mergeTraceDocs(sources) {
           for (const f of n.fields) byName.set(f.name, f); // the data pass is authority on a field
           m.fields = [...byName.values()];
         }
-        for (const k of ['parent', 'engine', 'host', 'kind', 'schema', 'dataType']) {
+        for (const k of ['parent', 'storeKind', 'fieldKind', 'dataType', 'host', 'engine']) {
           if (n[k] !== undefined && m[k] === undefined) m[k] = n[k];
         }
         if (n.nullable !== undefined && m.nullable === undefined) m.nullable = n.nullable;
@@ -136,7 +138,7 @@ export function mergeTraceDocs(sources) {
         errors.push(`node ${n.id}: parent '${n.parent}' not in nodes`);
       } else {
         const want = PARENT_LEVEL[n.type];
-        if (want && p.type !== want) warnings.push(`node ${n.id}: ${n.type} parent '${n.parent}' should be a ${want}, not a ${p.type} (it will be dropped from the data-model tree)`);
+        if (want && !want.has(p.type)) warnings.push(`node ${n.id}: ${n.type} parent '${n.parent}' must be a ${[...want].join(' or ')} (it will be dropped from the data-model tree), not a ${p.type}`);
         // Walk up to catch a parent cycle (self-parent or a→b→a); parentChain would otherwise
         // produce a meaningless breadcrumb.
         const seen = new Set([n.id]);

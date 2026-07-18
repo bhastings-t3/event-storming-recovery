@@ -37,10 +37,8 @@
         "externalSystem": 5,
         "invariant": 8,
         "event": 10,
-        "server": 1,
-        "database": 1,
-        "table": 3,
-        "column": 5
+        "datastore": 5,
+        "field": 5
       }
     },
     "deadFlows": [],
@@ -97,8 +95,8 @@
         ]
       },
       {
-        "id": "tbl-flows-json",
-        "type": "table",
+        "id": "ds-tbl-flows-json",
+        "type": "datastore",
         "label": "flows.json",
         "description": "The persisted canonical model store. A single JSON file assembled and written by the merge, then read back by the es-view server (in-memory) and by the generator. Its 'columns' are the top-level JSON keys: nodes, flows, hotspots, terms, meta (+ version). The authoritative structure is docs/flows-schema.md; the merge code maps the in-memory object onto it.",
         "flowCount": 5,
@@ -524,10 +522,10 @@
           "name": "nodes",
           "conceptual": true,
           "dataType": "array<node>",
-          "derivation": "The deduped union of every trace's nodes keyed by global id. First occurrence seeds the node; on a re-seen id the merge keeps the longest description, unions fields[] by name (data-pass authoritative), appends provenance, carries physical attributes (parent/engine/host/kind/schema/dataType/nullable), and accumulates a per-flow `usages` entry. Transient `_src` is stripped on output.",
+          "derivation": "The deduped union of every trace's nodes keyed by global id. First occurrence seeds the node; on a re-seen id the merge keeps the longest description, unions fields[] by name (data-pass authoritative), appends provenance, carries physical attributes (parent/storeKind/fieldKind/dataType/host/nullable), and accumulates a per-flow `usages` entry. Transient `_src` is stripped on output.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "aggregation",
               "note": "deduped union by id across all traces"
@@ -559,7 +557,7 @@
           "derivation": "The accumulated flow objects across all traces, keyed by id, FIRST-WINS: a duplicate flow id is a merge ERROR (flows are never merged/unioned like nodes). Written verbatim minus the transient `_sourceFile` key.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "aggregation",
               "note": "first-wins accumulation by id; duplicate = error"
@@ -585,7 +583,7 @@
           "derivation": "The union of hotspot objects by id across traces, first-wins (a duplicate id is a warning, first kept).",
           "sources": [
             {
-              "ref": "col-flows-hotspots",
+              "ref": "fld-col-flows-hotspots",
               "role": "derived-from",
               "transform": "aggregation",
               "note": "first-wins union by id"
@@ -611,7 +609,7 @@
           "derivation": "The union of ubiquitous-language terms by id (authored by the glossary-mining phase), first-wins on duplicate, then sorted case-insensitively by `term`.",
           "sources": [
             {
-              "ref": "col-flows-terms",
+              "ref": "fld-col-flows-terms",
               "role": "derived-from",
               "transform": "aggregation",
               "note": "union by id then localeCompare sort"
@@ -637,13 +635,13 @@
           "derivation": "Regenerated tallies computed at merge time: { flows, nodes, hotspots, terms } sizes, unresolvedTerms, and a byType node-type histogram. Not stored input — recomputed from the assembled maps on every merge.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "aggregation",
               "note": "node count + byType histogram"
             },
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "aggregation",
               "note": "flow count"
@@ -669,13 +667,13 @@
           "derivation": "The cross-flow shared-concept index: nodes appearing in more than one flow, projected to { id, type, label, description, flowCount, flows } and sorted by flowCount descending. A join of per-flow membership (steps + edge endpoints) against the node set.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "grouped-by",
               "transform": "aggregation",
               "note": "membership tally across flows"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve id -> {type,label,description}"
@@ -701,7 +699,7 @@
           "derivation": "The dead/superseded-flow index: flows whose status is not 'live', projected to { id, status, supersededBy, name }.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "filtered-by",
               "transform": "filter",
               "note": "status !== 'live'"
@@ -797,7 +795,7 @@
           "derivation": "The entire agg-model object (nodes/flows/hotspots/terms/meta) handed back verbatim by GET /api/model. The server resolves it once at startup and holds it in memory; the payload is a straight passthrough of the resolved model, not a re-query. The MCP list_model tool exposes a compact projection of the same object (flows: id/name/status; nodes: id/label/type).",
           "sources": [
             {
-              "ref": "tbl-flows-json",
+              "ref": "ds-tbl-flows-json",
               "role": "derived-from",
               "transform": "identity",
               "note": "resolved from the file (or in-memory merge of --traces) and passed through"
@@ -919,13 +917,13 @@
           "derivation": "The left sidebar's grouped flow list. sidebarGroups(model, groupMode, nodeById) either keeps the two tier buckets (tier !== 2 vs tier === 2) or, in 'actor'/'aggregate' pivot mode, walks every flow's node ids (flowNodeIds = steps + edge endpoints), buckets flows under each actor/aggregate node of that type, and sorts groups by node label. Pure client-side derivation over the one payload; switching group mode is React state only, no re-fetch.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "transformation",
               "note": "flows grouped by tier or pivoted per actor/aggregate"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve pivot node ids -> actor/aggregate labels via nodeById"
@@ -958,13 +956,13 @@
           "derivation": "The pan/zoom board for the currently selected flow: currentFlow = model.flows.find(id), rendered as its ordered sticky lane (flow.steps) with labeled edges, plus the flow's hotspots and tier-2 instances. Step and edge ids are resolved to sticky nodes via the memoized nodeById index. Client-side; selecting a flow changes React state only, never re-fetches.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "transformation",
               "note": "the selected flow's steps + edges + hotspots"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve step/edge ids to stickies for the lane"
@@ -1078,7 +1076,7 @@
           "derivation": "The server > database > table > column containment forest built from the flat physical node list by following parent pointers, each table carrying its child columns (label + dataType). Nodes with a missing parent are re-homed under a synthetic (unattached) bucket so nothing is silently dropped.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "filtered-by",
               "transform": "filter",
               "note": "physical nodes (srv/db/tbl/col) grouped via dataModelTree over parent pointers"
@@ -1104,13 +1102,13 @@
           "derivation": "Per table, the behavioral nodes that write/read/project it and the storage verb, gathered from every flow's edges pointing at that table (deduped by node+verb).",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "joined-on",
               "transform": "join",
               "note": "tableConsumers walks flow edges to each table"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve consumer ids to {type,label}"
@@ -1194,7 +1192,7 @@
           "derivation": "The ubiquitous-language dictionary. IMPORTANT: the SPA Glossary tab renders model.NODES (the stickies), not the curated model.terms array. Glossary.jsx filters model.nodes by the active type chips and a label+description query, optionally keeps only nodes appearing in more than one flow (sharedOnly, via nodeFlows), sorts by label case-insensitively, and interleaves A-Z letter headers; the heading literally counts '{n} of {model.nodes.length} terms'. (The curated model.terms array is instead rendered by the STATIC explorer.html glossary -- see rm-explorer.glossary / col-flows-terms -- not by this SPA tab.)",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "transformation",
               "note": "filter/sort stickies into an A-Z dictionary; sharedOnly keeps multi-flow nodes"
@@ -1291,7 +1289,7 @@
           "derivation": "Every sticky node in the model as a filterable grid. Gallery filters model.nodes by the active type-chip set and a text query over label + description + palette type name, then sorts by palette type order (types.indexOf) then label. Pure client-side re-derivation of the one payload, no server call. Each card also surfaces nodeFlows(model, id).length (how many flows the node appears in) and a 'retired' badge when all its flows are dead.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "transformation",
               "note": "filter by type chips + query, sort by palette type then label"
@@ -1318,7 +1316,7 @@
           "derivation": "The filter/sort type vocabulary: galleryTypes(model) lists the node types actually present in the model, in PALETTE order (excluding hotspot). Drives both the chip filter row and the grid's primary sort key.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "grouped-by",
               "transform": "aggregation",
               "note": "distinct node.type values present, palette-ordered"
@@ -1677,19 +1675,19 @@
           "name": "dotDigraph",
           "conceptual": true,
           "dataType": "string",
-          "derivation": "The full Graphviz DOT source: one `subgraph cluster_<flowId>` per flow, node ids namespaced `<flowId>__<nodeId>`, stickies colored by type from PALETTE, edges labeled with their verb, and the first tactical anchor attached as a vscode:// URL. Dead/superseded flows render dashed with a [STATUS] suffix. Physical storage nodes (server/database/table/column) and any edge touching them are filtered out via isDataId, so the DOT view stays purely behavioral.",
+          "derivation": "The full Graphviz DOT source: one `subgraph cluster_<flowId>` per flow, node ids namespaced `<flowId>__<nodeId>`, stickies colored by type from PALETTE, edges labeled with their verb, and the first tactical anchor attached as a vscode:// URL. Dead/superseded flows render dashed with a [STATUS] suffix. Physical storage nodes (datastore/field) and any edge touching them are filtered out via isDataId, so the DOT view stays purely behavioral.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "transformation",
               "note": "one cluster per flow; edges labeled by verb"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "filtered-by",
               "transform": "filter",
-              "note": "isDataId drops srv/db/tbl/col nodes"
+              "note": "isDataId drops datastore/field nodes"
             }
           ],
           "confidence": "high",
@@ -1812,7 +1810,7 @@
           "derivation": "A frozen JSON.stringify copy of the entire agg-model inlined into the page as `const MODEL` (with `<` escaped to \\u003c so the inline <script> stays safe). The SPA reads ONLY from this constant, never fetching flows.json, so the artifact is a frozen snapshot that drifts once the store changes (see hot-frozen-explorer-snapshot).",
           "sources": [
             {
-              "ref": "tbl-flows-json",
+              "ref": "ds-tbl-flows-json",
               "role": "derived-from",
               "transform": "identity",
               "note": "serialized verbatim copy at generation time"
@@ -1844,13 +1842,13 @@
           "derivation": "Flows tab: the sidebar (flows grouped by tier / pivoted by actor or aggregate) plus the pan/zoom board rendering the selected flow's sticky lane and edges. Derived client-side from the embedded model's flows + nodes.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "transformation",
               "note": "grouped/pivoted for the sidebar + board"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve step/edge ids to stickies"
@@ -1868,7 +1866,7 @@
           "derivation": "Gallery tab: nodes grouped by type. Derived from the embedded model's node set.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "grouped-by",
               "transform": "transformation",
               "note": "galleryTypes(model) buckets nodes by type"
@@ -1883,13 +1881,13 @@
           "name": "dataModel",
           "conceptual": true,
           "dataType": "object",
-          "derivation": "Data model tab: the physical server/database/table/column containment tree plus the fields[] returned by each read model/aggregate. Derived from the embedded model's physical nodes and their parent chains and from field lineage.",
+          "derivation": "Data model tab: the physical datastore/field containment tree plus the fields[] returned by each read model/aggregate. Derived from the embedded model's physical nodes and their parent chains and from field lineage.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "filtered-by",
               "transform": "filter",
-              "note": "physical nodes (srv/db/tbl/col) + fields[] on rm/agg nodes"
+              "note": "physical nodes (datastore/field) + fields[] on rm/agg nodes"
             }
           ],
           "confidence": "medium",
@@ -1904,7 +1902,7 @@
           "derivation": "Glossary tab: the ubiquitous-language terms, with flagged (partial/unresolved) terms rendered hotspot-style. Derived from the embedded model's terms.",
           "sources": [
             {
-              "ref": "col-flows-terms",
+              "ref": "fld-col-flows-terms",
               "role": "derived-from",
               "transform": "identity",
               "note": "terms rendered as a glossary"
@@ -1922,7 +1920,7 @@
           "derivation": "Overview tab: headline counts and the shared-concept / dead-flow summaries. Derived from the embedded model's meta block.",
           "sources": [
             {
-              "ref": "col-flows-meta",
+              "ref": "fld-col-flows-meta",
               "role": "derived-from",
               "transform": "identity",
               "note": "counts + sharedGlossary + deadFlows surfaced"
@@ -2512,7 +2510,7 @@
           "derivation": "The full grounded context of the selected node (the same projection as get_node): label/type/description/fields/breadcrumb/flows/enforces plus anchors with live source. A friendly 'ask the user to click a node' message when nothing is selected, or a 'no longer in the model' note when the selected id is stale.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "transformation",
               "note": "buildNodeContext(sel.nodeId) from the model"
@@ -2606,7 +2604,7 @@
           "derivation": "The ubiquitous-language label of the node, looked up by id in the in-memory model via indexes.nodeById.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "lookup",
               "note": "node.label by id"
@@ -2632,7 +2630,7 @@
           "derivation": "The node's event-storming type (actor/command/aggregate/.../table/column), taken from the resolved node.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "lookup",
               "note": "node.type by id"
@@ -2650,7 +2648,7 @@
           "derivation": "The 1-3 sentence domain description of the node, taken from the resolved node.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "lookup",
               "note": "node.description by id"
@@ -2668,7 +2666,7 @@
           "derivation": "The node's own conceptual fields[] (read-model/aggregate lineage). Each field's storage sources[].ref that looks like a physical id is resolved via nodeById to the column's label for display.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "transformation",
               "note": "n.fields mapped; each sources[].ref resolved to a column label via nodeById"
@@ -2694,7 +2692,7 @@
           "derivation": "For a physical data node, the containment chain [server, ..., node] built by walking the node's parent pointer to the root; null for behavioral nodes.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "lookup",
               "note": "parentChain over parent pointers"
@@ -2720,7 +2718,7 @@
           "derivation": "For a table node, its child column nodes (id, label, dataType); null otherwise. A filter over the flat node list.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "filtered-by",
               "transform": "filter",
               "note": "nodes where type=column and parent=this table"
@@ -2738,13 +2736,13 @@
           "derivation": "For a table node, the behavioral nodes that consume it (via flow edges to the table) with the verb; for a column node, the read-model/aggregate fields whose sources[].ref points at the column.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "joined-on",
               "transform": "join",
               "note": "tableConsumers walks flow edges to the table"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "columnConsumers scans fields[].sources[].ref across nodes"
@@ -2770,7 +2768,7 @@
           "derivation": "For a behavioral node, the physical tables it writes/reads/projects, resolved from its outgoing flow edges whose target is a data node, with the storage verb.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "join",
               "note": "nodeStorageLinks over flow edges to data nodes"
@@ -2796,7 +2794,7 @@
           "derivation": "The flows the node appears in (membership by steps + both ends of every edge), each projected to { id, name, status, kind }.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "grouped-by",
               "transform": "aggregation",
               "note": "nodeFlows scans steps + edge endpoints across all flows"
@@ -2822,13 +2820,13 @@
           "derivation": "The invariant enforces relation: for an aggregate, the invariants it enforces; for an invariant, the aggregates that enforce it. Gathered across every flow's aggregate--enforces-->invariant edges; null for other node types.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "joined-on",
               "transform": "join",
               "note": "enforcesRelation over enforces edges"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve related ids to {type,label}"
@@ -2854,7 +2852,7 @@
           "derivation": "Each source anchor { path, line, symbol, note, flow } from the node's tactical/usages, EACH paired with the real code excerpt (anchored line +/- 8) read live from disk. The grounding that turns a label into actual code.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "lookup",
               "note": "anchor metadata from node.tactical.anchors / usages"
@@ -2956,7 +2954,7 @@
           "derivation": "Flow identity + metadata handed back verbatim: id, name, status (default live), kind, summary, trigger, supersededBy.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "identity",
               "note": "flow fields off model.flows"
@@ -2974,13 +2972,13 @@
           "derivation": "The flow's edges as labeled verbs; each end's id is resolved to the node's label (fromLabel/toLabel) for readable rendering.",
           "sources": [
             {
-              "ref": "col-flows-flows",
+              "ref": "fld-col-flows-flows",
               "role": "derived-from",
               "transform": "transformation",
               "note": "f.edges mapped to {from,to,verb}"
             },
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "joined-on",
               "transform": "join",
               "note": "resolve from/to ids to labels via nodeById"
@@ -2998,7 +2996,7 @@
           "derivation": "The flow's hotspots (open questions) projected to { id, label, description }, resolved from the flow's hotspot ids.",
           "sources": [
             {
-              "ref": "col-flows-hotspots",
+              "ref": "fld-col-flows-hotspots",
               "role": "joined-on",
               "transform": "lookup",
               "note": "hotspotById lookup per f.hotspots id"
@@ -3016,7 +3014,7 @@
           "derivation": "Every node the flow touches (steps + edge endpoints), each fully grounded via the node-context projection (fields/breadcrumb/anchors with live source).",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "transformation",
               "note": "buildNodeContext per flowNodeIds"
@@ -4354,7 +4352,7 @@
           "derivation": "The item's display label returned alongside the markdown ({ type, id, label, markdown }) so the caller can title the paste.",
           "sources": [
             {
-              "ref": "col-flows-nodes",
+              "ref": "fld-col-flows-nodes",
               "role": "derived-from",
               "transform": "lookup",
               "note": "node/flow/hotspot label by id"
@@ -4892,8 +4890,8 @@
       ]
     },
     {
-      "id": "srv-local-fs",
-      "type": "server",
+      "id": "ds-srv-local-fs",
+      "type": "datastore",
       "label": "localhost/fs",
       "inferred": false,
       "engine": "filesystem",
@@ -4902,13 +4900,14 @@
         "assumed"
       ],
       "description": "The local filesystem/host the es-merge, es-generate CLIs and the es-view server run on. This is NOT a networked database server: `engine: filesystem` marks that the durable store is plain files on disk reached through node:fs (readFileSync/writeFileSync), addressed by path rather than a connection string. 'localhost/fs' is a synthetic host label; there is no real host/instance to recover because there is no connection string.",
+      "storeKind": "filesystem",
       "usages": []
     },
     {
-      "id": "db-es-model-dir",
-      "type": "database",
+      "id": "ds-db-es-model-dir",
+      "type": "datastore",
       "label": "examples/event-storming-recovery/model",
-      "parent": "srv-local-fs",
+      "parent": "ds-srv-local-fs",
       "inferred": false,
       "ownedBy": null,
       "provenance": [
@@ -4932,6 +4931,7 @@
           }
         ]
       },
+      "storeKind": "directory",
       "usages": [
         {
           "flow": "model-store.data",
@@ -4954,11 +4954,10 @@
       ]
     },
     {
-      "id": "tbl-flows-json",
-      "type": "table",
+      "id": "ds-tbl-flows-json",
+      "type": "datastore",
       "label": "flows.json",
-      "parent": "db-es-model-dir",
-      "kind": "table",
+      "parent": "ds-db-es-model-dir",
       "inferred": false,
       "provenance": [
         "orm-mapping",
@@ -4988,6 +4987,7 @@
           }
         ]
       },
+      "storeKind": "file",
       "usages": [
         {
           "flow": "model-store.data",
@@ -5016,11 +5016,10 @@
       ]
     },
     {
-      "id": "tbl-explorer-html",
-      "type": "table",
+      "id": "ds-tbl-explorer-html",
+      "type": "datastore",
       "label": "explorer.html",
-      "parent": "db-es-model-dir",
-      "kind": "view",
+      "parent": "ds-db-es-model-dir",
       "inferred": false,
       "provenance": [
         "orm-mapping"
@@ -5043,6 +5042,7 @@
           }
         ]
       },
+      "storeKind": "file",
       "usages": [
         {
           "flow": "model-store.data",
@@ -5065,18 +5065,17 @@
       ]
     },
     {
-      "id": "tbl-flows-dot",
-      "type": "table",
+      "id": "ds-tbl-flows-dot",
+      "type": "datastore",
       "label": "flows.dot",
-      "parent": "db-es-model-dir",
-      "kind": "view",
+      "parent": "ds-db-es-model-dir",
       "inferred": false,
       "provenance": [
         "orm-mapping"
       ],
       "description": "A derived view artifact: the Graphviz digraph, one cluster per flow with event-storming-colored stickies and labeled edges, for offline rendering (`dot -Tsvg`). A materialized VIEW of tbl-flows-json with the physical-storage nodes (and any edge touching them) deliberately filtered out.",
       "tactical": {
-        "explanation": "Built by the DOT block in tools/generate-views.js (from line 64); server/database/table/column nodes are excluded via isDataId (37, 73-74). Written by writeFileSync(outDir/flows.dot) at line 91.",
+        "explanation": "Built by the DOT block in tools/generate-views.js (from line 64); datastore/field nodes are excluded via isDataId (37, 73-74). Written by writeFileSync(outDir/flows.dot) at line 91.",
         "anchors": [
           {
             "path": "tools/generate-views.js",
@@ -5092,10 +5091,11 @@
           }
         ]
       },
+      "storeKind": "file",
       "usages": [
         {
           "flow": "model-store.data",
-          "explanation": "Built by the DOT block in tools/generate-views.js (from line 64); server/database/table/column nodes are excluded via isDataId (37, 73-74). Written by writeFileSync(outDir/flows.dot) at line 91.",
+          "explanation": "Built by the DOT block in tools/generate-views.js (from line 64); datastore/field nodes are excluded via isDataId (37, 73-74). Written by writeFileSync(outDir/flows.dot) at line 91.",
           "anchors": [
             {
               "path": "tools/generate-views.js",
@@ -5114,10 +5114,10 @@
       ]
     },
     {
-      "id": "col-flows-nodes",
-      "type": "column",
+      "id": "fld-col-flows-nodes",
+      "type": "field",
       "label": "nodes",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<node>",
       "nullable": false,
       "inferred": false,
@@ -5126,13 +5126,14 @@
         "migration"
       ],
       "description": "Top-level JSON key: the deduped array of sticky/physical nodes shared across flows. Assembled by the merge as [...nodes.values()] with transient _src stripped; structure per docs/flows-schema.md (Node).",
+      "fieldKind": "key",
       "usages": []
     },
     {
-      "id": "col-flows-flows",
-      "type": "column",
+      "id": "fld-col-flows-flows",
+      "type": "field",
       "label": "flows",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<flow>",
       "nullable": false,
       "inferred": false,
@@ -5141,13 +5142,14 @@
         "migration"
       ],
       "description": "Top-level JSON key: the array of flow objects (steps, edges, hotspots, instances). Assembled by the merge as [...flows.values()] with transient _sourceFile stripped; structure per docs/flows-schema.md (Flow).",
+      "fieldKind": "key",
       "usages": []
     },
     {
-      "id": "col-flows-hotspots",
-      "type": "column",
+      "id": "fld-col-flows-hotspots",
+      "type": "field",
       "label": "hotspots",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<hotspot>",
       "nullable": false,
       "inferred": false,
@@ -5156,13 +5158,14 @@
         "migration"
       ],
       "description": "Top-level JSON key: the array of hotspot objects referenced from flows. Assembled by the merge as [...hotspots.values()]; structure per docs/flows-schema.md (Hotspot).",
+      "fieldKind": "key",
       "usages": []
     },
     {
-      "id": "col-flows-terms",
-      "type": "column",
+      "id": "fld-col-flows-terms",
+      "type": "field",
       "label": "terms",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "array<term>",
       "nullable": false,
       "inferred": false,
@@ -5171,13 +5174,14 @@
         "migration"
       ],
       "description": "Top-level JSON key: the ubiquitous-language term array authored by the glossary-mining phase, sorted case-insensitively by term. Structure per docs/flows-schema.md (Term).",
+      "fieldKind": "key",
       "usages": []
     },
     {
-      "id": "col-flows-meta",
-      "type": "column",
+      "id": "fld-col-flows-meta",
+      "type": "field",
       "label": "meta",
-      "parent": "tbl-flows-json",
+      "parent": "ds-tbl-flows-json",
       "dataType": "object",
       "nullable": false,
       "inferred": false,
@@ -5186,6 +5190,7 @@
         "migration"
       ],
       "description": "Top-level JSON key: derived/regenerable metadata { generatedFrom, counts, deadFlows, sharedGlossary } computed at merge time (plus title/repoRoot fallbacks). Not hand-authored; recomputed on every merge.",
+      "fieldKind": "key",
       "usages": []
     },
     {
@@ -5829,17 +5834,17 @@
         },
         {
           "from": "rm-flow-board",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-gallery",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-glossary",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
@@ -6064,22 +6069,22 @@
         },
         {
           "from": "rm-current-selection",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-node-context",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-flow-context",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-data-model",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         }
       ],
@@ -6387,22 +6392,22 @@
         },
         {
           "from": "rm-flows-dot",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "rm-explorer",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         },
         {
           "from": "cmd-generate-views",
-          "to": "tbl-flows-dot",
+          "to": "ds-tbl-flows-dot",
           "verb": "writes"
         },
         {
           "from": "cmd-generate-views",
-          "to": "tbl-explorer-html",
+          "to": "ds-tbl-explorer-html",
           "verb": "writes"
         }
       ],
@@ -6455,7 +6460,7 @@
         },
         {
           "from": "rm-item-markdown",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "projects from"
         }
       ],
@@ -6558,7 +6563,7 @@
         },
         {
           "from": "agg-model",
-          "to": "tbl-flows-json",
+          "to": "ds-tbl-flows-json",
           "verb": "persists to"
         }
       ],

@@ -4,7 +4,7 @@
 // anchored to actual files, not just a label.
 import {
   nodeFlows, enforcesRelation, nodeUsages, flowNodeIds,
-  isDataNode, parentChain, tableConsumers, columnConsumers, nodeStorageLinks, dataModelTree,
+  isDataNode, parentChain, datastoreConsumers, fieldConsumers, nodeStorageLinks, dataModelTree, isRecordSet,
 } from '../lib/selectors.mjs';
 import { PALETTE } from '../lib/palette.mjs';
 import { readSource } from './source.mjs';
@@ -34,20 +34,20 @@ export function buildNodeContext(services, nodeId, { includeSource = true } = {}
     confidence: fld.confidence || null,
     derivation: fld.derivation || '',
     sources: (fld.sources || []).map((s) => {
-      const col = /^(col|tbl|db|srv)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+      const col = /^(ds|fld)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
       return { ref: s.ref || null, label: col ? col.label : (s.ref || null), role: s.role || null, transform: s.transform || null, note: s.note || null };
     }),
   }));
 
-  // Physical-storage grounding: containment breadcrumb, columns, and what depends on this node.
-  const breadcrumb = dataNode ? parentChain(nodeById, n).map((c) => ({ id: c.id, type: c.type, label: c.label })) : null;
-  const columns = n.type === 'table'
-    ? model.nodes.filter((x) => x.type === 'column' && x.parent === n.id).map((c) => ({ id: c.id, label: c.label, dataType: c.dataType || null }))
+  // Physical-storage grounding: containment breadcrumb, contained fields, and what depends on it.
+  const breadcrumb = dataNode ? parentChain(nodeById, n).map((c) => ({ id: c.id, type: c.type, label: c.label, storeKind: c.storeKind || c.fieldKind || null })) : null;
+  const contained = n.type === 'datastore'
+    ? model.nodes.filter((x) => x.type === 'field' && x.parent === n.id).map((c) => ({ id: c.id, label: c.label, dataType: c.dataType || null, fieldKind: c.fieldKind || null }))
     : null;
-  const usedBy = n.type === 'table'
-    ? tableConsumers(model, nodeById, n.id).map((c) => ({ id: c.node.id, label: c.node.label, type: c.node.type, verb: c.verb }))
-    : n.type === 'column'
-      ? columnConsumers(model, n.id).map((c) => ({ id: c.node.id, label: c.node.label, type: c.node.type, verb: 'field ' + c.field.name }))
+  const usedBy = n.type === 'datastore'
+    ? datastoreConsumers(model, nodeById, n.id).map((c) => ({ id: c.node.id, label: c.node.label, type: c.node.type, verb: c.verb }))
+    : n.type === 'field'
+      ? fieldConsumers(model, n.id).map((c) => ({ id: c.node.id, label: c.node.label, type: c.node.type, verb: 'field ' + c.field.name }))
       : null;
   const storage = !dataNode ? nodeStorageLinks(model, nodeById, n.id).map((s) => ({ id: s.node.id, label: s.node.label, verb: s.verb })) : null;
 
@@ -69,12 +69,13 @@ export function buildNodeContext(services, nodeId, { includeSource = true } = {}
     ownedBy: n.ownedBy || null,
     synchronous: !!n.synchronous,
     provenance: n.provenance || null,
-    engine: n.engine || null,
+    storeKind: n.storeKind || null,
+    fieldKind: n.fieldKind || null,
     host: n.host || null,
-    kind: n.kind || null,
+    engine: n.engine || null,
     fields,
     breadcrumb,
-    columns,
+    contained,
     usedBy,
     storage,
     flows,
@@ -94,8 +95,9 @@ export function renderNodeContextMarkdown(ctx) {
   if (ctx.inferred) tags.push('inferred from code');
   if (ctx.ownedBy) tags.push('state owned by ' + ctx.ownedBy);
   if (ctx.synchronous) tags.push('synchronous inline reaction');
+  if (ctx.storeKind) tags.push(ctx.storeKind);
+  if (ctx.fieldKind) tags.push(ctx.fieldKind);
   if (ctx.engine) tags.push(ctx.engine);
-  if (ctx.kind === 'view') tags.push('view');
   for (const pv of (ctx.provenance || [])) tags.push(pv);
   if (tags.length) out.push(`_${tags.join(' · ')}_`);
 
@@ -113,8 +115,8 @@ export function renderNodeContextMarkdown(ctx) {
     }
   }
 
-  if (ctx.columns && ctx.columns.length) {
-    out.push(`\n**Columns (${ctx.columns.length}):** ` + ctx.columns.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', '));
+  if (ctx.contained && ctx.contained.length) {
+    out.push(`\n**Fields (${ctx.contained.length}):** ` + ctx.contained.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', '));
   }
   if (ctx.usedBy && ctx.usedBy.length) {
     out.push(`\n**Used by:**`);
@@ -233,35 +235,28 @@ export function renderHotspotMarkdown(hc) {
   return out.join('\n');
 }
 
-/** Render the recovered physical data model (server ▸ database ▸ table ▸ column) as markdown,
- * with the behavioral nodes that touch each table. The storage the code actually uses. */
+/** Render the recovered data model as markdown: the datastore containment tree (whatever kind of
+ * storage it is) with the behavioral nodes that touch each record set. The storage the code uses. */
 export function renderDataModelMarkdown(services) {
   const { model, indexes } = services;
-  const { servers, unattached } = dataModelTree(model, indexes.nodeById);
-  const dataCount = model.nodes.filter((n) => ['server', 'database', 'table', 'column'].includes(n.type)).length;
-  if (!dataCount) return '_No data model recovered yet. Run the data-mapping phase to populate servers, tables, columns, and field lineage._';
+  const nodeById = indexes.nodeById;
+  const { roots } = dataModelTree(model, nodeById);
+  const dataCount = model.nodes.filter((n) => n.type === 'datastore' || n.type === 'field').length;
+  if (!dataCount) return '_No data model recovered yet. Run the data-mapping phase to populate data stores and field lineage._';
   const out = ['# Data model', ''];
-  const renderTable = (t, columns) => {
-    const consumers = tableConsumers(model, indexes.nodeById, t.id);
-    out.push(`  - **${t.schema ? t.schema + '.' + t.label : t.label}** _(${t.kind === 'view' ? 'view' : 'table'})_`);
-    if (columns.length) out.push(`      - columns: ${columns.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', ')}`);
-    for (const c of consumers) out.push(`      - ${c.node.label} _(${c.node.type})_ — ${c.verb}`);
+  const kindOf = (n) => n.storeKind || 'store';
+  const walk = (t, depth) => {
+    const { node: ds, stores, fields } = t;
+    const pad = '  '.repeat(depth);
+    const header = depth === 0 ? `## ${ds.label}` : `${pad}- **${ds.label}**`;
+    out.push(`${header} _(${kindOf(ds)})_${ds.host ? ` — \`${ds.host}\`` : ''}`);
+    if (fields.length) out.push(`${pad}  - fields: ${fields.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', ')}`);
+    if (isRecordSet(model, nodeById, ds)) {
+      for (const c of datastoreConsumers(model, nodeById, ds.id)) out.push(`${pad}  - ${c.node.label} _(${c.node.type})_ — ${c.verb}`);
+    }
+    for (const s of stores) walk(s, depth + 1);
   };
-  for (const { node: s, databases } of servers) {
-    out.push(`## ${s.label}${s.engine ? ` _(${s.engine})_` : ''}${s.host ? ` — \`${s.host}\`` : ''}`);
-    for (const { node: db, tables } of databases) {
-      out.push(`- database **${db.label}**`);
-      for (const { node: t, columns } of tables) renderTable(t, columns);
-    }
-  }
-  if (unattached && (unattached.tables.length || unattached.databases.length)) {
-    out.push(`## (unattached — no server/connection recovered)`);
-    for (const { node: db, tables } of unattached.databases) {
-      out.push(`- database **${db.label}**`);
-      for (const { node: t, columns } of tables) renderTable(t, columns);
-    }
-    for (const { node: t, columns } of unattached.tables) renderTable(t, columns);
-  }
+  for (const r of roots) walk(r, 0);
   return out.join('\n');
 }
 

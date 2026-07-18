@@ -30,10 +30,10 @@ const title = argVal('--title', (model.meta && model.meta.title) || 'Event Storm
 const nodeById = new Map(model.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(model.hotspots.map(h => [h.id, h]));
 
-// Physical storage node types (server > database > table > column). They are a substrate for the
-// behavioral model, not steps in a flow, so the flow board + DOT exclude them and any edge touching
-// them; the links survive in the model for the Data-model tab and the detail panel.
-const DATA_TYPES = new Set(['server', 'database', 'table', 'column']);
+// Technology-neutral storage node types (datastore, field). They are a substrate for the behavioral
+// model, not steps in a flow, so the flow board + DOT exclude them and any edge touching them by a
+// TYPE test; the links survive in the model for the Data-model tab and the detail panel.
+const DATA_TYPES = new Set(['datastore', 'field']);
 const isDataId = id => { const n = nodeById.get(id); return n && DATA_TYPES.has(n.type); };
 
 // Event-storming palette for a dark board. Each sticky's TEXT is a darker tone of its OWN
@@ -48,10 +48,8 @@ const PALETTE = {
   readModel:      { fill: '#6FC993', edge: '#358a5a', text: '#124a2c', name: 'Read Model' },
   externalSystem: { fill: '#E68DAF', edge: '#b05378', text: '#59213b', name: 'External System' },
   invariant:      { fill: '#26262e', edge: '#42424e', text: '#b7b7c2', name: 'Invariant' },
-  server:         { fill: '#2b323c', edge: '#464f5d', text: '#a5b2c4', name: 'Server' },
-  database:       { fill: '#3c4a5a', edge: '#5a6d84', text: '#b6c4d6', name: 'Database' },
-  table:          { fill: '#6f92b3', edge: '#3f5a76', text: '#16293c', name: 'Table' },
-  column:         { fill: '#c3d3e2', edge: '#7f96ab', text: '#2c3e50', name: 'Column' },
+  datastore:      { fill: '#6f92b3', edge: '#3f5a76', text: '#16293c', name: 'Data store' },
+  field:          { fill: '#c3d3e2', edge: '#7f96ab', text: '#2c3e50', name: 'Field' },
   hotspot:        { fill: '#E5645E', edge: '#a83530', text: '#4c110e', name: 'Hotspot' },
 };
 
@@ -442,9 +440,9 @@ const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
 let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 'tier';
 
-// Physical storage node types (server > database > table > column) — a substrate the behavioral
-// model anchors into. Kept out of the flow board; surfaced in the Data model tab + detail panel.
-const DATA_TYPE_SET = new Set(['server', 'database', 'table', 'column']);
+// Technology-neutral storage node types (datastore, field) — a substrate the behavioral model
+// anchors into. Kept out of the flow board; surfaced in the Data model tab + detail panel.
+const DATA_TYPE_SET = new Set(['datastore', 'field']);
 const isDataNode = n => n && DATA_TYPE_SET.has(n.type);
 const CONF_COLOR = { high: '#6FC993', medium: '#E9A23B', low: '#E5645E' };
 
@@ -1063,11 +1061,11 @@ function parentChain(node) {
   while (cur && !seen.has(cur.id)) { seen.add(cur.id); chain.unshift(cur); cur = cur.parent ? nodeById.get(cur.parent) : null; }
   return chain;
 }
-// Behavioral nodes that touch a given table, via flow edges. Returns [{ node, verb }] deduped.
-function tableConsumers(tableId) {
+// Behavioral nodes that touch a given datastore, via flow edges. Returns [{ node, verb }] deduped.
+function datastoreConsumers(storeId) {
   const seen = new Set(), out = [];
   for (const f of MODEL.flows) for (const e of (f.edges || [])) {
-    if (e.to !== tableId) continue;
+    if (e.to !== storeId) continue;
     const from = nodeById.get(e.from);
     if (!from || isDataNode(from)) continue;
     const key = e.from + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
@@ -1075,15 +1073,15 @@ function tableConsumers(tableId) {
   }
   return out;
 }
-// Read-model/aggregate fields that draw from a given column. Returns [{ node, field }].
-function columnConsumers(columnId) {
+// Read-model/aggregate fields that draw from a given stored field. Returns [{ node, field }].
+function fieldConsumers(fieldId) {
   const out = [];
   for (const n of MODEL.nodes) for (const fld of (n.fields || [])) {
-    if ((fld.sources || []).some(s => s.ref === columnId)) out.push({ node: n, field: fld });
+    if ((fld.sources || []).some(s => s.ref === fieldId)) out.push({ node: n, field: fld });
   }
   return out;
 }
-// Tables a behavioral node writes/reads/projects, via its flow edges. Returns [{ node: table, verb }].
+// Datastores a behavioral node writes/reads/projects, via its flow edges. Returns [{ node, verb }].
 function nodeStorageLinks(nodeId) {
   const seen = new Set(), out = [];
   for (const f of MODEL.flows) for (const e of (f.edges || [])) {
@@ -1095,34 +1093,69 @@ function nodeStorageLinks(nodeId) {
   }
   return out;
 }
-// Build the server > database > table > column containment forest from the flat node list.
+// Build the datastore containment forest from the flat node list. Each datastore subtree carries its
+// child datastores (recursively) and the fields parented directly to it. Arbitrary depth: the same
+// shape holds server▸database▸table▸column, filesystem▸directory▸file▸key, broker▸queue▸field, etc.
+// Returns { roots, looseFields } (fields orphaned from any datastore).
 function dataModelTree() {
-  const childrenOf = (id, type) => MODEL.nodes.filter(n => n.type === type && n.parent === id);
-  const wrapTable = t => ({ node: t, columns: childrenOf(t.id, 'column') });
-  const wrapDb = d => ({ node: d, tables: childrenOf(d.id, 'table').map(wrapTable) });
-  const wrapServer = s => ({ node: s, databases: childrenOf(s.id, 'database').map(wrapDb) });
-  const servers = MODEL.nodes.filter(n => n.type === 'server').map(wrapServer);
-  const orphanDbs = MODEL.nodes.filter(n => n.type === 'database' && (!n.parent || !nodeById.has(n.parent))).map(wrapDb);
-  const orphanTables = MODEL.nodes.filter(n => n.type === 'table' && (!n.parent || !nodeById.has(n.parent))).map(wrapTable);
-  const orphanCols = MODEL.nodes.filter(n => n.type === 'column' && (!n.parent || !nodeById.has(n.parent)));
-  const unattached = (orphanDbs.length || orphanTables.length || orphanCols.length)
-    ? { databases: orphanDbs, tables: orphanTables, columns: orphanCols } : null;
-  return { servers, unattached };
+  const stores = MODEL.nodes.filter(n => n.type === 'datastore');
+  const fields = MODEL.nodes.filter(n => n.type === 'field');
+  const childStores = id => stores.filter(n => n.parent === id);
+  const childFields = id => fields.filter(n => n.parent === id);
+  const seen = new Set();
+  const build = ds => {
+    if (seen.has(ds.id)) return { node: ds, stores: [], fields: [] }; // cycle guard
+    seen.add(ds.id);
+    return { node: ds, stores: childStores(ds.id).map(build), fields: childFields(ds.id) };
+  };
+  const isRoot = n => !n.parent || !nodeById.has(n.parent) || (nodeById.get(n.parent) || {}).type !== 'datastore';
+  const roots = stores.filter(isRoot).map(build);
+  const placed = new Set();
+  const walk = t => { t.fields.forEach(f => placed.add(f.id)); t.stores.forEach(walk); };
+  roots.forEach(walk);
+  const looseFields = fields.filter(f => !placed.has(f.id) && (!f.parent || (nodeById.get(f.parent) || {}).type !== 'field'));
+  return { roots, looseFields };
+}
+// Is this datastore a "record set" (fields hang off / behavior targets / a leaf), vs a pure container?
+function isRecordSet(ds) {
+  if (!ds || ds.type !== 'datastore') return false;
+  const hasFields = MODEL.nodes.some(n => n.type === 'field' && n.parent === ds.id);
+  const hasStoreChildren = MODEL.nodes.some(n => n.type === 'datastore' && n.parent === ds.id);
+  const isTarget = MODEL.flows.some(f => (f.edges || []).some(e => e.to === ds.id));
+  return hasFields || isTarget || !hasStoreChildren;
 }
 
-// ---- Data model tab: server ▸ database ▸ table cards, cross-linked to behavioral nodes ----
+// ---- Data model tab: recursive datastore forest, cross-linked to behavioral nodes ----
+// A datastore that behavior touches (or that fields hang off) renders as a CARD; a pure container
+// renders as a HEADER wrapping its children. Depth is whatever the codebase actually has. Mirrors
+// src/web/components/DataModel.jsx.
 let dataModelBuilt = false;
-// A table card: columns (click-through to the column node) + the behavioral nodes that write /
-// read / project it (click-through to the sticky).
-function dmTableCard(table, columns) {
-  const p = PALETTE.table || PALETTE.invariant;
+// The behavioral nodes that write / read / project a record-set datastore (click-through to sticky).
+function dmConsumerChips(ds) {
+  const consumers = datastoreConsumers(ds.id);
+  if (!consumers.length) return null;
+  const cons = el('div', { class: 'dm-consumers' });
+  for (const c of consumers) {
+    const cp = PALETTE[c.node.type] || PALETTE.invariant;
+    cons.append(el('span', { class: 'dm-consumer', style: 'border-color:' + cp.edge, title: cp.name + ' — ' + c.verb, onclick: () => openDetail(c.node.id) },
+      el('span', { class: 'dm-cdot', style: 'background:' + cp.fill }),
+      el('span', { class: 'dm-cverb' }, c.verb),
+      c.node.label));
+  }
+  return cons;
+}
+// A record-set datastore -> a CARD: storeKind badge + field rows + consumer chips + nested stores.
+function dmStoreCard(tree) {
+  const { node: ds, fields, stores } = tree;
+  const p = PALETTE.datastore;
+  const kind = (ds.storeKind || 'store').toUpperCase();
   const card = el('div', { class: 'dm-table', style: 'border-color:' + p.edge });
-  card.append(el('div', { class: 'dm-table-head', style: 'background:' + p.fill + ';color:' + p.text, onclick: () => openDetail(table.id) },
-    el('span', { class: 'dm-tt' }, table.kind === 'view' ? 'VIEW' : 'TABLE'),
-    el('span', { class: 'dm-tn' }, table.schema ? table.schema + '.' + table.label : table.label)));
-  if (columns.length) {
+  card.append(el('div', { class: 'dm-table-head', style: 'background:' + p.fill + ';color:' + p.text, onclick: () => openDetail(ds.id) },
+    el('span', { class: 'dm-tt' }, kind),
+    el('span', { class: 'dm-tn' }, ds.label)));
+  if (fields.length) {
     const cols = el('div', { class: 'dm-cols' });
-    for (const c of columns) {
+    for (const c of fields) {
       const col = el('div', { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) }, el('span', { class: 'dm-cn' }, c.label));
       if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
       if (c.nullable === false) col.append(el('span', { class: 'dm-nn' }, 'NN'));
@@ -1130,78 +1163,63 @@ function dmTableCard(table, columns) {
     }
     card.append(cols);
   }
-  const consumers = tableConsumers(table.id);
-  if (consumers.length) {
-    const cons = el('div', { class: 'dm-consumers' });
-    for (const c of consumers) {
-      const cp = PALETTE[c.node.type] || PALETTE.invariant;
-      cons.append(el('span', { class: 'dm-consumer', style: 'border-color:' + cp.edge, title: cp.name + ' — ' + c.verb, onclick: () => openDetail(c.node.id) },
-        el('span', { class: 'dm-cdot', style: 'background:' + cp.fill }),
-        el('span', { class: 'dm-cverb' }, c.verb),
-        c.node.label));
-    }
-    card.append(cons);
+  const chips = dmConsumerChips(ds);
+  if (chips) card.append(chips);
+  if (stores.length) {
+    const nested = el('div', { class: 'dm-tables' });
+    for (const s of stores) nested.append(dmStoreNode(s, 99));
+    card.append(nested);
   }
   return card;
 }
-function dmServerBlock(server, databases) {
-  const sp = PALETTE.server || PALETTE.invariant;
-  const dp = PALETTE.database || PALETTE.invariant;
-  const block = el('div', { class: 'dm-server' });
-  const shead = el('div', { class: 'dm-server-head', onclick: () => openDetail(server.id) },
-    el('span', { class: 'dm-badge', style: 'background:' + sp.fill + ';color:' + sp.text }, 'SERVER'),
-    el('span', { class: 'dm-sname' }, server.label));
-  if (server.host) shead.append(el('span', { class: 'dm-host' }, server.host));
-  if (server.engine) shead.append(el('span', { class: 'dm-engine' }, server.engine));
-  block.append(shead);
-  for (const { node: db, tables } of databases) {
-    const dbEl = el('div', { class: 'dm-db' });
-    const dhead = el('div', { class: 'dm-db-head', onclick: () => openDetail(db.id) },
-      el('span', { class: 'dm-badge', style: 'background:' + dp.fill + ';color:' + dp.text }, 'DATABASE'),
-      el('span', { class: 'dm-dname' }, db.label));
-    if (db.ownedBy) dhead.append(el('span', { class: 'dm-owned' }, 'owned by ' + db.ownedBy));
-    dbEl.append(dhead);
+// A datastore subtree: a card if a record set, else a container header grouping its record-set
+// children into a card grid and nesting its container children.
+function dmStoreNode(tree, depth) {
+  const { node: ds, stores } = tree;
+  if (isRecordSet(ds)) return dmStoreCard(tree);
+  const p = PALETTE.datastore;
+  const kind = (ds.storeKind || 'store').toUpperCase();
+  const cardKids = stores.filter(s => isRecordSet(s.node));
+  const headerKids = stores.filter(s => !isRecordSet(s.node));
+  const top = depth === 0;
+  const block = el('div', { class: top ? 'dm-server' : 'dm-db' });
+  const head = el('div', { class: top ? 'dm-server-head' : 'dm-db-head', onclick: () => openDetail(ds.id) },
+    el('span', { class: 'dm-badge', style: 'background:' + p.fill + ';color:' + p.text }, kind),
+    el('span', { class: top ? 'dm-sname' : 'dm-dname' }, ds.label));
+  if (ds.host) head.append(el('span', { class: 'dm-host' }, ds.host));
+  if (ds.ownedBy) head.append(el('span', { class: 'dm-owned' }, 'owned by ' + ds.ownedBy));
+  block.append(head);
+  for (const s of headerKids) block.append(dmStoreNode(s, depth + 1));
+  if (cardKids.length) {
     const tablesEl = el('div', { class: 'dm-tables' });
-    if (!tables.length) tablesEl.append(el('div', { class: 'dm-empty-sm' }, 'no tables recovered for this database yet'));
-    for (const { node: t, columns } of tables) tablesEl.append(dmTableCard(t, columns));
-    dbEl.append(tablesEl);
-    block.append(dbEl);
+    for (const s of cardKids) tablesEl.append(dmStoreNode(s, depth + 1));
+    block.append(tablesEl);
   }
   return block;
 }
 function buildDataModel() {
   const g = document.getElementById('datamodel'); g.innerHTML = '';
-  const { servers, unattached } = dataModelTree();
+  const { roots, looseFields } = dataModelTree();
   const dataCount = MODEL.nodes.filter(n => DATA_TYPE_SET.has(n.type)).length;
   const head = el('div', { class: 'dm-head' });
   head.append(el('h2', {}, 'Data model ', el('span', { class: 'count' }, String(dataCount))));
-  head.append(el('div', { class: 'dm-sub' }, 'The storage the code actually touches, recovered from SQL and connection strings. Servers ▸ databases ▸ tables ▸ columns, cross-linked to the behavioral nodes that write and read them. Demand-driven: only the columns a read model or aggregate references appear.'));
+  head.append(el('div', { class: 'dm-sub' }, 'The storage the code actually touches, recovered from the code and its config — whatever kind it is: databases, files, queues, caches, in-memory state. Data stores nest to whatever depth exists (server ▸ database ▸ table, or filesystem ▸ directory ▸ file, …) and are cross-linked to the read models and aggregates that read and write them. Demand-driven: only the fields a read model or aggregate references appear.'));
   g.append(head);
   const body = el('div', { class: 'dm-body' });
-  if (dataCount === 0) body.append(el('div', { class: 'dm-empty' }, 'No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate servers, tables, columns, and field lineage.'));
-  for (const { node: s, databases } of servers) body.append(dmServerBlock(s, databases));
-  if (unattached && (unattached.databases.length || unattached.tables.length)) {
+  if (dataCount === 0) body.append(el('div', { class: 'dm-empty' }, 'No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate data stores and field lineage.'));
+  const topContainers = roots.filter(r => !isRecordSet(r.node));
+  const topCards = roots.filter(r => isRecordSet(r.node));
+  for (const r of topContainers) body.append(dmStoreNode(r, 0));
+  if (topCards.length) {
+    const tablesEl = el('div', { class: 'dm-tables' });
+    for (const r of topCards) tablesEl.append(dmStoreNode(r, 0));
+    body.append(tablesEl);
+  }
+  if (looseFields.length) {
     const block = el('div', { class: 'dm-server' });
     block.append(el('div', { class: 'dm-server-head' },
-      el('span', { class: 'dm-badge dm-unattached' }, 'UNATTACHED'),
-      el('span', { class: 'dm-sname' }, 'no server/connection recovered')));
-    for (const { node: db, tables } of unattached.databases) {
-      const dbEl = el('div', { class: 'dm-db' });
-      dbEl.append(el('div', { class: 'dm-db-head', onclick: () => openDetail(db.id) },
-        el('span', { class: 'dm-badge dm-unattached' }, 'DATABASE'),
-        el('span', { class: 'dm-dname' }, db.label)));
-      const t1 = el('div', { class: 'dm-tables' });
-      for (const { node: t, columns } of tables) t1.append(dmTableCard(t, columns));
-      dbEl.append(t1);
-      block.append(dbEl);
-    }
-    if (unattached.tables.length) {
-      const dbEl = el('div', { class: 'dm-db' });
-      const tablesEl = el('div', { class: 'dm-tables' });
-      for (const { node: t, columns } of unattached.tables) tablesEl.append(dmTableCard(t, columns));
-      dbEl.append(tablesEl);
-      block.append(dbEl);
-    }
+      el('span', { class: 'dm-badge dm-unattached' }, 'UNATTACHED FIELDS'),
+      el('span', { class: 'dm-sname' }, 'not tied to a data store')));
     body.append(block);
   }
   g.append(body);
@@ -1284,12 +1302,17 @@ function openDetail(id) {
   inner.append(el('h3', {}, n.label));
   const chips = el('div', { class: 'chips' });
   if (n.inferred) chips.append(el('span', { class: 'chip' }, 'inferred from code'));
+  if (isDataNode(n) && n.inferred === false) chips.append(el('span', { class: 'chip' }, 'named in code'));
+  if (n.storeKind) chips.append(el('span', { class: 'chip' }, n.storeKind));
+  if (n.fieldKind) chips.append(el('span', { class: 'chip' }, n.fieldKind));
+  if (n.engine) chips.append(el('span', { class: 'chip' }, n.engine));
   if (n.ownedBy) chips.append(el('span', { class: 'chip' }, 'state owned by ' + n.ownedBy));
   if (n.synchronous) chips.append(el('span', { class: 'chip' }, 'synchronous inline reaction'));
+  for (const pv of (n.provenance || [])) chips.append(el('span', { class: 'chip' }, pv));
   inner.append(chips);
   inner.append(el('div', { class: 'desc' }, n.description || ''));
 
-  // Physical node (server/database/table/column): containment breadcrumb + columns + "Used by"
+  // Physical node (datastore/field): containment breadcrumb + child stores + child fields + "Used by"
   // back-references. Mirrors StorageSection in src/web/components/Detail.jsx.
   if (isDataNode(n)) {
     const chain = parentChain(n);
@@ -1302,19 +1325,28 @@ function openDetail(id) {
       });
       inner.append(bc);
     }
-    if (n.type === 'table') {
-      const columns = MODEL.nodes.filter(x => x.type === 'column' && x.parent === n.id);
-      if (columns.length) {
-        inner.append(el('h4', {}, columns.length + ' column' + (columns.length > 1 ? 's' : '')));
-        for (const c of columns) {
-          const lbl = el('div', { class: 'rlabel' }, c.label);
-          if (c.dataType) lbl.append(el('span', { class: 'fr-dtype' }, c.dataType));
-          inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
-        }
+    const subStores = n.type === 'datastore' ? MODEL.nodes.filter(x => x.type === 'datastore' && x.parent === n.id) : [];
+    if (subStores.length) {
+      inner.append(el('h4', {}, subStores.length + ' data store' + (subStores.length > 1 ? 's' : '')));
+      for (const c of subStores) {
+        const lbl = el('div', { class: 'rlabel' }, c.label);
+        const rel = c.storeKind || c.fieldKind;
+        if (rel) lbl.append(el('span', { class: 'fr-role' }, rel));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
       }
     }
-    const consumers = n.type === 'table' ? tableConsumers(n.id)
-      : n.type === 'column' ? columnConsumers(n.id).map(c => ({ node: c.node, verb: 'field ' + c.field.name }))
+    const fields = n.type === 'datastore' ? MODEL.nodes.filter(x => x.type === 'field' && x.parent === n.id) : [];
+    if (fields.length) {
+      inner.append(el('h4', {}, fields.length + ' field' + (fields.length > 1 ? 's' : '')));
+      for (const c of fields) {
+        const lbl = el('div', { class: 'rlabel' }, c.label);
+        if (c.dataType) lbl.append(el('span', { class: 'fr-dtype' }, c.dataType));
+        if (c.fieldKind) lbl.append(el('span', { class: 'fr-role' }, c.fieldKind));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
+      }
+    }
+    const consumers = n.type === 'datastore' ? datastoreConsumers(n.id)
+      : n.type === 'field' ? fieldConsumers(n.id).map(c => ({ node: c.node, verb: 'field ' + c.field.name }))
       : [];
     if (consumers.length) {
       inner.append(el('h4', {}, 'Used by ' + consumers.length));
@@ -1344,7 +1376,7 @@ function openDetail(id) {
       const sources = field.sources || [];
       if (sources.length) {
         for (const s of sources) {
-          const col = /^(col|tbl|db|srv)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+          const col = /^(ds|fld)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
           const src = el('div', { class: 'fr-src' }, el('span', { class: 'fr-role' }, s.role || 'from'));
           if (col) src.append(el('span', { class: 'fr-col link', onclick: () => openDetail(col.id) }, col.label));
           else src.append(el('span', { class: 'fr-col addr' }, s.ref || '(unresolved)'));

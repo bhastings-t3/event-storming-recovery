@@ -16,9 +16,24 @@
       "tactical": {
         "explanation": "Lifecycle/startup orchestration (single plane, kept in tactical per the two-plane rule -- do NOT promote each boot step to its own aggregate/policy/event). main() runs, in order: (1) parseArgs(process.argv.slice(2)) -- tolerates a leading `view` subcommand, maps --model/--traces/--repo-root/--port/--host/--no-open, a bare path is treated as --model, an unknown -flag exits 2; (2) resolveModel({...opts, cwd, packageRoot}) inside try/catch -- any throw prints `✖ <msg>` and process.exit(1); (3) createState() -- the empty in-memory selection/bundle (agg-selection); (4) buildServices(resolved) -- { model, indexes: buildIndexes(model), repoRoot }, the EAGER read-only index built once; (5) createMcpHandler(services, state) -- the /mcp handler closing over the same services+state; (6) await startServer({...}) -- binds the first free port at/after --port and resolves { url }; (7) print the banner (url, model provenance, contents, the `claude mcp add ... {url}/mcp` line); (8) if opts.open, openBrowser(url). None of parseArgs/resolveModel/createState/buildServices/createMcpHandler is promoted to its own node; only ModelResolved and ServerStarted are.",
         "anchors": [
-          { "path": "bin/es-view.mjs", "line": 75, "symbol": "main", "note": "boot orchestration: parseArgs -> resolveModel -> createState -> buildServices -> createMcpHandler -> startServer -> banner -> openBrowser" },
-          { "path": "bin/es-view.mjs", "line": 26, "symbol": "parseArgs", "note": "arg parsing; unknown -flag exits 2; bare path treated as --model" },
-          { "path": "bin/es-view.mjs", "line": 114, "symbol": "main", "note": "main().catch(err => { console.error(err); process.exit(1); })" }
+          {
+            "path": "bin/es-view.mjs",
+            "line": 75,
+            "symbol": "main",
+            "note": "boot orchestration: parseArgs -> resolveModel -> createState -> buildServices -> createMcpHandler -> startServer -> banner -> openBrowser"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 26,
+            "symbol": "parseArgs",
+            "note": "arg parsing; unknown -flag exits 2; bare path treated as --model"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 114,
+            "symbol": "main",
+            "note": "main().catch(err => { console.error(err); process.exit(1); })"
+          }
         ]
       }
     },
@@ -31,9 +46,24 @@
       "tactical": {
         "explanation": "createServer() builds the http.createServer request router (MCP at /mcp, the /api/* endpoints, static SPA from distDir) closing over `resolved`, `state`, `services`, and `mcpHandler`. startServer() wraps it and calls tryListen(port, 20): server.listen(pnum, host); on EADDRINUSE with attemptsLeft>0 it retries pnum+1 (fall-forward from 5178, up to 20 attempts), else rejects; on success it sets runtime.baseUrl = `http://${host}:${pnum}` (so /api/mcp/* can print the exact connect command) and resolves { server, url, port }. buildServices(resolved) is the eager, never-rebuilt read model: { model, indexes: buildIndexes(model)={nodeById, hotspotById}, repoRoot }. The session is a two-face aggregate over ONE process: the same `services`+`state` back both the /api and /mcp handlers.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 194, "symbol": "startServer", "note": "tryListen recurses on EADDRINUSE up to 20 attempts from default 5178; sets runtime.baseUrl on listen" },
-          { "path": "src/server/server.mjs", "line": 98, "symbol": "createServer", "note": "one http server routing /mcp, /api/*, and the static SPA over shared services+state" },
-          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "eager { model, indexes: buildIndexes(model), repoRoot } built once at boot" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 194,
+            "symbol": "startServer",
+            "note": "tryListen recurses on EADDRINUSE up to 20 attempts from default 5178; sets runtime.baseUrl on listen"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 98,
+            "symbol": "createServer",
+            "note": "one http server routing /mcp, /api/*, and the static SPA over shared services+state"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 85,
+            "symbol": "buildServices",
+            "note": "eager { model, indexes: buildIndexes(model), repoRoot } built once at boot"
+          }
         ]
       }
     },
@@ -46,9 +76,24 @@
       "tactical": {
         "explanation": "Boot READS the model via resolveModel, precedence highest-first: (1) --model <flows.json> readModelFile(path); (2) --traces <dir> mergeTracesDir(dir) in memory (throws if merged.errors.length -- the server never serves an invalid model); (3) auto-discover findFlowsFiles(cwd) -- a bounded (maxDepth 6) FS walk skipping node_modules/.git/.claude/dist/.next/out/coverage and dot-dirs, preferring `model/flows.json`, then shallower, then alphabetical; (4) bundled example examples/toy-shop/model/flows.json. Returns { model, source, sourcePath, repoRoot, warnings }; repoRoot precedence is --repo-root > model.meta.repoRoot > (example tree | cwd). The model here is read-only for the process life (no write side on the server path).",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 65, "symbol": "resolveModel", "note": "precedence: --model > --traces > auto-discover > bundled example; returns model + provenance + repoRoot" },
-          { "path": "src/server/resolve-model.mjs", "line": 20, "symbol": "findFlowsFiles", "note": "bounded maxDepth-6 walk; prefers model/flows.json, then shallower, then alphabetical" },
-          { "path": "src/server/resolve-model.mjs", "line": 47, "symbol": "readModelFile", "note": "JSON.parse + shape check (nodes/flows arrays)" }
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 65,
+            "symbol": "resolveModel",
+            "note": "precedence: --model > --traces > auto-discover > bundled example; returns model + provenance + repoRoot"
+          },
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 20,
+            "symbol": "findFlowsFiles",
+            "note": "bounded maxDepth-6 walk; prefers model/flows.json, then shallower, then alphabetical"
+          },
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 47,
+            "symbol": "readModelFile",
+            "note": "JSON.parse + shape check (nodes/flows arrays)"
+          }
         ]
       }
     },
@@ -61,7 +106,12 @@
       "tactical": {
         "explanation": "createState() returns a closure over `let selection = null` and a `bundle = new Map()`, exposing get/set/clear for both. Purely in-memory (no file, no persistence -- 'live what am I looking at right now' for this run); it starts empty at boot and is never rehydrated. The same object is closed over by both the /api/selection + /api/context handlers and every MCP session's tools, so a click in the SPA is visible to a connected Claude session.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 9, "symbol": "createState", "note": "initializes selection=null and an empty bundle Map; in-memory only, no persistence" }
+          {
+            "path": "src/server/state.mjs",
+            "line": 9,
+            "symbol": "createState",
+            "note": "initializes selection=null and an empty bundle Map; in-memory only, no persistence"
+          }
         ]
       }
     },
@@ -74,9 +124,24 @@
       "tactical": {
         "explanation": "ERROR-level boot gates (distinct from agg-model's merge-time invariants, which run inside the --traces path): readModelFile throws `<file> does not look like a flows model (missing nodes/flows arrays)` when nodes/flows are not arrays; the --traces branch throws when mergeTracesDir returns merged.errors.length, attaching err.validation, so the in-memory path never exposes an invalid model; main() wraps resolveModel in try/catch and does process.exit(1) on any throw. (Note the CLI es-merge path deliberately differs -- it writes the invalid file then exits 1 -- captured in the merge-traces flow's hot-invalid-model-written.)",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 50, "symbol": "readModelFile", "note": "throws when nodes/flows are not arrays" },
-          { "path": "src/server/resolve-model.mjs", "line": 76, "symbol": "resolveModel", "note": "--traces path throws on any merge validation error" },
-          { "path": "bin/es-view.mjs", "line": 83, "symbol": "main", "note": "catch(err) -> print and process.exit(1); never serves on a resolve failure" }
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 50,
+            "symbol": "readModelFile",
+            "note": "throws when nodes/flows are not arrays"
+          },
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 76,
+            "symbol": "resolveModel",
+            "note": "--traces path throws on any merge validation error"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 83,
+            "symbol": "main",
+            "note": "catch(err) -> print and process.exit(1); never serves on a resolve failure"
+          }
         ]
       }
     },
@@ -89,8 +154,18 @@
       "tactical": {
         "explanation": "The domain-significant fact promoted from the resolveModel precedence chain (the branch mechanics stay in agg-model/cmd tactical). Realized when resolveModel returns { model, source, sourcePath, repoRoot, warnings }; `source` ∈ { model, traces, discovered, example } drives the banner's provenance line, and warnings (e.g. multiple flows.json found) are surfaced. buildServices then freezes the eager index over this model.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 104, "symbol": "resolveModel", "note": "return { model, source, sourcePath, repoRoot, warnings }" },
-          { "path": "bin/es-view.mjs", "line": 101, "symbol": "main", "note": "banner prints the resolved source label + from-path + counts + warnings" }
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 104,
+            "symbol": "resolveModel",
+            "note": "return { model, source, sourcePath, repoRoot, warnings }"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 101,
+            "symbol": "main",
+            "note": "banner prints the resolved source label + from-path + counts + warnings"
+          }
         ]
       }
     },
@@ -103,9 +178,24 @@
       "tactical": {
         "explanation": "Realized by startServer's tryListen success callback: server.listen(pnum, host) fires, runtime.baseUrl is set to `http://${host}:${pnum}`, and the promise resolves { server, url, port }. main() then prints the banner (url, model provenance, `claude mcp add --transport http event-storming ${url}/mcp`) and, unless --no-open, calls openBrowser(url). The bound port may be higher than requested because of the EADDRINUSE fall-forward (see hot-port-fall-forward-stale-mcp).",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 202, "symbol": "startServer", "note": "server.listen(pnum, host, ...) success -> resolve { server, url, port }" },
-          { "path": "src/server/server.mjs", "line": 204, "symbol": "startServer", "note": "runtime.baseUrl set so /api/mcp/* builds the exact connect command" },
-          { "path": "bin/es-view.mjs", "line": 99, "symbol": "main", "note": "banner: url, provenance, and the claude mcp add line" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 202,
+            "symbol": "startServer",
+            "note": "server.listen(pnum, host, ...) success -> resolve { server, url, port }"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 204,
+            "symbol": "startServer",
+            "note": "runtime.baseUrl set so /api/mcp/* builds the exact connect command"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 99,
+            "symbol": "main",
+            "note": "banner: url, provenance, and the claude mcp add line"
+          }
         ]
       }
     },
@@ -118,8 +208,18 @@
       "tactical": {
         "explanation": "Reached via node:fs during resolveModel: readModelFile does fs.readFileSync(file,'utf8'); findFlowsFiles does fs.readdirSync(dir,{withFileTypes:true}) recursively (bounded maxDepth 6, skipping ignore-dirs and dot-dirs); the --traces path delegates to mergeTracesDir (readdirSync + readFileSync of *.json). The boot is read-only against the FS -- it never writes.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 48, "symbol": "readModelFile", "note": "fs.readFileSync of the resolved flows.json" },
-          { "path": "src/server/resolve-model.mjs", "line": 25, "symbol": "findFlowsFiles", "note": "fs.readdirSync recursive walk under cwd for auto-discovery" }
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 48,
+            "symbol": "readModelFile",
+            "note": "fs.readFileSync of the resolved flows.json"
+          },
+          {
+            "path": "src/server/resolve-model.mjs",
+            "line": 25,
+            "symbol": "findFlowsFiles",
+            "note": "fs.readdirSync recursive walk under cwd for auto-discovery"
+          }
         ]
       }
     },
@@ -132,8 +232,18 @@
       "tactical": {
         "explanation": "openBrowser(url) spawns a detached, stdio-ignored OS opener and unref()s it, best-effort (never throws): win32 -> `cmd /c start \"\" <url>`, darwin -> `open <url>`, else -> `xdg-open <url>`. Gated by opts.open (default true; --no-open disables). The URL is always printed too, so a failed open is non-fatal.",
         "anchors": [
-          { "path": "src/server/open.mjs", "line": 4, "symbol": "openBrowser", "note": "platform-specific detached spawn of start/open/xdg-open; best-effort" },
-          { "path": "bin/es-view.mjs", "line": 111, "symbol": "main", "note": "if (opts.open) openBrowser(url)" }
+          {
+            "path": "src/server/open.mjs",
+            "line": 4,
+            "symbol": "openBrowser",
+            "note": "platform-specific detached spawn of start/open/xdg-open; best-effort"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 111,
+            "symbol": "main",
+            "note": "if (opts.open) openBrowser(url)"
+          }
         ]
       }
     }
@@ -147,19 +257,68 @@
       "status": "live",
       "summary": "The operator runs `npx event-storming-recovery` / `es-view` (or `npm run preview`). es-view parses its args, resolves a servable model (explicit --model, an on-the-fly --traces merge, an auto-discovered flows.json, or the bundled toy-shop example), builds an eager read-only index over it, and initializes an empty in-memory selection/bundle state. It then stands up ONE local node:http server -- SPA + JSON API + MCP endpoint over that shared state -- binding the first free port at/after 5178, prints the connect banner (including the exact `claude mcp add` line), and opens the browser. The result is a live session a human can explore and a Claude terminal can attach to.",
       "trigger": "Operator runs `npx event-storming-recovery [view] [options]`, `es-view`, or `npm run preview` (which builds then runs `node bin/es-view.mjs`).",
-      "steps": ["actor-operator", "cmd-launch-es-view", "agg-es-view-session", "agg-model", "evt-model-resolved", "agg-selection", "evt-server-started", "ext-browser"],
-      "edges": [
-        { "from": "actor-operator", "to": "cmd-launch-es-view", "verb": "issues" },
-        { "from": "cmd-launch-es-view", "to": "agg-es-view-session", "verb": "handled by" },
-        { "from": "agg-es-view-session", "to": "agg-model", "verb": "reads" },
-        { "from": "agg-model", "to": "ext-source-fs", "verb": "projects from" },
-        { "from": "agg-es-view-session", "to": "inv-servable-model", "verb": "enforces" },
-        { "from": "agg-es-view-session", "to": "agg-selection", "verb": "initializes" },
-        { "from": "agg-es-view-session", "to": "evt-model-resolved", "verb": "emits" },
-        { "from": "agg-es-view-session", "to": "evt-server-started", "verb": "emits" },
-        { "from": "agg-es-view-session", "to": "ext-browser", "verb": "opens" }
+      "steps": [
+        "actor-operator",
+        "cmd-launch-es-view",
+        "agg-es-view-session",
+        "agg-model",
+        "evt-model-resolved",
+        "agg-selection",
+        "evt-server-started",
+        "ext-browser"
       ],
-      "hotspots": ["hot-port-fall-forward-stale-mcp", "hot-eager-indexes-never-invalidated", "hot-host-exposure"],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-launch-es-view",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-launch-es-view",
+          "to": "agg-es-view-session",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-es-view-session",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "agg-model",
+          "to": "ext-source-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "agg-es-view-session",
+          "to": "inv-servable-model",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-es-view-session",
+          "to": "agg-selection",
+          "verb": "initializes"
+        },
+        {
+          "from": "agg-es-view-session",
+          "to": "evt-model-resolved",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-es-view-session",
+          "to": "evt-server-started",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-es-view-session",
+          "to": "ext-browser",
+          "verb": "opens"
+        }
+      ],
+      "hotspots": [
+        "hot-port-fall-forward-stale-mcp",
+        "hot-eager-indexes-never-invalidated",
+        "hot-host-exposure"
+      ],
       "instances": []
     }
   ],
@@ -171,9 +330,24 @@
       "tactical": {
         "explanation": "server.mjs startServer/tryListen(port,20): on EADDRINUSE with attemptsLeft>0 it retries pnum+1, else rejects; runtime.baseUrl and the printed banner use the actual bound port. plugin.json and .mcp.json.example both pin :5178; SKILL.md hard-codes the 5178 assumption. The runtime is dynamic, the declared MCP endpoint is static.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 197, "symbol": "startServer", "note": "tryListen recurses pnum+1 on EADDRINUSE up to 20 attempts" },
-          { "path": ".claude-plugin/plugin.json", "line": 13, "symbol": "mcpServers.event-storming.url", "note": "hardcoded http://127.0.0.1:5178/mcp" },
-          { "path": "skills/event-storming-explorer/SKILL.md", "line": 25, "symbol": "run-requirements", "note": "'the app must run on port 5178'; free 5178 if taken" }
+          {
+            "path": "src/server/server.mjs",
+            "line": 197,
+            "symbol": "startServer",
+            "note": "tryListen recurses pnum+1 on EADDRINUSE up to 20 attempts"
+          },
+          {
+            "path": ".claude-plugin/plugin.json",
+            "line": 13,
+            "symbol": "mcpServers.event-storming.url",
+            "note": "hardcoded http://127.0.0.1:5178/mcp"
+          },
+          {
+            "path": "skills/event-storming-explorer/SKILL.md",
+            "line": 25,
+            "symbol": "run-requirements",
+            "note": "'the app must run on port 5178'; free 5178 if taken"
+          }
         ]
       }
     },
@@ -184,9 +358,24 @@
       "tactical": {
         "explanation": "main() calls buildServices(resolved) exactly once; the returned { model, indexes, repoRoot } is closed over by every /api and /mcp handler for the process lifetime. buildIndexes builds nodeById/hotspotById Maps eagerly. Nothing re-reads resolved.sourcePath or rebuilds the indexes after listen.",
         "anchors": [
-          { "path": "bin/es-view.mjs", "line": 90, "symbol": "main", "note": "buildServices(resolved) called once at boot" },
-          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "eager { model, indexes: buildIndexes(model), repoRoot }; never rebuilt" },
-          { "path": "src/lib/selectors.mjs", "line": 4, "symbol": "buildIndexes", "note": "eager nodeById/hotspotById Maps over the boot-time model" }
+          {
+            "path": "bin/es-view.mjs",
+            "line": 90,
+            "symbol": "main",
+            "note": "buildServices(resolved) called once at boot"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 85,
+            "symbol": "buildServices",
+            "note": "eager { model, indexes: buildIndexes(model), repoRoot }; never rebuilt"
+          },
+          {
+            "path": "src/lib/selectors.mjs",
+            "line": 4,
+            "symbol": "buildIndexes",
+            "note": "eager nodeById/hotspotById Maps over the boot-time model"
+          }
         ]
       }
     },
@@ -197,9 +386,24 @@
       "tactical": {
         "explanation": "parseArgs takes --host (default 127.0.0.1) and passes it verbatim to startServer -> server.listen(pnum, host). No route checks Origin, a token, or the bound host. readSource guards against ../ escapes (abs must stay under path.resolve(repoRoot)), bounding /api/source to the repo tree. mcp-register.mjs's claudeMcpAdd is invoked by POST /api/mcp/register with no auth.",
         "anchors": [
-          { "path": "bin/es-view.mjs", "line": 38, "symbol": "parseArgs", "note": "--host parsed, default 127.0.0.1, passed through unmodified" },
-          { "path": "src/server/server.mjs", "line": 202, "symbol": "startServer", "note": "server.listen(pnum, host) with no auth on any /api or /mcp route" },
-          { "path": "src/server/source.mjs", "line": 18, "symbol": "readSource", "note": "traversal guard bounds /api/source to repoRoot (whole-repo, not whole-FS, exposure)" }
+          {
+            "path": "bin/es-view.mjs",
+            "line": 38,
+            "symbol": "parseArgs",
+            "note": "--host parsed, default 127.0.0.1, passed through unmodified"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 202,
+            "symbol": "startServer",
+            "note": "server.listen(pnum, host) with no auth on any /api or /mcp route"
+          },
+          {
+            "path": "src/server/source.mjs",
+            "line": 18,
+            "symbol": "readSource",
+            "note": "traversal guard bounds /api/source to repoRoot (whole-repo, not whole-FS, exposure)"
+          }
         ]
       }
     }

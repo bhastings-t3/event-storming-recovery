@@ -16,9 +16,24 @@
       "tactical": {
         "explanation": "Reached via node:fs. generate-views reads the model with fs.readFileSync(flowsFile) and writes both artifacts with fs.writeFileSync into <outDir>: flows.dot and explorer.html. These are plain files on disk, not a database.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "model", "note": "readFileSync(flowsFile) — reads flows.json" },
-          { "path": "tools/generate-views.js", "line": 91, "symbol": "dot", "note": "writeFileSync(outDir/flows.dot)" },
-          { "path": "tools/generate-views.js", "line": 1487, "symbol": "html", "note": "writeFileSync(outDir/explorer.html)" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 24,
+            "symbol": "model",
+            "note": "readFileSync(flowsFile) — reads flows.json"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 91,
+            "symbol": "dot",
+            "note": "writeFileSync(outDir/flows.dot)"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 1487,
+            "symbol": "html",
+            "note": "writeFileSync(outDir/explorer.html)"
+          }
         ]
       }
     },
@@ -31,8 +46,18 @@
       "tactical": {
         "explanation": "Links are built by anchorUrl, which is defined twice with identical form: once for the DOT side (node URLs) and once inside the inlined SPA (detail-panel anchors). Both produce `vscode://file/${repoRoot}/${a.path}:${a.line}`. Whether the link resolves depends entirely on repoRoot being an absolute path (see hot-unresolved-repo-root-links).",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 60, "symbol": "anchorUrl", "note": "DOT-side vscode:// URL builder" },
-          { "path": "tools/generate-views.js", "line": 478, "symbol": "anchorUrl", "note": "SPA-side vscode:// URL builder (inlined into explorer.html)" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 60,
+            "symbol": "anchorUrl",
+            "note": "DOT-side vscode:// URL builder"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 478,
+            "symbol": "anchorUrl",
+            "note": "SPA-side vscode:// URL builder (inlined into explorer.html)"
+          }
         ]
       }
     },
@@ -45,8 +70,18 @@
       "tactical": {
         "explanation": "In this flow the model is a READ-ONLY input: generate-views JSON.parses flows.json into `model` (line 24) and builds a nodeById / hotspotById index (30-31) plus a DATA_TYPES filter (36-37). The generator never mutates or re-validates the aggregate; it only projects it into views. meta.repoRoot and meta.title act as fallbacks for the --repo-root / --title flags (27-28).",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "model", "note": "JSON.parse(readFileSync(flowsFile)) — the model is the generator's input" },
-          { "path": "tools/generate-views.js", "line": 30, "symbol": "nodeById", "note": "index nodes + hotspots for lookup during rendering" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 24,
+            "symbol": "model",
+            "note": "JSON.parse(readFileSync(flowsFile)) — the model is the generator's input"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 30,
+            "symbol": "nodeById",
+            "note": "index nodes + hotspots for lookup during rendering"
+          }
         ]
       }
     },
@@ -59,10 +94,30 @@
       "tactical": {
         "explanation": "ETL transform kept on a single plane per the two-plane rule; NONE of its internal stages are promoted to aggregates/policies/events. (1) Parse argv: flowsFile, outDir, and the --repo-root / --title flags with meta fallbacks (19-28). (2) Read the model and index it (24, 30-37). (3) BUILD DOT (62-90): emit `digraph event_storming` with one `subgraph cluster_<flowId>` per flow; within each, the used node set is steps + edge endpoints MINUS any physical node (server/database/table/column) and any edge touching one (isDataId, 37,73-74); each behavioral node becomes a filled+rounded box colored from PALETTE (fill/edge/text), the node's FIRST tactical anchor becomes a vscode:// URL (78-79), and dead/superseded flows render dashed with a [STATUS] label (69-71,81). Write flows.dot (91). (4) BUILD explorer.html (93-1486): assemble one large template string that inlines the entire model as `const MODEL = ${modelJson}` (438, with `<` escaped to \\u003c at 94), plus `const REPO_ROOT` (439) and `const PALETTE` (440), followed by a dependency-free vanilla-JS SPA (flows board, gallery, data-model tab, glossary, detail panel with source anchors). Write explorer.html (1487) and log the two paths (1489). Both the DOT-building and HTML-templating stages stay in this tactical block; only the completed render is promoted (evt-views-generated).",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 19, "symbol": "args", "note": "argv: flowsFile, outDir, --repo-root, --title (+ meta fallbacks at 27-28)" },
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "model", "note": "reads the merged model (input to the transform)" },
-          { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "DOT build: one subgraph per flow; physical nodes excluded (36-37,73-74)" },
-          { "path": "tools/generate-views.js", "line": 96, "symbol": "html", "note": "explorer.html template string; MODEL/REPO_ROOT/PALETTE inlined at 438-440" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 19,
+            "symbol": "args",
+            "note": "argv: flowsFile, outDir, --repo-root, --title (+ meta fallbacks at 27-28)"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 24,
+            "symbol": "model",
+            "note": "reads the merged model (input to the transform)"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 64,
+            "symbol": "dot",
+            "note": "DOT build: one subgraph per flow; physical nodes excluded (36-37,73-74)"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 96,
+            "symbol": "html",
+            "note": "explorer.html template string; MODEL/REPO_ROOT/PALETTE inlined at 438-440"
+          }
         ]
       }
     },
@@ -75,8 +130,18 @@
       "tactical": {
         "explanation": "Built by the DOT block (62-90) and written to <outDir>/flows.dot at line 91. Each flow is a `subgraph cluster_<flowId>`; the used-node set is steps + edge endpoints filtered through isDataId so server/database/table/column nodes never appear (37,73-74). Node ids are namespaced per flow as `<flowId>__<nodeId>` so a shared node repeats visually inside each flow that uses it. Colors come from PALETTE by node type; the first tactical anchor is attached as a vscode:// URL (78-79). Dead/superseded flows render with a dashed style and a [STATUS] suffix (69-71,81).",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 64, "symbol": "dot", "note": "digraph header + per-flow subgraphs" },
-          { "path": "tools/generate-views.js", "line": 91, "symbol": "dot", "note": "writeFileSync(outDir/flows.dot)" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 64,
+            "symbol": "dot",
+            "note": "digraph header + per-flow subgraphs"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 91,
+            "symbol": "dot",
+            "note": "writeFileSync(outDir/flows.dot)"
+          }
         ]
       }
     },
@@ -89,9 +154,24 @@
       "tactical": {
         "explanation": "Assembled as one template string (93-1486) and written to <outDir>/explorer.html at line 1487. The whole model is frozen into the page at line 438 (`const MODEL = ${modelJson}`, where modelJson is JSON.stringify(model) with `<` escaped to \\u003c at line 94 to keep the inline <script> safe); REPO_ROOT and PALETTE are inlined at 439-440. The SPA rebuilds nodeById/hotspotById from MODEL (441-442) and constructs vscode:// deep links via its own anchorUrl (478), used across the detail panel (998,1410,1459). Because the model is embedded rather than fetched, the artifact is a FROZEN snapshot (see hot-frozen-explorer-snapshot) and is offline-safe (no <script src=> — asserted by the smoke test).",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 96, "symbol": "html", "note": "start of the explorer.html template string" },
-          { "path": "tools/generate-views.js", "line": 438, "symbol": "MODEL", "note": "entire model inlined as const MODEL (frozen snapshot)" },
-          { "path": "tools/generate-views.js", "line": 1487, "symbol": "html", "note": "writeFileSync(outDir/explorer.html)" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 96,
+            "symbol": "html",
+            "note": "start of the explorer.html template string"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 438,
+            "symbol": "MODEL",
+            "note": "entire model inlined as const MODEL (frozen snapshot)"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 1487,
+            "symbol": "html",
+            "note": "writeFileSync(outDir/explorer.html)"
+          }
         ]
       }
     },
@@ -104,9 +184,24 @@
       "tactical": {
         "explanation": "Realized by the two fs.writeFileSync calls (91 for the DOT, 1487 for the HTML) and the closing console.log that reports both paths (1489). All intermediate DOT-building and HTML-templating stages stay inside cmd-generate-views tactical per the two-plane rule; this event is the only fact promoted from them. The generator has no failure/validation branch of its own here (an unparseable flows.json throws at read time, line 24); a successful run always emits exactly this fact.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 91, "symbol": "dot", "note": "flows.dot written" },
-          { "path": "tools/generate-views.js", "line": 1487, "symbol": "html", "note": "explorer.html written" },
-          { "path": "tools/generate-views.js", "line": 1489, "symbol": "(script)", "note": "console.log('wrote ... and ...') — both artifacts done" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 91,
+            "symbol": "dot",
+            "note": "flows.dot written"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 1487,
+            "symbol": "html",
+            "note": "explorer.html written"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 1489,
+            "symbol": "(script)",
+            "note": "console.log('wrote ... and ...') — both artifacts done"
+          }
         ]
       }
     }
@@ -120,23 +215,86 @@
       "status": "live",
       "summary": "The operator runs es-generate over a merged flows.json and an output directory. The tool reads the model once and projects it into two human-facing read models without mutating any domain state: a Graphviz DOT board (one cluster per flow, physical storage nodes excluded) and a self-contained explorer.html that inlines the whole model and a dependency-free SPA. Both artifacts are written to the output directory and embed vscode:// deep links back into the analyzed checkout. The point is to turn the abstract model into something a human can open in a browser or Graphviz and click straight to source.",
       "trigger": "Operator runs `node tools/generate-views.js <flows.json> <outDir> --repo-root <abs> --title \"...\"` (via the `es-generate` bin, or `npm run demo` -> scripts/build-example.mjs).",
-      "steps": ["actor-operator", "cmd-generate-views", "agg-model", "rm-flows-dot", "rm-explorer", "evt-views-generated", "ext-source-fs"],
-      "edges": [
-        { "from": "actor-operator", "to": "cmd-generate-views", "verb": "issues" },
-        { "from": "cmd-generate-views", "to": "agg-model", "verb": "reads" },
-        { "from": "cmd-generate-views", "to": "rm-flows-dot", "verb": "writes" },
-        { "from": "cmd-generate-views", "to": "rm-explorer", "verb": "writes" },
-        { "from": "cmd-generate-views", "to": "evt-views-generated", "verb": "emits" },
-        { "from": "rm-flows-dot", "to": "ext-source-fs", "verb": "persists to" },
-        { "from": "rm-explorer", "to": "ext-source-fs", "verb": "persists to" },
-        { "from": "rm-flows-dot", "to": "ext-editor", "verb": "links to" },
-        { "from": "rm-explorer", "to": "ext-editor", "verb": "links to" },
-        { "from": "rm-flows-dot", "to": "tbl-flows-json", "verb": "projects from" },
-        { "from": "rm-explorer", "to": "tbl-flows-json", "verb": "projects from" },
-        { "from": "cmd-generate-views", "to": "tbl-flows-dot", "verb": "writes" },
-        { "from": "cmd-generate-views", "to": "tbl-explorer-html", "verb": "writes" }
+      "steps": [
+        "actor-operator",
+        "cmd-generate-views",
+        "agg-model",
+        "rm-flows-dot",
+        "rm-explorer",
+        "evt-views-generated",
+        "ext-source-fs"
       ],
-      "hotspots": ["hot-frozen-explorer-snapshot", "hot-unresolved-repo-root-links"],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-generate-views",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "rm-flows-dot",
+          "verb": "writes"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "rm-explorer",
+          "verb": "writes"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "evt-views-generated",
+          "verb": "emits"
+        },
+        {
+          "from": "rm-flows-dot",
+          "to": "ext-source-fs",
+          "verb": "persists to"
+        },
+        {
+          "from": "rm-explorer",
+          "to": "ext-source-fs",
+          "verb": "persists to"
+        },
+        {
+          "from": "rm-flows-dot",
+          "to": "ext-editor",
+          "verb": "links to"
+        },
+        {
+          "from": "rm-explorer",
+          "to": "ext-editor",
+          "verb": "links to"
+        },
+        {
+          "from": "rm-flows-dot",
+          "to": "ds-tbl-flows-json",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-explorer",
+          "to": "ds-tbl-flows-json",
+          "verb": "projects from"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-tbl-flows-dot",
+          "verb": "writes"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-tbl-explorer-html",
+          "verb": "writes"
+        }
+      ],
+      "hotspots": [
+        "hot-frozen-explorer-snapshot",
+        "hot-unresolved-repo-root-links"
+      ],
       "instances": []
     }
   ],
@@ -148,9 +306,24 @@
       "tactical": {
         "explanation": "modelJson = JSON.stringify(model) with `<` escaped to \\u003c (94), then inlined verbatim at `const MODEL = ${modelJson}` (438). The SPA reads only from MODEL (441-442) — there is no fetch, no version banner, and no reference back to the on-disk flows.json. Contrast the es-view server, which holds the model in memory and re-resolves it. The smoke test even asserts the model is embedded and there are no external <script src=> tags, confirming the static/offline design is deliberate.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 94, "symbol": "modelJson", "note": "JSON.stringify(model), < escaped for inline <script>" },
-          { "path": "tools/generate-views.js", "line": 438, "symbol": "MODEL", "note": "whole model frozen into the page" },
-          { "path": "tools/generate-views.js", "line": 1487, "symbol": "html", "note": "static explorer.html written; no live source link" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 94,
+            "symbol": "modelJson",
+            "note": "JSON.stringify(model), < escaped for inline <script>"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 438,
+            "symbol": "MODEL",
+            "note": "whole model frozen into the page"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 1487,
+            "symbol": "html",
+            "note": "static explorer.html written; no live source link"
+          }
         ]
       }
     },
@@ -161,9 +334,24 @@
       "tactical": {
         "explanation": "repoRoot = argVal('--repo-root', (model.meta && model.meta.repoRoot) || '.') at line 27 — the '.' fallback is the trap. Both anchorUrl definitions (60 DOT-side, 478 SPA-side) interpolate repoRoot directly into a vscode://file/ URL with no absolute-path check or normalization. The DOT side additionally only ever links the FIRST anchor of each node (78-79), so secondary anchors are unreachable from the graph regardless of repoRoot.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 27, "symbol": "repoRoot", "note": "defaults to meta.repoRoot else '.', no absolute-path validation" },
-          { "path": "tools/generate-views.js", "line": 60, "symbol": "anchorUrl", "note": "DOT-side vscode:// link built from raw repoRoot" },
-          { "path": "tools/generate-views.js", "line": 478, "symbol": "anchorUrl", "note": "SPA-side vscode:// link built from raw REPO_ROOT" }
+          {
+            "path": "tools/generate-views.js",
+            "line": 27,
+            "symbol": "repoRoot",
+            "note": "defaults to meta.repoRoot else '.', no absolute-path validation"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 60,
+            "symbol": "anchorUrl",
+            "note": "DOT-side vscode:// link built from raw repoRoot"
+          },
+          {
+            "path": "tools/generate-views.js",
+            "line": 478,
+            "symbol": "anchorUrl",
+            "note": "SPA-side vscode:// link built from raw REPO_ROOT"
+          }
         ]
       }
     }

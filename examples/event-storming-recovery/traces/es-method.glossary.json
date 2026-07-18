@@ -4,10 +4,17 @@
       "id": "term-es-event-storming",
       "term": "Event Storming",
       "category": "concept",
-      "aka": ["ES", "event storm"],
+      "aka": [
+        "ES",
+        "event storm"
+      ],
       "definition": "A workshop technique (Alberto Brandolini) for modeling a business domain as a timeline of domain events, then filling in the commands, aggregates, policies, read models, actors, and external systems around them. This tool recovers a first-draft Event Storming model directly from code instead of a from-scratch workshop, so the result is an always-true scaffold and conversation starter rather than a replacement for the wall.",
       "anchors": [
-        { "path": "docs/METHOD.md", "line": 11, "symbol": "The problem" }
+        {
+          "path": "docs/METHOD.md",
+          "line": 11,
+          "symbol": "The problem"
+        }
       ],
       "status": "resolved"
     },
@@ -15,11 +22,21 @@
       "id": "term-es-ubiquitous-language",
       "term": "Ubiquitous Language",
       "category": "concept",
-      "aka": ["UL", "domain vocabulary", "glossary"],
+      "aka": [
+        "UL",
+        "domain vocabulary",
+        "glossary"
+      ],
       "definition": "The shared domain vocabulary that the code, the model, and the people all use for the same concept. Drift (the same concept under two ids/names) is what the merge's consistency pass hunts. Phase 5 promotes the vocabulary into a first-class curated glossary (the terms this file authors), distinct from the behavioral stickies.",
-      "relatedNodes": ["inv-referential-integrity"],
+      "relatedNodes": [
+        "inv-referential-integrity"
+      ],
       "anchors": [
-        { "path": "docs/METHOD.md", "line": 148, "symbol": "Phase 5 - Ubiquitous Language mining" }
+        {
+          "path": "docs/METHOD.md",
+          "line": 148,
+          "symbol": "Phase 5 - Ubiquitous Language mining"
+        }
       ],
       "status": "resolved"
     },
@@ -27,10 +44,16 @@
       "id": "term-es-aggregate",
       "term": "Aggregate",
       "category": "concept",
-      "aka": ["agg-*"],
+      "aka": [
+        "agg-*"
+      ],
       "definition": "A consistency boundary: state that changes together and enforces its own invariants. In Event Storming an aggregate only RECEIVES commands and EMITS events, never issues a command. In a services-and-repositories codebase there are no explicit aggregates, so the data-layer scout recovers them as clusters of entities that change together (they are almost always 'inferred').",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 40, "symbol": "Node rules: aggregates only receive" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 40,
+          "symbol": "Node rules: aggregates only receive"
+        }
       ],
       "status": "resolved"
     },
@@ -38,11 +61,21 @@
       "id": "term-es-command",
       "term": "Command",
       "category": "concept",
-      "aka": ["cmd-*"],
+      "aka": [
+        "cmd-*"
+      ],
       "definition": "An intent to change state, named in the imperative (\"PlaceOrder\", \"MergeTraces\"). Commands come from actors, policies, or external systems, are handled by an aggregate, and produce an event. A command that must read other aggregates/read models before acting expresses that with a 'reads' edge (a command lookup).",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 25, "symbol": "label: commands IMPERATIVE" },
-        { "path": "docs/flows-schema.md", "line": 47, "symbol": "Command lookups" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 25,
+          "symbol": "label: commands IMPERATIVE"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 47,
+          "symbol": "Command lookups"
+        }
       ],
       "status": "resolved"
     },
@@ -50,10 +83,17 @@
       "id": "term-es-domain-event",
       "term": "Domain Event",
       "category": "concept",
-      "aka": ["Event", "evt-*"],
+      "aka": [
+        "Event",
+        "evt-*"
+      ],
       "definition": "A named business fact that already happened, stated in the past tense (\"OrderPlaced\", \"ModelValidated\"). It is the most stable Event Storming convention. \"A row was inserted\" is NOT an event; the discriminator against a raw measurement/telemetry data-point is whether it is a domain-significant fact. Prefer few meaningful events over one event per statement (a multi-table transactional write is one event).",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 54, "symbol": "Node rules: events past tense" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 54,
+          "symbol": "Node rules: events past tense"
+        }
       ],
       "status": "resolved"
     },
@@ -61,11 +101,25 @@
       "id": "term-es-policy",
       "term": "Policy",
       "category": "concept",
-      "aka": ["pol-*", "process", "reaction", "synchronous policy", "synchronous: true"],
+      "aka": [
+        "pol-*",
+        "process",
+        "reaction",
+        "synchronous policy",
+        "synchronous: true"
+      ],
       "definition": "Strictly reactive logic: \"whenever <event> then <command>.\" It sits after an event and before the next command, orchestrating cross-aggregate reactions. This repo adds a 'synchronous' flag: a synchronous policy is inline synchronous code reacting to the first event (not a decoupled subscriber), which is how the UI-vs-service split rule models a second write with its own failure window.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 43, "symbol": "Node rules: Policy = strictly reactive" },
-        { "path": "docs/flows-schema.md", "line": 28, "symbol": "synchronous field" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 43,
+          "symbol": "Node rules: Policy = strictly reactive"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 28,
+          "symbol": "synchronous field"
+        }
       ],
       "status": "resolved"
     },
@@ -73,10 +127,19 @@
       "id": "term-es-invariant",
       "term": "Invariant",
       "category": "concept",
-      "aka": ["inv-*", "business rule", "guard", "specification"],
+      "aka": [
+        "inv-*",
+        "business rule",
+        "guard",
+        "specification"
+      ],
       "definition": "A constraint enforced INSIDE an aggregate while it handles a command, before any event, that can reject the action (\"a bundle item references a real item at most once\", \"aggregates never issue commands\"). It is NOT event-triggered and does not issue a command, which is exactly what distinguishes it from a Policy. Invariants attach to their aggregate with an 'enforces' edge and never appear in a flow's steps lane.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 45, "symbol": "Node rules: invariant vs policy" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 45,
+          "symbol": "Node rules: invariant vs policy"
+        }
       ],
       "status": "resolved"
     },
@@ -84,10 +147,18 @@
       "id": "term-es-read-model",
       "term": "Read Model",
       "category": "concept",
-      "aka": ["rm-*", "view", "projection"],
+      "aka": [
+        "rm-*",
+        "view",
+        "projection"
+      ],
       "definition": "What an actor reads in order to decide: a grid, view, projection, or downloaded file. It is the query side, distinct from the command/write side, and carries a demand-driven fields[] list describing what data it returns and where that data comes from.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 55, "symbol": "Node rules: read models" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 55,
+          "symbol": "Node rules: read models"
+        }
       ],
       "status": "resolved"
     },
@@ -95,10 +166,16 @@
       "id": "term-es-external-system",
       "term": "External System",
       "category": "concept",
-      "aka": ["ext-*"],
+      "aka": [
+        "ext-*"
+      ],
       "definition": "A system outside the deploy boundary (SaaS, another service, a cloud API, a legacy system, the local filesystem/browser/editor as this tool models them). It can issue commands and raise or receive events. An in-process library is NOT an external system. An aggregate whose state actually lives inside one is marked with 'ownedBy'.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 56, "symbol": "Node rules: external systems" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 56,
+          "symbol": "Node rules: external systems"
+        }
       ],
       "status": "resolved"
     },
@@ -106,10 +183,18 @@
       "id": "term-es-actor",
       "term": "Actor",
       "category": "role",
-      "aka": ["actor-*", "user", "role"],
+      "aka": [
+        "actor-*",
+        "user",
+        "role"
+      ],
       "definition": "A person or role that issues commands and reads read models to decide (Viewer, Operator, a connected Claude session). Actor is the softest color convention on a wall (a small yellow), and in a flat digital diagram it needs a genuinely different hue from the aggregate to stay distinct.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 24, "symbol": "Node type: actor" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 24,
+          "symbol": "Node type: actor"
+        }
       ],
       "status": "resolved"
     },
@@ -117,11 +202,22 @@
       "id": "term-es-hotspot",
       "term": "Hotspot",
       "category": "concept",
-      "aka": ["red sticky", "hot-*"],
+      "aka": [
+        "red sticky",
+        "hot-*"
+      ],
       "definition": "The red sticky: friction, risk, disagreement, or a place where intent is unrecoverable from code, framed as THE QUESTION A HUMAN SHOULD ANSWER and anchored to the source. Hotspots are the payoff of a code-derived model and the one thing no code reading can produce; they are human judgment. They attach at flow level and live in a top-level hotspots array, not in nodes.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 156, "symbol": "Hotspot" },
-        { "path": "docs/METHOD.md", "line": 208, "symbol": "Hotspots are questions, not verdicts" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 156,
+          "symbol": "Hotspot"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 208,
+          "symbol": "Hotspots are questions, not verdicts"
+        }
       ],
       "status": "resolved"
     },
@@ -129,10 +225,17 @@
       "id": "term-es-sticky",
       "term": "Sticky (note)",
       "category": "concept",
-      "aka": ["sticky note", "node"],
+      "aka": [
+        "sticky note",
+        "node"
+      ],
       "definition": "One card on the Event Storming wall: a single command, aggregate, event, policy, read model, actor, external system, or invariant. In this tool a sticky is realized as a node in flows.json (behavioral stickies are colored by the event-storming palette). Value Objects and Entities are NOT stickies; tactical structure is implied on the wall, not drawn.",
       "anchors": [
-        { "path": "C:/Users/bhastings/.claude/skills/event-storming-modeling/SKILL.md", "line": 24, "symbol": "Sticky colors (the vocabulary)" }
+        {
+          "path": "C:/Users/bhastings/.claude/skills/event-storming-modeling/SKILL.md",
+          "line": 24,
+          "symbol": "Sticky colors (the vocabulary)"
+        }
       ],
       "status": "resolved"
     },
@@ -140,11 +243,20 @@
       "id": "term-es-grammar-rule",
       "term": "ES grammar rule (aggregates never issue commands)",
       "category": "concept",
-      "aka": ["the flow grammar", "The Picture That Explains Everything"],
+      "aka": [
+        "the flow grammar",
+        "The Picture That Explains Everything"
+      ],
       "definition": "The self-reinforcing loop Actor/Policy/External-System -> Command -> Aggregate -> Event -> Policy -> Command, with read models fed off events. The one hard constraint the merge enforces at load time is that an aggregate may only receive commands and emit events, never issue one: an edge from an aggregate with verb 'issues' is an error. The other shapes (policies issue commands, command lookups) are left to author discipline.",
-      "relatedNodes": ["inv-es-grammar"],
+      "relatedNodes": [
+        "inv-es-grammar"
+      ],
       "anchors": [
-        { "path": "src/lib/merge.mjs", "line": 169, "symbol": "aggregate issues a command - forbidden" }
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 169,
+          "symbol": "aggregate issues a command - forbidden"
+        }
       ],
       "status": "resolved"
     },
@@ -152,11 +264,26 @@
       "id": "term-es-two-plane",
       "term": "Two-plane model",
       "category": "jargon",
-      "aka": ["two planes", "dataflow plane", "command/aggregate plane", "anti-corruption seam", "ACL", "translation slice"],
+      "aka": [
+        "two planes",
+        "dataflow plane",
+        "command/aggregate plane",
+        "anti-corruption seam",
+        "ACL",
+        "translation slice"
+      ],
       "definition": "This repo's key modeling stance: the command/aggregate/event/policy grammar fits TRANSACTIONAL domains (intent that can be rejected), but a dataflow/ETL/pipeline stretch is a different plane that continuously transforms immutable records and cannot reject anything. Model the two planes joined at a named seam (an anti-corruption/translation step): everything on the dataflow side is plumbing kept in a command's tactical detail, and only domain-significant facts crossing the seam are promoted to events. In this self-model the merge and generate steps are ETL kept single-plane for exactly this reason.",
       "anchors": [
-        { "path": "docs/METHOD.md", "line": 123, "symbol": "The two-plane rule" },
-        { "path": "docs/flows-schema.md", "line": 204, "symbol": "Conventions: dataflow stages are not aggregates" }
+        {
+          "path": "docs/METHOD.md",
+          "line": 123,
+          "symbol": "The two-plane rule"
+        },
+        {
+          "path": "docs/flows-schema.md",
+          "line": 204,
+          "symbol": "Conventions: dataflow stages are not aggregates"
+        }
       ],
       "status": "resolved"
     },
@@ -164,10 +291,16 @@
       "id": "term-es-altitude",
       "term": "Altitude",
       "category": "jargon",
-      "aka": ["altitude variation"],
+      "aka": [
+        "altitude variation"
+      ],
       "definition": "The zoom level at which the same action is modeled. A generic 'cmd-attach-file' in a file-attachment pattern flow and a specialized 'cmd-attach-files-to-line' inline in an ordering flow are the same action at two altitudes. The merge deliberately does NOT force-merge legitimate altitude variations: collapsing them breaks the ability to walk each flow as a self-contained story. Shared aggregates and external systems, not collapsed commands, carry the connective tissue between flows.",
       "anchors": [
-        { "path": "docs/METHOD.md", "line": 142, "symbol": "don't force-merge altitude variations" }
+        {
+          "path": "docs/METHOD.md",
+          "line": 142,
+          "symbol": "don't force-merge altitude variations"
+        }
       ],
       "status": "resolved"
     },
@@ -175,11 +308,24 @@
       "id": "term-es-strategic-tactical",
       "term": "Strategic vs tactical",
       "category": "jargon",
-      "aka": ["strategic DDD", "tactical DDD", "tactical.explanation", "tactical.anchors"],
+      "aka": [
+        "strategic DDD",
+        "tactical DDD",
+        "tactical.explanation",
+        "tactical.anchors"
+      ],
       "definition": "The two registers the model moves between. STRATEGIC = what the system does, why, and how its flows connect (the recovered Event Storming view). TACTICAL = how it is actually implemented: the call chain, key methods, data touched, carried on every behavioral node as a 'tactical' block of explanation + source anchors. Every sticky keeps tactical anchors precisely so a reader can move between the two planes freely; a strategic node with no way back to code is a dead end.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 31, "symbol": "tactical block" },
-        { "path": "docs/METHOD.md", "line": 10, "symbol": "tactical implementation vs strategic view" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 31,
+          "symbol": "tactical block"
+        },
+        {
+          "path": "docs/METHOD.md",
+          "line": 10,
+          "symbol": "tactical implementation vs strategic view"
+        }
       ],
       "status": "resolved"
     },
@@ -187,11 +333,22 @@
       "id": "term-es-inferred",
       "term": "inferred",
       "category": "jargon",
-      "aka": ["inferred: true", "inferred: false"],
+      "aka": [
+        "inferred: true",
+        "inferred: false"
+      ],
       "definition": "A per-node flag: true when the concept was RECOVERED from code that never names it (the usual case for behavioral stickies in a services-and-repositories codebase), false only when the code literally names the concept. Physical data-model nodes (server/database/table/column) default to inferred:false, the inverse of the behavioral layer, because the SQL names them outright. At merge time an explicit inferred:false wins over an inferred:true seeding.",
       "anchors": [
-        { "path": "docs/flows-schema.md", "line": 59, "symbol": "inferred rule" },
-        { "path": "src/lib/merge.mjs", "line": 91, "symbol": "explicit code naming wins" }
+        {
+          "path": "docs/flows-schema.md",
+          "line": 59,
+          "symbol": "inferred rule"
+        },
+        {
+          "path": "src/lib/merge.mjs",
+          "line": 91,
+          "symbol": "explicit code naming wins"
+        }
       ],
       "status": "resolved"
     },
@@ -199,7 +356,11 @@
       "id": "term-es-bounded-context",
       "term": "Bounded context",
       "category": "concept",
-      "aka": ["subdomain", "core domain", "supporting subdomain"],
+      "aka": [
+        "subdomain",
+        "core domain",
+        "supporting subdomain"
+      ],
       "definition": "A strategic boundary within which the ubiquitous language is consistent; edges that cross it are the integration points (an anti-corruption layer or published language). A bounded context must be DECLARED with an explicit label, never inferred from namespace/folder layout, because code layout is an accident rather than a domain fact. A code-derived view cannot recover context grouping on its own, which is one of the things it structurally loses versus a workshop wall.",
       "status": "partial",
       "openQuestion": "This recovered self-model is small enough to be a single context and does not declare bounded-context boundaries; a human who knows the intended architecture should say whether the recovery/explorer/MCP surfaces are meant to be separate bounded contexts and, if so, label them."

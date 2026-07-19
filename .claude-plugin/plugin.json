@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "event-storming-recovery",
   "description": "Recover a strategic Event Storming model from an existing codebase, then explore it interactively and work with Claude on it. Orchestrates parallel scout + deep-trace sub-agents into a validated flows.json, and ships an npx-run SPA whose MCP server lets any Claude session read what you're looking at (selection + curated context) to drive grounded refactors.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": { "name": "Blake Hastings" },
   "repository": "https://github.com/bhastings-t3/event-storming-recovery",
   "license": "MIT",

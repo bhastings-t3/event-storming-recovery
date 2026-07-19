@@ -105,9 +105,20 @@ against the pilot, and every subsequent trace inherits the fix. Skipping the pil
 the same gap 26 times.
 
 Each trace agent:
-- **verifies reachability first.** Is the entry point actually wired — does a caller exist, is the
-  route registered, is DI set up? When a caller is missing, chasing `git log`/`git show` recovers
-  *why* it was removed, which is often the most valuable finding in the whole model. Dead and
+- **verifies reachability first — at both ends.** Is the entry point actually reachable by a real
+  actor? Verify *outward to the trigger* and *through to the final effect*, not just the middle. The
+  trap that bites most: "the handler exists and is DI-registered" is **not** reachability — a Save
+  button gated by a flag that is never set true, a popup nothing opens, a grid whose delete affordance
+  never renders, are all **dead-but-armed** (the service compiles and is wired, but no actor can start
+  it). Trace outward until you reach a *rendered* control, a *registered* route, or a scheduled/DI
+  entry — or a dead end. Before calling a write path `live`, name the concrete `file:line` an actor
+  uses to start it. But reachability is **asymmetric**, and false-*dead* is as costly as false-live
+  (it erases a real pathway from the map): `dead` is a *positive* claim that needs positive evidence —
+  a verified removal commit, or an exhaustive repo-wide search that also rules out indirect invocation
+  (DI, reflection, interface dispatch, event wiring a parent supplies, config/DB-driven dispatch). A
+  trigger you searched for but couldn't confirm is a **reachability hotspot** (state what you searched
+  and the open question), *not* a `dead` verdict on a hunch. When the trigger is missing, chasing `git log`/`git show`
+  recovers *why* it was removed, which is often the most valuable finding in the whole model. Dead and
   superseded flows get a `status` and a `supersededBy` link, and are traced anyway — the delta
   between the dead flow and its replacement is recovered intent you can't get any other way.
 - **traces end to end and distrusts its hints.** The orchestrator gives each agent a starting point,

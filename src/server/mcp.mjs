@@ -10,7 +10,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   buildNodeContext, buildFlowContext,
-  renderNodeContextMarkdown, renderBundleMarkdown, renderFlowMarkdown,
+  renderNodeContextMarkdown, renderBundleMarkdown, renderFlowMarkdown, renderDataModelMarkdown,
 } from './context.mjs';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
@@ -72,6 +72,16 @@ function buildMcpServer(services, state) {
       const nodes = model.nodes.map((n) => `- \`${n.id}\` — ${n.label} _(${n.type})_`).join('\n');
       return text(`# Model index\n\n## Flows (${model.flows.length})\n${flows}\n\n## Nodes (${model.nodes.length})\n${nodes}`);
     },
+  );
+
+  server.registerTool(
+    'list_data_model',
+    {
+      title: 'List the recovered data model',
+      description: 'The physical storage the code actually touches: servers ▸ databases ▸ tables ▸ columns, and for each table the behavioral nodes that write/read/project it. Use this for "what tables does this touch", "where does this data live", or "who writes this table". For a single node\'s fields and lineage, use get_node.',
+      inputSchema: {},
+    },
+    async () => text(renderDataModelMarkdown(services)),
   );
 
   server.registerResource(

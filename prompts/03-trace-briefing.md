@@ -129,3 +129,6 @@ with one line each, node count, and confirmation both files were written.
 - AI / file-parsing / ETL pipeline stages are NOT aggregates or policies — keep them in the command's
   tactical detail; promote only domain-significant facts to events (the two-plane model).
 - Read models are what actors read to decide (grids, projections, downloaded files).
+- **Data returns are a later phase.** Note in `tactical.explanation` which tables/stores a read model
+  or aggregate touches, but don't build out `fields[]`/storage lineage here — the dedicated
+  data-mapping phase (`05-data-mapping.md`) recovers those against the merged model.

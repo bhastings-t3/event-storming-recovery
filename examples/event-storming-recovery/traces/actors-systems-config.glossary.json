@@ -1,0 +1,352 @@
+{
+  "terms": [
+    {
+      "id": "term-asc-operator",
+      "term": "Operator",
+      "category": "role",
+      "aka": [
+        "actor-operator",
+        "developer/orchestrator"
+      ],
+      "definition": "The developer or orchestrator who runs the tool from a terminal: the merge/generate CLIs (es-merge, es-generate, npm run demo) and the es-view launcher (npx event-storming-recovery). Distinguished from the Viewer: the Operator boots the app; the Viewer then interacts with it in the browser (often the same person, not necessarily).",
+      "relatedNodes": [
+        "actor-operator"
+      ],
+      "anchors": [
+        {
+          "path": "bin/es-view.mjs",
+          "line": 75,
+          "symbol": "main",
+          "note": "the CLI the operator invokes to boot the explorer"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-viewer",
+      "term": "Viewer",
+      "category": "role",
+      "aka": [
+        "actor-viewer"
+      ],
+      "definition": "The human interacting with the running Event Storming explorer SPA in a browser: clicking nodes to inspect them, viewing source behind anchors, and curating a context bundle to hand to Claude. A pure consumer of the served app, not necessarily the same person as the Operator who launched it.",
+      "relatedNodes": [
+        "actor-viewer"
+      ],
+      "anchors": [],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-connected-claude",
+      "term": "Connected Claude session",
+      "category": "role",
+      "aka": [
+        "actor-claude",
+        "connected Claude terminal"
+      ],
+      "definition": "A Claude session wired to the running es-view app's MCP endpoint (same process as the SPA). It READS what the Viewer selected or gathered (via get_current_selection or the event-storming://selected-nodes resource) as grounded markdown, then does the real refactoring work in its own session on the real files. It is a context CONSUMER; the app is a 'context authority, not a Claude owner'. Contrast the Claude MCP client (the transport-level process) and the Claude CLI (the shelled-out registration command).",
+      "relatedNodes": [
+        "actor-claude"
+      ],
+      "anchors": [],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-claude-cli",
+      "term": "Claude Code CLI",
+      "category": "system",
+      "aka": [
+        "claude mcp add",
+        "claude.cmd",
+        "ext-claude-cli"
+      ],
+      "definition": "The user's Claude Code command-line tool (`claude`), invoked out-of-process by the es-view server. RegisterMcp shells out to `claude mcp add --transport http event-storming \"<url>\" [--scope <scope>]` on the Viewer's behalf to register the running app as an MCP server in the user's own Claude config. It runs as the same OS user with their PATH (a Windows claude.cmd shim resolves), so the effect is exactly what the user could type by hand; a missing binary is reported as notFound.",
+      "relatedNodes": [
+        "ext-claude-cli"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/mcp-register.mjs",
+          "line": 13,
+          "symbol": "claudeMcpAdd",
+          "note": "builds and execs the `claude mcp add` command"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-claude-mcp-client",
+      "term": "Claude MCP client",
+      "category": "system",
+      "aka": [
+        "ext-claude-mcp-client",
+        "streamable-HTTP transport client"
+      ],
+      "definition": "The Claude process on the far side of the MCP transport that POSTs to /mcp over streamable HTTP to read the model, the current selection, and the curated bundle. Distinct from the @modelcontextprotocol/sdk used inside the server (that is an in-process LIBRARY, not this external system) and from the `claude` CLI (the separate command shelled out to REGISTER the server). Per-session transports are keyed by Mcp-Session-Id.",
+      "relatedNodes": [
+        "ext-claude-mcp-client"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/mcp.mjs",
+          "line": 120,
+          "symbol": "createMcpHandler",
+          "note": "transports Map keyed by Mcp-Session-Id; POST /mcp entry"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-source-fs",
+      "term": "Local filesystem as a data source",
+      "category": "system",
+      "aka": [
+        "ext-source-fs",
+        "local filesystem"
+      ],
+      "definition": "The local filesystem treated as the tool's data source and sink, outside the process boundary. It holds the per-flow trace JSONs the merge reads, receives the merged flows.json written as output (CLI path only; the server keeps the model in memory), and supplies the REAL code excerpts pulled behind each anchor when a Viewer views source.",
+      "relatedNodes": [
+        "ext-source-fs"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/source.mjs",
+          "line": 13,
+          "symbol": "readSource",
+          "note": "reads the real file behind an anchor from disk"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-browser",
+      "term": "Default web browser",
+      "category": "system",
+      "aka": [
+        "ext-browser",
+        "OS opener",
+        "start/open/xdg-open"
+      ],
+      "definition": "The Operator's default web browser, outside the process boundary. At the end of boot es-view crosses the browser/OS-shell boundary by spawning a detached, best-effort OS opener (win32 `start`, darwin `open`, else `xdg-open`) to launch the served URL there, unless --no-open. The URL is always printed too, so a failed open is non-fatal.",
+      "relatedNodes": [
+        "ext-browser"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/open.mjs",
+          "line": 4,
+          "symbol": "openBrowser",
+          "note": "platform-specific detached spawn; best-effort, never throws"
+        },
+        {
+          "path": "bin/es-view.mjs",
+          "line": 111,
+          "symbol": "main",
+          "note": "if (opts.open) openBrowser(url)"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-vscode-deeplink",
+      "term": "VS Code deep link",
+      "category": "jargon",
+      "aka": [
+        "vscode://file/...",
+        "anchorUrl",
+        "ext-editor"
+      ],
+      "definition": "A `vscode://file/<repoRoot>/<path>:<line>` URL built from a node's tactical anchor. Clicking it hands off across the process boundary to the local editor (VS Code), which opens the real file at that line straight from the filesystem. It is the sibling grounding path to the inline view-source excerpt: same anchor, different destination. Built by anchorUrl in both the generated explorer.html and the DOT (the first anchor becomes each sticky's URL).",
+      "relatedNodes": [
+        "ext-editor"
+      ],
+      "anchors": [
+        {
+          "path": "tools/generate-views.js",
+          "line": 478,
+          "symbol": "anchorUrl",
+          "note": "vscode://file/ + REPO_ROOT + path[:line] in the generated SPA"
+        },
+        {
+          "path": "tools/generate-views.js",
+          "line": 79,
+          "symbol": "dot",
+          "note": "first tactical anchor attached as a vscode:// URL on the DOT node"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-plugin",
+      "term": "plugin",
+      "category": "jargon",
+      "aka": [
+        "Claude Code plugin",
+        ".claude-plugin/plugin.json"
+      ],
+      "definition": "This repo packaged as a Claude Code plugin, declared by `.claude-plugin/plugin.json`. Installing it bundles both skills, the prompts/tools, and the `event-storming` MCP server declaration (pinned to http://127.0.0.1:5178/mcp) in one step, so an installed user gets the whole workflow plus the context bridge without wiring anything by hand.",
+      "anchors": [
+        {
+          "path": ".claude-plugin/plugin.json",
+          "line": 10,
+          "symbol": "mcpServers",
+          "note": "declares the event-storming MCP server at the pinned localhost URL"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-marketplace",
+      "term": "marketplace",
+      "category": "jargon",
+      "aka": [
+        "Claude Code plugin marketplace",
+        ".claude-plugin/marketplace.json"
+      ],
+      "definition": "A Claude Code plugin marketplace manifest (`.claude-plugin/marketplace.json`) listing installable plugins. Here the repo is BOTH the marketplace and the single plugin it hosts (source `./`): `claude plugin marketplace add bhastings-t3/event-storming-recovery` then `plugin install event-storming-recovery@event-storming-recovery` wire it up from the same repo.",
+      "anchors": [
+        {
+          "path": ".claude-plugin/marketplace.json",
+          "line": 8,
+          "symbol": "plugins",
+          "note": "the repo listed as its own plugin, source ./"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-skill",
+      "term": "skill",
+      "category": "jargon",
+      "aka": [
+        "SKILL.md"
+      ],
+      "definition": "A Claude Code skill: a SKILL.md file with YAML frontmatter (a name plus description triggers) that teaches Claude a workflow. This plugin ships two: event-storming-recovery (orchestrates BUILDING the model) and event-storming-explorer (launches the app + MCP bridge and drives WORKING on the model with Claude).",
+      "anchors": [
+        {
+          "path": "skills/event-storming-explorer/SKILL.md",
+          "line": 1,
+          "symbol": "frontmatter",
+          "note": "the explorer skill's name + trigger description"
+        },
+        {
+          "path": "skills/event-storming-recovery/SKILL.md",
+          "line": 1,
+          "symbol": "frontmatter",
+          "note": "the recovery skill"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-npx-bin",
+      "term": "npx / bin entry points",
+      "category": "jargon",
+      "aka": [
+        "es-view",
+        "es-merge",
+        "es-generate",
+        "event-storming-recovery",
+        "npx event-storming-recovery view"
+      ],
+      "definition": "The package's executable entry points declared in package.json `bin`: `event-storming-recovery` and `es-view` (both -> bin/es-view.mjs, the SPA + MCP launcher), `es-merge` (tools/merge-flows.js) and `es-generate` (tools/generate-views.js). Run via `npx event-storming-recovery view` without a global install, or as the bare `es-*` commands once installed. `view` is an optional leading subcommand es-view accepts; a bare path argument is treated as --model.",
+      "anchors": [
+        {
+          "path": "package.json",
+          "line": 7,
+          "symbol": "bin",
+          "note": "the four declared executables and their targets"
+        },
+        {
+          "path": "bin/es-view.mjs",
+          "line": 29,
+          "symbol": "parseArgs",
+          "note": "optional leading `view` subcommand shifted off"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-repo-root",
+      "term": "REPO_ROOT / repoRoot",
+      "category": "jargon",
+      "aka": [
+        "repoRoot",
+        "REPO_ROOT",
+        "--repo-root",
+        "meta.repoRoot"
+      ],
+      "definition": "The absolute path of the ANALYZED checkout that all source anchors resolve against — the target codebase the model describes, NOT this tool's own repo. Set by --repo-root, falling back to model.meta.repoRoot then the example tree or cwd. It is used server-side to read source and to build vscode:// links, and is inlined into the static explorer.html as `const REPO_ROOT`.",
+      "relatedNodes": [
+        "ext-source-fs"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/resolve-model.mjs",
+          "line": 65,
+          "symbol": "resolveModel",
+          "note": "repoRoot precedence: --repo-root > meta.repoRoot > example tree | cwd"
+        },
+        {
+          "path": "src/server/source.mjs",
+          "line": 15,
+          "symbol": "readSource",
+          "note": "path.resolve(repoRoot) is the sandbox root anchors resolve under"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-scope",
+      "term": "scope",
+      "category": "jargon",
+      "aka": [
+        "--scope",
+        "local",
+        "project",
+        "user"
+      ],
+      "definition": "The Claude MCP registration scope passed to `claude mcp add --scope`, one of a whitelisted set: `local` (this project, private to you), `project` (shared via a committed .mcp.json), or `user` (your global Claude settings). Determines WHERE RegisterMcp writes the server entry. es-view whitelists exactly these three (anything else is dropped, no --scope emitted) because the value is interpolated into a shell command.",
+      "relatedNodes": [
+        "cmd-register-mcp"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/mcp-register.mjs",
+          "line": 11,
+          "symbol": "SCOPES",
+          "note": "new Set(['local','project','user']) — the whitelist"
+        },
+        {
+          "path": "src/server/mcp-register.mjs",
+          "line": 14,
+          "symbol": "claudeMcpAdd",
+          "note": "scopeArg only emitted when scope is whitelisted"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-asc-sandbox",
+      "term": "sandbox / path-escape guard",
+      "category": "jargon",
+      "aka": [
+        "path escapes repo root",
+        "repo-root sandbox"
+      ],
+      "definition": "The guard that keeps view-source reads inside the repo root. readSource resolves the anchor path against repoRoot and refuses (returning error 'path escapes repo root') any resolved path that is not the root itself or under `root + path separator`, blocking `../` traversal out of the analyzed checkout so a malicious/broken anchor can't read arbitrary files.",
+      "relatedNodes": [
+        "ext-source-fs"
+      ],
+      "anchors": [
+        {
+          "path": "src/server/source.mjs",
+          "line": 18,
+          "symbol": "readSource",
+          "note": "abs must equal root or start with root + path.sep, else refuse"
+        }
+      ],
+      "status": "resolved"
+    }
+  ]
+}

@@ -1,0 +1,273 @@
+{
+  "nodes": [
+    {
+      "id": "actor-viewer",
+      "type": "actor",
+      "label": "Viewer",
+      "inferred": true,
+      "description": "The human viewing the Event Storming explorer SPA. Here they click 'Add to Claude' in the ConnectClaude panel to wire this running app into their Claude terminal as an MCP server, choosing a scope (this project / shared / all my projects)."
+    },
+    {
+      "id": "ext-claude-cli",
+      "type": "externalSystem",
+      "label": "Claude CLI",
+      "inferred": false,
+      "description": "The user's Claude Code command-line tool, outside the es-view process boundary. `claude mcp add` mutates the user's own MCP configuration (a project-local entry, a shared .mcp.json, or the user-global settings depending on --scope). The es-view server shells out to it as the same OS user, so the effect is exactly what the user could type themselves.",
+      "tactical": {
+        "explanation": "Reached via node:child_process exec from the server. The built command is `claude mcp add --transport http event-storming \"<url>\" [--scope <scope>]`. Because it runs through a shell, a Windows `claude.cmd` shim resolves on PATH. exec runs with windowsHide + a 20s timeout; a missing binary is detected via ENOENT or a 'not recognized/not found' stderr and reported as { notFound: true } so the UI can tell the user to install Claude Code or run the command by hand.",
+        "anchors": [
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 15,
+            "symbol": "claudeMcpAdd",
+            "note": "builds `claude mcp add --transport http <name> \"<url>\"[ --scope <scope>]`"
+          },
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 17,
+            "symbol": "claudeMcpAdd",
+            "note": "exec(command, { timeout: 20000, windowsHide: true })"
+          },
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 20,
+            "symbol": "claudeMcpAdd",
+            "note": "missing-binary detection: ENOENT / stderr regex => notFound"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-mcp-connect-command",
+      "type": "readModel",
+      "label": "MCP connect command",
+      "inferred": true,
+      "description": "The exact `claude mcp add` command the viewer would run to connect this session, shown WITHOUT running it. It lets the human read/copy the command instead of (or before) letting the app run it. Surfaced three ways: the SPA renders it under the button, GET /api/mcp/info returns it, and the es-view CLI banner prints it at startup.",
+      "tactical": {
+        "explanation": "Projected from the server's in-memory runtime (runtime.baseUrl, set after the socket binds), NOT from any file. GET /api/mcp/info returns { name: 'event-storming', url: <baseUrl>/mcp, command: `claude mcp add --transport http event-storming <url>` }. The SPA displays info.command; bin/es-view.mjs prints the same line in its banner. This projection uses the ACTUAL bound port (the fall-forward port if 5178 was taken), so it agrees with the register write. Note the info command omits --scope and does not quote the URL, a cosmetic drift from the string the register write actually builds.",
+        "anchors": [
+          {
+            "path": "src/server/server.mjs",
+            "line": 174,
+            "symbol": "createServer",
+            "note": "GET /api/mcp/info returns { name, url, command } without running it"
+          },
+          {
+            "path": "src/web/components/ConnectClaude.jsx",
+            "line": 53,
+            "symbol": "ConnectClaude",
+            "note": "renders info.command under the button"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 107,
+            "symbol": "main",
+            "note": "startup banner prints the same claude mcp add line"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-register-mcp",
+      "type": "command",
+      "label": "RegisterMcp",
+      "inferred": true,
+      "description": "Register this running es-view app as an MCP server in the user's Claude configuration at the chosen scope, by having the server run `claude mcp add` on the host on the viewer's behalf. This is the single most surprising write in the app: a browser click spawns a host-side process running the user's CLI.",
+      "tactical": {
+        "explanation": "UI -> server -> shell chain. ConnectClaude.add() calls registerMcp(scope) (src/web/api.js:32) which POSTs /api/mcp/register with { scope }. The route (server.mjs:178) resolves the live MCP url from runtime.baseUrl (503 if the socket isn't bound yet), whitelists the scope to {local,project,user} (else undefined), and calls claudeMcpAdd({ name: MCP_NAME, url, scope }). claudeMcpAdd (mcp-register.mjs:13) builds the fixed command string and runs it via exec. The result { ok, command, stdout, stderr, notFound } is returned to the SPA, which shows 'Added', a 'claude not found' hint, or the trimmed stderr. No in-process state changes; the state lives in the external CLI's config.",
+        "anchors": [
+          {
+            "path": "src/web/components/ConnectClaude.jsx",
+            "line": 20,
+            "symbol": "add",
+            "note": "button handler; calls registerMcp(scope) and renders the result"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 32,
+            "symbol": "registerMcp",
+            "note": "POST /api/mcp/register { scope }"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 178,
+            "symbol": "createServer",
+            "note": "route: resolve url, whitelist scope, call claudeMcpAdd"
+          },
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 13,
+            "symbol": "claudeMcpAdd",
+            "note": "build command + exec on the host"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-mcp-registration",
+      "type": "aggregate",
+      "label": "MCP Registration",
+      "inferred": true,
+      "ownedBy": "ext-claude-cli",
+      "description": "This app's registration as an MCP server (alias 'event-storming') inside the user's Claude configuration. It has no state inside the es-view process: its state lives entirely in the external Claude CLI's config (a project-local list, a shared .mcp.json, or the user-global settings, per --scope). The merge command's guards are its invariants.",
+      "tactical": {
+        "explanation": "Realized purely by the `claude mcp add` shell-out; there is no in-memory or on-disk representation on the es-view side (ownedBy ext-claude-cli). The registered alias is MCP_NAME = 'event-storming' (server.mjs:24). Idempotency, overwrite, and where exactly the entry lands are all delegated to the Claude CLI. The registration URL points at <baseUrl>/mcp using the actual bound port.",
+        "anchors": [
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 13,
+            "symbol": "claudeMcpAdd",
+            "note": "the only writer; effect lands in the external CLI config"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 24,
+            "symbol": "MCP_NAME",
+            "note": "registered alias 'event-storming'"
+          }
+        ]
+      }
+    },
+    {
+      "id": "inv-mcp-input-safe",
+      "type": "invariant",
+      "label": "Registration inputs are fixed and non-injectable (scope whitelisted)",
+      "inferred": true,
+      "description": "The only variable in the shelled command is the scope, which must be one of {local, project, user}; anything else is dropped. The subcommands are fixed, and the URL is the app's own localhost address (quoted). So even though the command runs through a shell, nothing user-supplied can be injected into it.",
+      "tactical": {
+        "explanation": "Two layers of whitelist. The route (server.mjs:182) accepts scope only if ['local','project','user'].includes(scope), else passes undefined. claudeMcpAdd re-checks against a SCOPES Set (mcp-register.mjs:11) and appends ` --scope <scope>` only on a hit, else '' (mcp-register.mjs:14). name and the fixed subcommands are compile-time constants; url is the server's own runtime.baseUrl + '/mcp', quoted in the command string. The code comment notes execFile(args,{shell:true}) was deliberately avoided (Node 24 DEP0190) precisely because array args aren't escaped; here every part is controlled.",
+        "anchors": [
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 11,
+            "symbol": "SCOPES",
+            "note": "whitelist Set {local, project, user}"
+          },
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 14,
+            "symbol": "claudeMcpAdd",
+            "note": "scopeArg appended only when whitelisted, else ''"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 182,
+            "symbol": "createServer",
+            "note": "route-level scope whitelist before the call"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-mcp-registered",
+      "type": "event",
+      "label": "McpRegistered",
+      "inferred": true,
+      "description": "The app is now registered as an MCP server named 'event-storming' in the user's chosen Claude scope. The viewer is told to run /mcp in Claude (restarting it if already open), then click a node and ask 'explain the selected node'.",
+      "tactical": {
+        "explanation": "The fact holds when exec returns no error: claudeMcpAdd resolves { ok: !err, ... } (mcp-register.mjs:21) and the SPA's add() enters the 'done' branch on r.ok, showing the 'Added as \"event-storming\"' guidance (ConnectClaude.jsx:24-26). On failure the fact does not hold: notFound yields an install hint, any other error surfaces the trimmed stderr/stdout.",
+        "anchors": [
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 21,
+            "symbol": "claudeMcpAdd",
+            "note": "resolve { ok: !err, command, stdout, stderr, notFound }"
+          },
+          {
+            "path": "src/web/components/ConnectClaude.jsx",
+            "line": 24,
+            "symbol": "add",
+            "note": "r.ok => status 'done' + '/mcp' guidance"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "register-mcp",
+      "name": "Viewer connects their Claude terminal from the explorer",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "In the explorer's ConnectClaude panel the viewer picks a scope and clicks 'Add to Claude'. The SPA POSTs /api/mcp/register; the server resolves its own live MCP URL, whitelists the scope, and shells out `claude mcp add --transport http event-storming \"<url>/mcp\" [--scope <scope>]` on the host as the same OS user. On success the app is registered as an MCP server in the user's Claude config and the viewer is told to run /mcp. The point is one-click wiring of the running app into the user's Claude terminal, but the mechanism (a browser click spawning a host process that runs the user's CLI) is the single most surprising write in the app.",
+      "trigger": "Viewer clicks 'Add to Claude' in the ConnectClaude panel (scope dropdown: local/project/user).",
+      "steps": [
+        "actor-viewer",
+        "rm-mcp-connect-command",
+        "cmd-register-mcp",
+        "agg-mcp-registration",
+        "evt-mcp-registered",
+        "ext-claude-cli"
+      ],
+      "edges": [
+        {
+          "from": "rm-mcp-connect-command",
+          "to": "actor-viewer",
+          "verb": "read by"
+        },
+        {
+          "from": "actor-viewer",
+          "to": "cmd-register-mcp",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-register-mcp",
+          "to": "agg-mcp-registration",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-register-mcp",
+          "to": "ext-claude-cli",
+          "verb": "calls"
+        },
+        {
+          "from": "agg-mcp-registration",
+          "to": "inv-mcp-input-safe",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-mcp-registration",
+          "to": "evt-mcp-registered",
+          "verb": "emits"
+        }
+      ],
+      "hotspots": [
+        "hot-ui-shells-claude-cli",
+        "hot-mcp-name-mismatch",
+        "hot-port-fall-forward-stale-mcp"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-ui-shells-claude-cli",
+      "label": "A browser click spawns a host process running the user's claude CLI",
+      "description": "Clicking 'Add to Claude' makes the local server run `claude mcp add` on the host via a shell. The inputs are whitelisted and non-injectable, and the server already runs as the user with their PATH, so the code argues this is 'no new privilege'. Still: a web page triggering host command execution is a real trust surface (any page/script that can reach 127.0.0.1:<port> could POST /api/mcp/register). Human question: is the one-click convenience worth letting the UI spawn host processes, or should this require an explicit terminal confirmation / be gated behind a token, especially if the server is ever bound beyond loopback (--host 0.0.0.0)?",
+      "tactical": {
+        "explanation": "POST /api/mcp/register (server.mjs:178) -> claudeMcpAdd -> exec(`claude mcp add ...`) (mcp-register.mjs:17). No auth/CSRF token on the route; the only guard is scope whitelisting and the fixed command. The server binds 127.0.0.1 by default (bin/es-view.mjs:27) but --host is user-overridable, which would widen exposure of this write endpoint.",
+        "anchors": [
+          {
+            "path": "src/server/mcp-register.mjs",
+            "line": 17,
+            "symbol": "claudeMcpAdd",
+            "note": "exec runs the user's claude CLI on the host"
+          },
+          {
+            "path": "src/server/server.mjs",
+            "line": 178,
+            "symbol": "createServer",
+            "note": "unauthenticated POST route that triggers the shell-out"
+          },
+          {
+            "path": "bin/es-view.mjs",
+            "line": 27,
+            "symbol": "parseArgs",
+            "note": "default host 127.0.0.1 but --host is overridable"
+          }
+        ]
+      }
+    }
+  ]
+}

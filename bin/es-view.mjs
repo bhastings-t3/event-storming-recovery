@@ -63,13 +63,13 @@ Options:
   -h, --help             show this help
 
 With no --model/--traces, es-view auto-discovers a **/model/flows.json under the
-current directory, and falls back to the bundled toy-shop example.`;
+current directory, and falls back to the bundled example (this tool's own self-model).`;
 
 const SOURCE_LABEL = {
   model: 'explicit --model',
   traces: 'merged from --traces',
   discovered: 'auto-discovered in this directory',
-  example: 'bundled toy-shop example (no model found here)',
+  example: 'bundled example — this tool\'s own self-model (no model found here)',
 };
 
 async function main() {

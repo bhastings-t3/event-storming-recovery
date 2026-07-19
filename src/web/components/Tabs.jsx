@@ -4,6 +4,7 @@ import { useExplorer } from '../store.jsx';
 const TABS = [
   ['flows', 'Flows'],
   ['gallery', 'Gallery'],
+  ['data', 'Data model'],
   ['glossary', 'Glossary'],
   ['overview', 'Overview'],
 ];

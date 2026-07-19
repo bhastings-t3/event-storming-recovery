@@ -30,6 +30,12 @@ const title = argVal('--title', (model.meta && model.meta.title) || 'Event Storm
 const nodeById = new Map(model.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(model.hotspots.map(h => [h.id, h]));
 
+// Technology-neutral storage node types (datastore, field). They are a substrate for the behavioral
+// model, not steps in a flow, so the flow board + DOT exclude them and any edge touching them by a
+// TYPE test; the links survive in the model for the Data-model tab and the detail panel.
+const DATA_TYPES = new Set(['datastore', 'field']);
+const isDataId = id => { const n = nodeById.get(id); return n && DATA_TYPES.has(n.type); };
+
 // Event-storming palette for a dark board. Each sticky's TEXT is a darker tone of its OWN
 // fill hue (tonal, not near-black) so the label reads as part of the card, not stamped on it.
 // Actor vs aggregate keep distinct yellow shades per skill guidance.
@@ -42,6 +48,8 @@ const PALETTE = {
   readModel:      { fill: '#6FC993', edge: '#358a5a', text: '#124a2c', name: 'Read Model' },
   externalSystem: { fill: '#E68DAF', edge: '#b05378', text: '#59213b', name: 'External System' },
   invariant:      { fill: '#26262e', edge: '#42424e', text: '#b7b7c2', name: 'Invariant' },
+  datastore:      { fill: '#6f92b3', edge: '#3f5a76', text: '#16293c', name: 'Data store' },
+  field:          { fill: '#c3d3e2', edge: '#7f96ab', text: '#2c3e50', name: 'Field' },
   hotspot:        { fill: '#E5645E', edge: '#a83530', text: '#4c110e', name: 'Hotspot' },
 };
 
@@ -60,8 +68,8 @@ for (const f of model.flows) {
   dot.push(`  subgraph "cluster_${f.id}" {`);
   dot.push(`    label="${dotEsc(f.name)}${dead ? '  [' + f.status.toUpperCase() + ']' : ''}"; fontsize=13; color="${dead ? '#3a3a44' : '#4a4a56'}"; style="rounded"; fontcolor="${dead ? '#71717a' : '#e4e4e7'}";`);
   const used = new Set();
-  (f.steps || []).forEach(s => used.add(s));
-  (f.edges || []).forEach(e => { used.add(e.from); used.add(e.to); });
+  (f.steps || []).forEach(s => { if (!isDataId(s)) used.add(s); });
+  (f.edges || []).forEach(e => { if (isDataId(e.from) || isDataId(e.to)) return; used.add(e.from); used.add(e.to); });
   for (const id of used) {
     const n = nodeById.get(id); if (!n) continue;
     const p = PALETTE[n.type] || PALETTE.invariant;
@@ -327,12 +335,78 @@ const html = `<!DOCTYPE html>
   .ctx-title:hover { color: #fff; text-decoration: underline; }
   .ctx-kind { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 2px 8px; text-decoration: none; }
   .ctx-lane { position: relative; }
+  /* detail panel: conceptual field rows (read-model "Data returned" / aggregate "State & fields") */
+  .fieldrow { border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; margin-bottom: 8px; background: var(--card); }
+  .fr-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .fr-head .fr-name { font-size: 12.5px; font-weight: 650; color: var(--fg); overflow-wrap: anywhere; }
+  .fr-dtype { font: 10px/1.4 ui-monospace, Consolas, monospace; color: #9fbef0; background: var(--accent); border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  .fr-conf { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+  .fr-tag { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; }
+  .fr-tag.sensitive { color: #eda3a0; border-color: rgba(229,100,94,.4); }
+  .fr-deriv { font-size: 12px; color: var(--dim); line-height: 1.5; margin: 6px 0 4px; overflow-wrap: anywhere; }
+  .fr-src { font-size: 11px; color: var(--muted); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 2px 0; }
+  .fr-src.none { color: #6b6b78; font-style: italic; }
+  .fr-role { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--accent-2); border-radius: 99px; padding: 1px 7px; }
+  .fr-col { font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--dim); }
+  .fr-col.link { color: #7db2f5; cursor: pointer; }
+  .fr-col.link:hover { text-decoration: underline; }
+  .fr-col.addr { color: #8a8a96; word-break: break-all; }
+  .fr-xform { font-size: 9.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+  .fr-note { font-size: 10.5px; color: var(--muted); font-style: italic; }
+  /* physical-node containment breadcrumb (server ▸ database ▸ table ▸ column) */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; margin-bottom: 12px; }
+  .breadcrumb .bc-sep { color: #55555f; }
+  .breadcrumb .bc-link { color: #7db2f5; cursor: pointer; }
+  .breadcrumb .bc-link:hover { text-decoration: underline; }
+  .breadcrumb .bc-here { color: var(--dim); font-weight: 650; }
+  /* Data model tab: server ▸ database ▸ table cards, cross-linked to behavioral nodes */
+  #datamodel { flex: 1; min-width: 0; display: none; flex-direction: column; }
+  #datamodel.show { display: flex; }
+  .dm-head { padding: 16px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+  .dm-head h2 { margin: 0 0 8px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .dm-head h2 .count { font-size: 11px; font-weight: 700; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 2px 9px; letter-spacing: 0; }
+  .dm-sub { font-size: 12px; color: var(--muted); line-height: 1.55; max-width: 900px; }
+  .dm-body { flex: 1; overflow-y: auto; padding: 20px 24px 40px; }
+  .dm-empty { color: var(--muted); font-size: 13px; padding: 30px 2px; line-height: 1.6; }
+  .dm-empty-sm { color: #6b6b78; font-size: 11.5px; font-style: italic; padding: 4px 2px; }
+  .dm-server { margin-bottom: 26px; }
+  .dm-server-head { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 4px 2px; flex-wrap: wrap; }
+  .dm-server-head:hover .dm-sname { text-decoration: underline; }
+  .dm-badge { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; }
+  .dm-badge.dm-unattached { background: var(--accent-2); color: var(--muted); }
+  .dm-sname { font-size: 15px; font-weight: 650; color: var(--fg); }
+  .dm-host { font: 11px/1.5 ui-monospace, Consolas, monospace; color: #8a8a96; }
+  .dm-engine { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); background: var(--accent); border-radius: 99px; padding: 1px 8px; }
+  .dm-db { margin: 10px 0 4px 14px; padding-left: 16px; border-left: 1px solid var(--line); }
+  .dm-db-head { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 8px 2px 10px; flex-wrap: wrap; }
+  .dm-db-head:hover .dm-dname { text-decoration: underline; }
+  .dm-dname { font-size: 13.5px; font-weight: 650; color: var(--dim); }
+  .dm-owned { font-size: 10.5px; color: var(--muted); font-style: italic; }
+  .dm-tables { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .dm-table { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); overflow: hidden; box-shadow: var(--shadow); }
+  .dm-table-head { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; }
+  .dm-table-head:hover { filter: brightness(1.06); }
+  .dm-tt { font-size: 8.5px; font-weight: 800; letter-spacing: .08em; opacity: .7; }
+  .dm-tn { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+  .dm-cols { padding: 6px 4px; }
+  .dm-col { display: flex; align-items: baseline; gap: 8px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background .1s; }
+  .dm-col:hover { background: var(--accent); }
+  .dm-cn { font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--dim); overflow-wrap: anywhere; }
+  .dm-ct { font: 10px/1.4 ui-monospace, Consolas, monospace; color: #7db2f5; margin-left: auto; }
+  .dm-nn { font-size: 8px; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  .dm-consumers { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--line); }
+  .dm-consumer { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--dim); background: var(--input); border: 1px solid var(--line); border-radius: 99px; padding: 3px 9px; cursor: pointer; transition: background .1s, color .1s; }
+  .dm-consumer:hover { background: var(--accent-2); color: #fff; }
+  .dm-cdot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .dm-cverb { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .dm-consumer:hover .dm-cverb { color: #cfcfe0; }
 </style>
 </head>
 <body>
 <div id="tabbar">
   <button id="tab-flows" class="tab active">Flows</button>
   <button id="tab-gallery" class="tab">Gallery</button>
+  <button id="tab-datamodel" class="tab">Data model</button>
   <button id="tab-glossary" class="tab">Glossary</button>
   <button id="tab-overview" class="tab">Overview</button>
 </div>
@@ -353,6 +427,7 @@ const html = `<!DOCTYPE html>
   </div>
 </div>
 <section id="gallery"></section>
+<section id="datamodel"></section>
 <section id="glossary"></section>
 <section id="overview"><div id="ov-wrap"><div id="ov-canvas"></div><div id="ov-zoomctl" class="zoomctl"><button id="ov-zin" title="Zoom in">+</button><button id="ov-zout" title="Zoom out">&minus;</button><button id="ov-zfit" title="Fit to view">&#10530;</button></div></div></section>
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
@@ -364,6 +439,12 @@ const PALETTE = ${JSON.stringify(PALETTE)};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
 let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 'tier';
+
+// Technology-neutral storage node types (datastore, field) — a substrate the behavioral model
+// anchors into. Kept out of the flow board; surfaced in the Data model tab + detail panel.
+const DATA_TYPE_SET = new Set(['datastore', 'field']);
+const isDataNode = n => n && DATA_TYPE_SET.has(n.type);
+const CONF_COLOR = { high: '#6FC993', medium: '#E9A23B', low: '#E5645E' };
 
 // types present in the model, in palette order (drives the gallery filter chips + sort)
 const galleryTypes = Object.keys(PALETTE).filter(t => t !== 'hotspot' && MODEL.nodes.some(n => n.type === t));
@@ -472,6 +553,11 @@ const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9
 function renderFlowInto(f, lane) {
   lane.innerHTML = '';
   lane.style.position = 'relative';
+  // Physical storage nodes (server/database/table/column) are a substrate, not steps in the
+  // behavioral lane. Drop them and any edge touching them so the flow board stays behavioral;
+  // the links survive in the model for the Data-model tab and the detail panel.
+  const isData = id => { const n = nodeById.get(id); return n && DATA_TYPE_SET.has(n.type); };
+  f = { ...f, steps: (f.steps || []).filter(id => !isData(id)), edges: (f.edges || []).filter(e => !isData(e.from) && !isData(e.to)) };
   const flowIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
   const stepIdx = {}; (f.steps || []).forEach((id, i) => (stepIdx[id] = i));
   const isRM = n => n && n.type === 'readModel';
@@ -968,18 +1054,194 @@ function renderGlossary() {
   glSyncChips();
   renderGlossaryList();
 }
+// ---- Data model layer: pure selectors (mirrors src/lib/selectors.mjs) ----
+// Walk a node's parent chain to the root, returning [root, ..., node] (containment breadcrumb).
+function parentChain(node) {
+  const chain = [], seen = new Set(); let cur = node;
+  while (cur && !seen.has(cur.id)) { seen.add(cur.id); chain.unshift(cur); cur = cur.parent ? nodeById.get(cur.parent) : null; }
+  return chain;
+}
+// Behavioral nodes that touch a given datastore, via flow edges. Returns [{ node, verb }] deduped.
+function datastoreConsumers(storeId) {
+  const seen = new Set(), out = [];
+  for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+    if (e.to !== storeId) continue;
+    const from = nodeById.get(e.from);
+    if (!from || isDataNode(from)) continue;
+    const key = e.from + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
+    out.push({ node: from, verb: e.verb });
+  }
+  return out;
+}
+// Read-model/aggregate fields that draw from a given stored field. Returns [{ node, field }].
+function fieldConsumers(fieldId) {
+  const out = [];
+  for (const n of MODEL.nodes) for (const fld of (n.fields || [])) {
+    if ((fld.sources || []).some(s => s.ref === fieldId)) out.push({ node: n, field: fld });
+  }
+  return out;
+}
+// Datastores a behavioral node writes/reads/projects, via its flow edges. Returns [{ node, verb }].
+function nodeStorageLinks(nodeId) {
+  const seen = new Set(), out = [];
+  for (const f of MODEL.flows) for (const e of (f.edges || [])) {
+    if (e.from !== nodeId) continue;
+    const to = nodeById.get(e.to);
+    if (!to || !isDataNode(to)) continue;
+    const key = e.to + '|' + e.verb; if (seen.has(key)) continue; seen.add(key);
+    out.push({ node: to, verb: e.verb });
+  }
+  return out;
+}
+// Build the datastore containment forest from the flat node list. Each datastore subtree carries its
+// child datastores (recursively) and the fields parented directly to it. Arbitrary depth: the same
+// shape holds server▸database▸table▸column, filesystem▸directory▸file▸key, broker▸queue▸field, etc.
+// Returns { roots, looseFields } (fields orphaned from any datastore).
+function dataModelTree() {
+  const stores = MODEL.nodes.filter(n => n.type === 'datastore');
+  const fields = MODEL.nodes.filter(n => n.type === 'field');
+  const childStores = id => stores.filter(n => n.parent === id);
+  const childFields = id => fields.filter(n => n.parent === id);
+  const seen = new Set();
+  const build = ds => {
+    if (seen.has(ds.id)) return { node: ds, stores: [], fields: [] }; // cycle guard
+    seen.add(ds.id);
+    return { node: ds, stores: childStores(ds.id).map(build), fields: childFields(ds.id) };
+  };
+  const isRoot = n => !n.parent || !nodeById.has(n.parent) || (nodeById.get(n.parent) || {}).type !== 'datastore';
+  const roots = stores.filter(isRoot).map(build);
+  const placed = new Set();
+  const walk = t => { t.fields.forEach(f => placed.add(f.id)); t.stores.forEach(walk); };
+  roots.forEach(walk);
+  const looseFields = fields.filter(f => !placed.has(f.id) && (!f.parent || (nodeById.get(f.parent) || {}).type !== 'field'));
+  return { roots, looseFields };
+}
+// Is this datastore a "record set" (fields hang off / behavior targets / a leaf), vs a pure container?
+function isRecordSet(ds) {
+  if (!ds || ds.type !== 'datastore') return false;
+  const hasFields = MODEL.nodes.some(n => n.type === 'field' && n.parent === ds.id);
+  const hasStoreChildren = MODEL.nodes.some(n => n.type === 'datastore' && n.parent === ds.id);
+  const isTarget = MODEL.flows.some(f => (f.edges || []).some(e => e.to === ds.id));
+  return hasFields || isTarget || !hasStoreChildren;
+}
+
+// ---- Data model tab: recursive datastore forest, cross-linked to behavioral nodes ----
+// A datastore that behavior touches (or that fields hang off) renders as a CARD; a pure container
+// renders as a HEADER wrapping its children. Depth is whatever the codebase actually has. Mirrors
+// src/web/components/DataModel.jsx.
+let dataModelBuilt = false;
+// The behavioral nodes that write / read / project a record-set datastore (click-through to sticky).
+function dmConsumerChips(ds) {
+  const consumers = datastoreConsumers(ds.id);
+  if (!consumers.length) return null;
+  const cons = el('div', { class: 'dm-consumers' });
+  for (const c of consumers) {
+    const cp = PALETTE[c.node.type] || PALETTE.invariant;
+    cons.append(el('span', { class: 'dm-consumer', style: 'border-color:' + cp.edge, title: cp.name + ' — ' + c.verb, onclick: () => openDetail(c.node.id) },
+      el('span', { class: 'dm-cdot', style: 'background:' + cp.fill }),
+      el('span', { class: 'dm-cverb' }, c.verb),
+      c.node.label));
+  }
+  return cons;
+}
+// A record-set datastore -> a CARD: storeKind badge + field rows + consumer chips + nested stores.
+function dmStoreCard(tree) {
+  const { node: ds, fields, stores } = tree;
+  const p = PALETTE.datastore;
+  const kind = (ds.storeKind || 'store').toUpperCase();
+  const card = el('div', { class: 'dm-table', style: 'border-color:' + p.edge });
+  card.append(el('div', { class: 'dm-table-head', style: 'background:' + p.fill + ';color:' + p.text, onclick: () => openDetail(ds.id) },
+    el('span', { class: 'dm-tt' }, kind),
+    el('span', { class: 'dm-tn' }, ds.label)));
+  if (fields.length) {
+    const cols = el('div', { class: 'dm-cols' });
+    for (const c of fields) {
+      const col = el('div', { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) }, el('span', { class: 'dm-cn' }, c.label));
+      if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
+      if (c.nullable === false) col.append(el('span', { class: 'dm-nn' }, 'NN'));
+      cols.append(col);
+    }
+    card.append(cols);
+  }
+  const chips = dmConsumerChips(ds);
+  if (chips) card.append(chips);
+  if (stores.length) {
+    const nested = el('div', { class: 'dm-tables' });
+    for (const s of stores) nested.append(dmStoreNode(s, 99));
+    card.append(nested);
+  }
+  return card;
+}
+// A datastore subtree: a card if a record set, else a container header grouping its record-set
+// children into a card grid and nesting its container children.
+function dmStoreNode(tree, depth) {
+  const { node: ds, stores } = tree;
+  if (isRecordSet(ds)) return dmStoreCard(tree);
+  const p = PALETTE.datastore;
+  const kind = (ds.storeKind || 'store').toUpperCase();
+  const cardKids = stores.filter(s => isRecordSet(s.node));
+  const headerKids = stores.filter(s => !isRecordSet(s.node));
+  const top = depth === 0;
+  const block = el('div', { class: top ? 'dm-server' : 'dm-db' });
+  const head = el('div', { class: top ? 'dm-server-head' : 'dm-db-head', onclick: () => openDetail(ds.id) },
+    el('span', { class: 'dm-badge', style: 'background:' + p.fill + ';color:' + p.text }, kind),
+    el('span', { class: top ? 'dm-sname' : 'dm-dname' }, ds.label));
+  if (ds.host) head.append(el('span', { class: 'dm-host' }, ds.host));
+  if (ds.ownedBy) head.append(el('span', { class: 'dm-owned' }, 'owned by ' + ds.ownedBy));
+  block.append(head);
+  for (const s of headerKids) block.append(dmStoreNode(s, depth + 1));
+  if (cardKids.length) {
+    const tablesEl = el('div', { class: 'dm-tables' });
+    for (const s of cardKids) tablesEl.append(dmStoreNode(s, depth + 1));
+    block.append(tablesEl);
+  }
+  return block;
+}
+function buildDataModel() {
+  const g = document.getElementById('datamodel'); g.innerHTML = '';
+  const { roots, looseFields } = dataModelTree();
+  const dataCount = MODEL.nodes.filter(n => DATA_TYPE_SET.has(n.type)).length;
+  const head = el('div', { class: 'dm-head' });
+  head.append(el('h2', {}, 'Data model ', el('span', { class: 'count' }, String(dataCount))));
+  head.append(el('div', { class: 'dm-sub' }, 'The storage the code actually touches, recovered from the code and its config — whatever kind it is: databases, files, queues, caches, in-memory state. Data stores nest to whatever depth exists (server ▸ database ▸ table, or filesystem ▸ directory ▸ file, …) and are cross-linked to the read models and aggregates that read and write them. Demand-driven: only the fields a read model or aggregate references appear.'));
+  g.append(head);
+  const body = el('div', { class: 'dm-body' });
+  if (dataCount === 0) body.append(el('div', { class: 'dm-empty' }, 'No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate data stores and field lineage.'));
+  const topContainers = roots.filter(r => !isRecordSet(r.node));
+  const topCards = roots.filter(r => isRecordSet(r.node));
+  for (const r of topContainers) body.append(dmStoreNode(r, 0));
+  if (topCards.length) {
+    const tablesEl = el('div', { class: 'dm-tables' });
+    for (const r of topCards) tablesEl.append(dmStoreNode(r, 0));
+    body.append(tablesEl);
+  }
+  if (looseFields.length) {
+    const block = el('div', { class: 'dm-server' });
+    block.append(el('div', { class: 'dm-server-head' },
+      el('span', { class: 'dm-badge dm-unattached' }, 'UNATTACHED FIELDS'),
+      el('span', { class: 'dm-sname' }, 'not tied to a data store')));
+    body.append(block);
+  }
+  g.append(body);
+  dataModelBuilt = true;
+}
+function renderDataModel() { if (!dataModelBuilt) buildDataModel(); }
+
 function setMode(m) {
   currentMode = m;
   document.getElementById('tab-flows').classList.toggle('active', m === 'flows');
   document.getElementById('tab-gallery').classList.toggle('active', m === 'gallery');
+  document.getElementById('tab-datamodel').classList.toggle('active', m === 'datamodel');
   document.getElementById('tab-glossary').classList.toggle('active', m === 'glossary');
   document.getElementById('tab-overview').classList.toggle('active', m === 'overview');
   document.getElementById('sidebar').style.display = m === 'flows' ? '' : 'none';
   document.getElementById('main').style.display = m === 'flows' ? '' : 'none';
   document.getElementById('gallery').classList.toggle('show', m === 'gallery');
+  document.getElementById('datamodel').classList.toggle('show', m === 'datamodel');
   document.getElementById('glossary').classList.toggle('show', m === 'glossary');
   document.getElementById('overview').classList.toggle('show', m === 'overview');
   if (m === 'gallery') renderGallery();
+  else if (m === 'datamodel') renderDataModel();
   else if (m === 'glossary') renderGlossary();
   else if (m === 'overview') renderOverview();
 }
@@ -1040,10 +1302,107 @@ function openDetail(id) {
   inner.append(el('h3', {}, n.label));
   const chips = el('div', { class: 'chips' });
   if (n.inferred) chips.append(el('span', { class: 'chip' }, 'inferred from code'));
+  if (isDataNode(n) && n.inferred === false) chips.append(el('span', { class: 'chip' }, 'named in code'));
+  if (n.storeKind) chips.append(el('span', { class: 'chip' }, n.storeKind));
+  if (n.fieldKind) chips.append(el('span', { class: 'chip' }, n.fieldKind));
+  if (n.engine) chips.append(el('span', { class: 'chip' }, n.engine));
   if (n.ownedBy) chips.append(el('span', { class: 'chip' }, 'state owned by ' + n.ownedBy));
   if (n.synchronous) chips.append(el('span', { class: 'chip' }, 'synchronous inline reaction'));
+  for (const pv of (n.provenance || [])) chips.append(el('span', { class: 'chip' }, pv));
   inner.append(chips);
   inner.append(el('div', { class: 'desc' }, n.description || ''));
+
+  // Physical node (datastore/field): containment breadcrumb + child stores + child fields + "Used by"
+  // back-references. Mirrors StorageSection in src/web/components/Detail.jsx.
+  if (isDataNode(n)) {
+    const chain = parentChain(n);
+    if (chain.length > 1) {
+      const bc = el('div', { class: 'breadcrumb' });
+      chain.forEach((c, i) => {
+        if (i > 0) bc.append(el('span', { class: 'bc-sep' }, '▸'));
+        if (c.id === n.id) bc.append(el('span', { class: 'bc-here' }, c.label));
+        else bc.append(el('span', { class: 'bc-link', onclick: () => openDetail(c.id) }, c.label));
+      });
+      inner.append(bc);
+    }
+    const subStores = n.type === 'datastore' ? MODEL.nodes.filter(x => x.type === 'datastore' && x.parent === n.id) : [];
+    if (subStores.length) {
+      inner.append(el('h4', {}, subStores.length + ' data store' + (subStores.length > 1 ? 's' : '')));
+      for (const c of subStores) {
+        const lbl = el('div', { class: 'rlabel' }, c.label);
+        const rel = c.storeKind || c.fieldKind;
+        if (rel) lbl.append(el('span', { class: 'fr-role' }, rel));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
+      }
+    }
+    const fields = n.type === 'datastore' ? MODEL.nodes.filter(x => x.type === 'field' && x.parent === n.id) : [];
+    if (fields.length) {
+      inner.append(el('h4', {}, fields.length + ' field' + (fields.length > 1 ? 's' : '')));
+      for (const c of fields) {
+        const lbl = el('div', { class: 'rlabel' }, c.label);
+        if (c.dataType) lbl.append(el('span', { class: 'fr-dtype' }, c.dataType));
+        if (c.fieldKind) lbl.append(el('span', { class: 'fr-role' }, c.fieldKind));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.id) }, lbl));
+      }
+    }
+    const consumers = n.type === 'datastore' ? datastoreConsumers(n.id)
+      : n.type === 'field' ? fieldConsumers(n.id).map(c => ({ node: c.node, verb: 'field ' + c.field.name }))
+      : [];
+    if (consumers.length) {
+      inner.append(el('h4', {}, 'Used by ' + consumers.length));
+      for (const c of consumers) {
+        const lbl = el('div', { class: 'rlabel' }, c.node.label);
+        lbl.append(el('span', { class: 'fr-role' }, c.verb));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(c.node.id) }, lbl));
+      }
+    }
+  }
+
+  // Conceptual fields: read model "Data returned" / aggregate "State & fields", each with its
+  // derivation prose, confidence dot, tags, and 0..N storage sources. Mirrors FieldsSection.
+  if (n.fields && n.fields.length) {
+    const heading = n.type === 'readModel' ? 'Data returned' : n.type === 'aggregate' ? 'State & fields' : 'Fields';
+    inner.append(el('h4', {}, heading));
+    for (const field of n.fields) {
+      const fr = el('div', { class: 'fieldrow' });
+      const fhead = el('div', { class: 'fr-head' }, el('span', { class: 'fr-name' }, field.name));
+      if (field.dataType) fhead.append(el('span', { class: 'fr-dtype' }, field.dataType));
+      const conf = field.confidence && CONF_COLOR[field.confidence];
+      if (conf) fhead.append(el('span', { class: 'fr-conf', style: 'background:' + conf, title: 'derivation confidence: ' + field.confidence }));
+      if (field.conceptual) fhead.append(el('span', { class: 'fr-tag' }, 'conceptual'));
+      if (field.sensitive) fhead.append(el('span', { class: 'fr-tag sensitive' }, 'sensitive'));
+      fr.append(fhead);
+      if (field.derivation) fr.append(el('div', { class: 'fr-deriv' }, field.derivation));
+      const sources = field.sources || [];
+      if (sources.length) {
+        for (const s of sources) {
+          const col = /^(ds|fld)-/.test(s.ref || '') ? nodeById.get(s.ref) : null;
+          const src = el('div', { class: 'fr-src' }, el('span', { class: 'fr-role' }, s.role || 'from'));
+          if (col) src.append(el('span', { class: 'fr-col link', onclick: () => openDetail(col.id) }, col.label));
+          else src.append(el('span', { class: 'fr-col addr' }, s.ref || '(unresolved)'));
+          if (s.transform) src.append(el('span', { class: 'fr-xform' }, s.transform));
+          if (s.note) src.append(el('span', { class: 'fr-note' }, '— ' + s.note));
+          fr.append(src);
+        }
+      } else {
+        fr.append(el('div', { class: 'fr-src none' }, 'computed / no direct source'));
+      }
+      inner.append(fr);
+    }
+  }
+
+  // Behavioral node -> the storage tables it writes/reads/projects. Mirrors the "Storage" block.
+  if (!isDataNode(n)) {
+    const storageLinks = nodeStorageLinks(n.id);
+    if (storageLinks.length) {
+      inner.append(el('h4', {}, 'Storage'));
+      for (const s of storageLinks) {
+        const lbl = el('div', { class: 'rlabel' }, s.node.label);
+        lbl.append(el('span', { class: 'fr-role' }, s.verb));
+        inner.append(el('div', { class: 'relrow', onclick: () => openDetail(s.node.id) }, lbl));
+      }
+    }
+  }
 
   // aggregate <-> invariant cross-reference. The "enforces" relationship lives on flow edges
   // (aggregate --enforces--> invariant); surface the full set here regardless of the flow you
@@ -1146,6 +1505,7 @@ document.querySelectorAll('#groupby .gb').forEach(b => b.addEventListener('click
 }));
 document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
 document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
+document.getElementById('tab-datamodel').addEventListener('click', () => setMode('datamodel'));
 document.getElementById('tab-glossary').addEventListener('click', () => setMode('glossary'));
 document.getElementById('tab-overview').addEventListener('click', () => setMode('overview'));
 

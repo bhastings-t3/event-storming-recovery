@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useExplorer } from '../store.jsx';
-import { sidebarGroups } from '../model.js';
+import { sidebarGroups, flowSearchText, queryTokens, matchesQuery } from '../model.js';
 
 const KIND_COLOR = { read: '#6FC993', policy: '#BF9BE0', write: '#6BA3E8' };
 
 export default function Sidebar() {
   const { model, PALETTE, nodeById, groupMode, setGroupMode, filter, setFilter, currentFlow, selectFlow, openMenu } = useExplorer();
-  const f = (filter || '').toLowerCase();
   const title = (model.meta && model.meta.title) || 'Event Storming Explorer';
+  const tokens = useMemo(() => queryTokens(filter), [filter]);
+  // built once per model (not per keystroke): flow id -> lowercased haystack
+  const flowHaystacks = useMemo(() => {
+    const m = new Map();
+    for (const fl of model.flows) m.set(fl.id, flowSearchText(model, nodeById, fl));
+    return m;
+  }, [model, nodeById]);
 
   return (
     <aside id="sidebar">
@@ -26,7 +32,7 @@ export default function Sidebar() {
       </div>
       <nav id="flowlist">
         {sidebarGroups(model, groupMode, nodeById).map((g, gi) => {
-          const flows = model.flows.filter(g.pred).filter((fl) => !f || (fl.name + fl.id).toLowerCase().includes(f));
+          const flows = model.flows.filter(g.pred).filter((fl) => !tokens.length || matchesQuery(flowHaystacks.get(fl.id), tokens));
           if (!flows.length) return null;
           return (
             <React.Fragment key={gi}>

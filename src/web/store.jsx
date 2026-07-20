@@ -37,9 +37,9 @@ export function ExplorerProvider({ model, meta, children }) {
     setSelectedNodeId(null);
     setDetail(null);
   }, []);
-  const openDetail = useCallback((id) => {
+  const openDetail = useCallback((id, opts) => {
     setSelectedNodeId(id);
-    setDetail({ kind: 'node', id });
+    setDetail({ kind: 'node', id, focusVerb: opts && opts.focusVerb ? opts.focusVerb : null });
     pushSelection(id); // mirror to the server so MCP get_current_selection sees it
   }, []);
   const openHotspot = useCallback((id) => { setDetail({ kind: 'hotspot', id }); }, []);

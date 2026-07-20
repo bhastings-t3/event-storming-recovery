@@ -362,3 +362,58 @@ svg.edges path { transition: opacity .13s; }
 .boot-card h1 { font-size: 18px; font-weight: 650; margin: 0 0 4px; }
 .boot-card .sub { color: var(--muted); font-size: 13px; }
 .boot-err { color: #fca5a5; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; margin-top: 12px; }
+
+/* ---- Data model GRAPH (pannable canvas; replaces the nested-card tree) ---- */
+#dm-wrap {
+  flex: 1; min-height: 250px; overflow: hidden; position: relative; cursor: grab;
+  background-image: radial-gradient(circle, #1b1b22 1px, transparent 1.4px);
+  background-size: 22px 22px; background-position: -1px -1px;
+}
+#dm-wrap.grabbing { cursor: grabbing; }
+#dm-lane { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+
+.dm-node {
+  position: absolute; width: 250px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); box-shadow: var(--shadow); overflow: hidden; z-index: 1;
+  transition: box-shadow .1s;
+}
+.dm-node:hover { box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 2; }
+.dm-node-head { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; }
+.dm-node-head:hover { filter: brightness(1.08); }
+.dm-node-name { font-size: 13px; font-weight: 700; color: var(--fg); overflow-wrap: anywhere; }
+.dm-node-meta { padding: 5px 12px; font: 10.5px/1.5 ui-monospace, Consolas, monospace; color: #8a8a96; border-top: 1px solid var(--line); }
+.dm-node-cols { padding: 5px 4px; border-top: 1px solid var(--line); }
+.dm-node-col { display: flex; align-items: baseline; gap: 8px; padding: 3px 10px; border-radius: 5px; cursor: pointer; transition: background .1s; }
+.dm-node-col:hover { background: var(--accent); }
+.dm-node-more { padding: 4px 12px 3px; font-size: 10px; color: var(--muted); font-style: italic; }
+
+/* behavioral-relationship badges: one colored disc per behavioral node TYPE touching a store,
+   the count inside, a short edge down to the store. Color = that node type's fill. */
+.dm-badge-circle {
+  position: absolute; border-radius: 50%; border: 1.5px solid; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; cursor: pointer; z-index: 3; box-shadow: 0 1px 3px rgba(0,0,0,.5);
+  transition: transform .1s; white-space: pre-line;
+}
+.dm-badge-circle:hover { transform: scale(1.18); z-index: 5; }
+
+/* nested cluster group box (an expanded container's boundary) + its titled header */
+.dm-group { position: absolute; border: 1px dashed var(--line); border-radius: 12px; background: rgba(255,255,255,.015); z-index: 0; pointer-events: none; }
+.dm-group-head { cursor: pointer; background: var(--panel); }
+.dm-group-head .dm-node-head { cursor: pointer; }
+.dm-group-head.dm-collapsed { background: var(--card); border-style: dashed; }
+.dm-group-head:hover { filter: brightness(1.08); }
+.dm-arrow { font-size: 10px; color: var(--muted); margin-right: 1px; }
+.dm-group-sub { padding: 4px 12px 7px; font-size: 10.5px; color: var(--muted); }
+
+/* data-model card: header total-count badge + footer per-verb relationship pills */
+.dm-total { margin-left: auto; font-size: 10px; font-weight: 800; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 2px 8px; letter-spacing: 0; }
+.dm-node-footer { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px 9px; border-top: 1px solid var(--line); }
+.dm-verb-pill { font-size: 10px; font-weight: 700; color: #16202a; background: #8a8a96; border-radius: 99px; padding: 2px 9px; cursor: pointer; letter-spacing: .01em; transition: filter .1s, transform .1s; }
+.dm-verb-pill:hover { filter: brightness(1.12); transform: translateY(-1px); }
+
+/* Detail sidebar: consumers grouped by verb, with a flash when focused from a pill click */
+.dm-verb-group { border-radius: 8px; padding: 2px 6px 4px; margin: 0 -6px; }
+.dm-verb-group h4 { display: flex; align-items: center; gap: 7px; }
+.dm-verb-group .vg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dm-verb-group.flash { animation: dm-flash 1.5s ease; }
+@keyframes dm-flash { 0% { background: rgba(110,201,147,.22); } 60% { background: rgba(110,201,147,.10); } 100% { background: transparent; } }

@@ -14,3 +14,14 @@ export const PALETTE = {
   field:          { fill: '#c3d3e2', edge: '#7f96ab', text: '#2c3e50', name: 'Field' },
   hotspot:        { fill: '#E5645E', edge: '#a83530', text: '#4c110e', name: 'Hotspot' },
 };
+
+// Colors for the behavioral -> storage RELATIONSHIP verbs (data-model footer pills + Detail groups).
+// One consistent color per verb so the same relationship reads the same everywhere.
+export const VERB_COLORS = {
+  'writes':        '#E5645E',
+  'persists to':   '#6FC993',
+  'projects from': '#6BA3E8',
+  'reads':         '#BF9BE0',
+  'connects via':  '#8a8a96',
+  _default:        '#8a8a96',
+};

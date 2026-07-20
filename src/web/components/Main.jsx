@@ -32,9 +32,15 @@ function FlowActions({ flow }) {
 function DataTouched({ flow, dataNodes, nodeById, PALETTE, openDetail, openMenu }) {
   const gmap = new Map();
   const placed = new Set();
+  const seen = new Set();
   for (const e of (flow.edges || [])) {
     const t = nodeById.get(e.to);
     if (!t || !isDataNode(t)) continue;
+    // a flow commonly reaches the same store over several edges (one per step); collapse those
+    // so a node lists once per verb, matching the seen-key dedupe in selectors.mjs
+    const key = e.to + '|' + e.verb;
+    if (seen.has(key)) continue;
+    seen.add(key);
     (gmap.get(e.verb) || gmap.set(e.verb, []).get(e.verb)).push(t);
     placed.add(t.id);
   }

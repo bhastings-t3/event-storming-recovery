@@ -9,3 +9,6 @@ dist/
 
 # npm pack artifacts
 *.tgz
+
+# explorer comment sidecars (human notes; live next to the model, not in source control here)
+comments.json

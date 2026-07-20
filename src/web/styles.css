@@ -241,6 +241,26 @@ svg.edges path { transition: opacity .13s; }
 .ctxmenu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--dim); background: none; border: 0; border-radius: 6px; padding: 8px 9px; cursor: pointer; }
 .ctxmenu button:hover { background: var(--accent-2); color: #fff; }
 
+/* --- comment dialog (right-click → Add / Show comments) --- */
+.cmt-dialog { position: fixed; z-index: 210; width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.cmt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+.cmt-title { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmt-title b { color: var(--dim); font-weight: 650; }
+.cmt-x { border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 5px; border-radius: 5px; line-height: 1; flex-shrink: 0; }
+.cmt-x:hover { background: var(--accent); color: var(--fg); }
+.cmt-list { max-height: 190px; overflow-y: auto; padding: 8px 11px; display: flex; flex-direction: column; gap: 8px; }
+.cmt-empty { font-size: 11.5px; color: var(--muted); padding: 4px 0; }
+.cmt-item { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; }
+.cmt-text { font-size: 12.5px; color: var(--dim); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmt-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; font-size: 10px; color: var(--muted); }
+.cmt-del { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 10px; padding: 1px 4px; border-radius: 4px; }
+.cmt-del:hover { background: rgba(229,100,94,.15); color: #fca5a5; }
+.cmt-input { margin: 0 11px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--input); color: var(--fg); font: inherit; font-size: 12.5px; resize: vertical; min-height: 52px; outline: none; }
+.cmt-input:focus { border-color: var(--ring); box-shadow: 0 0 0 3px rgba(120,120,140,.16); }
+.cmt-input::placeholder { color: var(--muted); }
+.cmt-actions { display: flex; justify-content: flex-end; padding: 9px 11px 11px; }
+.cmt-actions .btn-primary { flex: 0 0 auto; padding: 6px 14px; }
+
 /* --- context-bundle drawer --- */
 .drawer-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 150; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw; background: var(--panel); border-left: 1px solid var(--line); box-shadow: var(--shadow); z-index: 151; display: flex; flex-direction: column; padding: 18px 20px 20px; }

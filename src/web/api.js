@@ -27,6 +27,11 @@ export const clearContext = () => fetch('/api/context', json('DELETE')).then((r)
 // A single item's ready-to-paste markdown (node / flow / hotspot).
 export const getItem = (type, id) => fetch('/api/item?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id)).then((r) => r.json());
 
+// Human comments on items (node / flow / hotspot), persisted server-side to comments.json.
+export const getComments = () => fetch('/api/comments').then((r) => r.json()); // { comments: { "type:id": [...] } }
+export const addComment = (type, id, text) => fetch('/api/comments', json('POST', { type, id, text })).then((r) => r.json());
+export const removeComment = (type, id, commentId) => fetch('/api/comments', json('DELETE', { type, id, commentId })).then((r) => r.json());
+
 // MCP connection helper: the exact `claude mcp add` command, and running it on the user's behalf.
 export const getMcpInfo = () => fetch('/api/mcp/info').then((r) => r.json()); // { name, url, command }
 export const registerMcp = (scope) => fetch('/api/mcp/register', json('POST', { scope })).then((r) => r.json());

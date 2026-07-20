@@ -230,7 +230,7 @@ export function setupPanZoom(wrap, lane, ids) {
   }, { passive: false });
   let panning = false, sx = 0, sy = 0, ox = 0, oy = 0;
   wrap.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.sticky, .inv, .dupdot, .zoomctl, .ctx-title, .dm-node, .dm-badge-circle')) return;
+    if (e.button !== 0 || e.target.closest('.sticky, .inv, .dupdot, .zoomctl, .ctx-title, .dm-node, .dm-badge-circle, .board-views')) return;
     panning = true; sx = e.clientX; sy = e.clientY; ox = st.tx; oy = st.ty;
     wrap.classList.add('grabbing'); wrap.setPointerCapture(e.pointerId);
   });

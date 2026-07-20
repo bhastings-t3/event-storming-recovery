@@ -1,27 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useExplorer } from '../store.jsx';
-import { getItem } from '../api.js';
 import { flowNodeIds, isDataNode } from '../model.js';
 import { VERB_COLORS } from '../../lib/palette.mjs';
 import Board from './Board.jsx';
 
 const VERB_ORDER = ['writes', 'persists to', 'projects from', 'reads', 'connects via'];
 
-// Grab the whole flow you're viewing (all nodes + edges + a Mermaid graph) into context.
-function FlowActions({ flow }) {
-  const { isInBundle, addToContext, removeFromContext } = useExplorer();
-  const [copied, setCopied] = useState(false);
-  const inBundle = isInBundle('flow', flow.id);
-  const copy = async () => {
-    try { const r = await getItem('flow', flow.id); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
+// Flow actions (add to context bundle / copy grounded markdown / comment) live in the shared
+// right-click menu, so this is just a ⋯ affordance that opens it anchored under the button —
+// same menu you get right-clicking the flow in the sidebar. Keeps the header short so the
+// board gets the height.
+function FlowMenuButton({ flow }) {
+  const { menu, openMenu, closeMenu, isInBundle } = useExplorer();
+  const open = !!menu && menu.ref && menu.ref.type === 'flow' && menu.ref.id === flow.id;
+  const toggle = (e) => {
+    if (open) { closeMenu(); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    openMenu(r.right - 210, r.bottom + 6, { type: 'flow', id: flow.id, label: flow.name });
   };
   return (
-    <div className="detail-actions" style={{ marginTop: 12, marginBottom: 0 }}>
-      <button className={inBundle ? 'da-in' : ''} onClick={() => (inBundle ? removeFromContext('flow', flow.id) : addToContext('flow', flow.id))}>
-        {inBundle ? 'Flow in bundle ✓' : '+ Add flow to context'}
-      </button>
-      <button onClick={copy}>{copied ? 'Copied ✓' : '⧉ Copy flow for Claude'}</button>
-    </div>
+    <button
+      className={'flow-menu-btn' + (open ? ' open' : '') + (isInBundle('flow', flow.id) ? ' in-bundle' : '')}
+      title="Flow actions — add to context, copy for Claude, comment"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onPointerDown={(e) => e.stopPropagation()}  // else ContextMenu's window listener closes it mid-click
+      onClick={toggle}
+    >⋯</button>
   );
 }
 
@@ -116,7 +121,7 @@ export default function Main() {
             </h2>
             <div className="summary">{f.summary || ''}</div>
             {f.trigger && <div className="trigger"><b>Trigger: </b>{f.trigger}</div>}
-            <FlowActions flow={f} />
+            <FlowMenuButton flow={f} />
           </>
         )}
       </div>

@@ -68,8 +68,21 @@ body {
 .badge.hs { background: rgba(239,78,78,.18); color: #fca5a5; }
 /* main */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#flowheader { padding: 18px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); }
-#flowheader h2 { margin: 0 0 6px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+#flowheader { padding: 18px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); position: relative; }
+/* ⋯ flow actions, pinned top-right so the header stays two short lines */
+.flow-menu-btn {
+  position: absolute; right: 18px; top: 14px; width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid transparent; background: none; color: var(--muted); cursor: pointer;
+  font-size: 17px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  transition: background .1s, color .1s, border-color .1s;
+}
+.flow-menu-btn:hover, .flow-menu-btn.open { background: var(--accent-2); color: #fff; border-color: var(--line); }
+/* a dot when the flow is already in the bundle — the state the old inline button used to show */
+.flow-menu-btn.in-bundle::after {
+  content: ''; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px;
+  border-radius: 99px; background: #74dc9b;
+}
+#flowheader h2 { margin: 0 0 6px; padding-right: 44px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
 #flowheader .summary { color: var(--muted); font-size: 12.5px; max-width: 900px; line-height: 1.55; }
 #flowheader .trigger { font-size: 12px; margin-top: 9px; color: var(--dim); }
 #flowheader .trigger b { color: var(--muted); font-weight: 600; }

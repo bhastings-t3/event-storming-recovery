@@ -1,7 +1,7 @@
 // SPA-facing model selectors. The pure, framework-agnostic ones live in src/lib/selectors.mjs
 // (shared with the server); re-exported here. The palette-dependent ones stay local.
 import { PALETTE } from './palette.js';
-import { flowNodeIds } from '../lib/selectors.mjs';
+import { flowNodeIds, nodeFlows } from '../lib/selectors.mjs';
 
 export {
   buildIndexes, flowNodeIds, nodeFlows, enforcesRelation, nodeUsages,
@@ -42,4 +42,39 @@ export function sidebarGroups(model, groupMode, nodeById) {
 
 export function anchorUrl(repoRoot, a) {
   return 'vscode://file/' + repoRoot + '/' + a.path + (a.line ? ':' + a.line : '');
+}
+
+// --- Search --------------------------------------------------------------
+// Shared by Sidebar/Gallery/Glossary so a query like "operator boots" matches regardless of
+// word order, and a flow/sticky surfaces even when the term only lives in a related item
+// (a flow's step label, or a sticky's containing flow) rather than its own name/label.
+
+// lowercase, split on whitespace, drop empties
+export function queryTokens(q) {
+  return (q || '').toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+// every token must appear somewhere in the haystack (AND semantics) — order/adjacency don't matter
+export function matchesQuery(haystack, tokens) {
+  return tokens.every((t) => haystack.includes(t));
+}
+
+// lowercased search haystack for a flow: its own fields, plus the label/description of every
+// node it touches (so e.g. "glossary" in a step's description still surfaces the flow)
+export function flowSearchText(model, nodeById, flow) {
+  const parts = [flow.name, flow.id, flow.summary, flow.trigger];
+  for (const nid of flowNodeIds(flow)) {
+    const n = nodeById.get(nid);
+    if (!n) continue;
+    parts.push(n.label, n.description);
+  }
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
+// lowercased search haystack for a node: its own fields, the palette type name, and the name of
+// every flow it appears in (so e.g. a flow title's word still finds the stickies in that flow)
+export function nodeSearchText(model, node, typeName) {
+  const parts = [node.label, node.description, typeName];
+  for (const f of nodeFlows(model, node.id)) parts.push(f.name);
+  return parts.filter(Boolean).join(' ').toLowerCase();
 }

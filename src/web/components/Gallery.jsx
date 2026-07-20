@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useExplorer } from '../store.jsx';
-import { nodeFlows } from '../model.js';
+import { nodeFlows, nodeSearchText, queryTokens, matchesQuery } from '../model.js';
 
 // Gallery: every sticky in the model, filtered by type chips + text search. Ported from
 // buildGallery/renderGrid in generate-views.js.
@@ -15,10 +15,17 @@ export default function Gallery() {
   });
   const allOn = () => setGallery((s) => ({ ...s, active: new Set(types) }));
 
-  const ql = q.toLowerCase();
+  const tokens = useMemo(() => queryTokens(q), [q]);
+  // built once per model (not per keystroke): node id -> lowercased haystack, including the
+  // names of every flow the node appears in so e.g. a flow title's word finds its stickies
+  const nodeHaystacks = useMemo(() => {
+    const m = new Map();
+    for (const n of model.nodes) m.set(n.id, nodeSearchText(model, n, PALETTE[n.type] ? PALETTE[n.type].name : ''));
+    return m;
+  }, [model, PALETTE]);
   const nodes = model.nodes
     .filter((n) => active.has(n.type))
-    .filter((n) => !ql || (n.label + ' ' + (n.description || '') + ' ' + (PALETTE[n.type] ? PALETTE[n.type].name : '')).toLowerCase().includes(ql))
+    .filter((n) => !tokens.length || matchesQuery(nodeHaystacks.get(n.id), tokens))
     .sort((a, b) => (types.indexOf(a.type) - types.indexOf(b.type)) || String(a.label).localeCompare(String(b.label)));
 
   const allActive = types.every((t) => active.has(t));

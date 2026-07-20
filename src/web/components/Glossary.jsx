@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useExplorer } from '../store.jsx';
-import { nodeFlows } from '../model.js';
+import { nodeFlows, queryTokens, matchesQuery } from '../model.js';
 
 const GL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('');
 const letterOf = (n) => { const c = (n.label || '').trim()[0]; return c && /[a-z]/i.test(c) ? c.toUpperCase() : '#'; };
@@ -18,10 +18,17 @@ export default function Glossary() {
   });
   const allOn = () => setGlossary((s) => ({ ...s, active: new Set(types) }));
 
-  const ql = q.toLowerCase();
+  const tokens = useMemo(() => queryTokens(q), [q]);
+  // built once per model (not per keystroke): node id -> lowercased "label + description" haystack.
+  // Kept to the term's own fields (no flow names) — glossary search is about the term, not usage.
+  const nodeHaystacks = useMemo(() => {
+    const m = new Map();
+    for (const n of model.nodes) m.set(n.id, (n.label + ' ' + (n.description || '')).toLowerCase());
+    return m;
+  }, [model]);
   let nodes = model.nodes
     .filter((n) => active.has(n.type))
-    .filter((n) => !ql || (n.label + ' ' + (n.description || '')).toLowerCase().includes(ql));
+    .filter((n) => !tokens.length || matchesQuery(nodeHaystacks.get(n.id), tokens));
   if (sharedOnly) nodes = nodes.filter((n) => nodeFlows(model, n.id).length > 1);
   nodes.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: 'base' }));
 

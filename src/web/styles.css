@@ -35,8 +35,17 @@ body {
 .gb:hover { color: var(--dim); background: var(--accent); }
 .gb.active { background: var(--accent-2); color: #fff; border-color: var(--ring); }
 #flowlist { overflow-y: auto; flex: 1; padding: 4px 8px 16px; }
-.flow-group { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 15px 8px 6px; font-weight: 600; display: flex; align-items: center; }
+.flow-group {
+  font: inherit; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted);
+  margin: 15px 8px 6px; padding: 2px 4px; font-weight: 600; display: flex; align-items: center; width: calc(100% - 8px);
+  background: none; border: none; border-radius: 4px; cursor: pointer; transition: background .1s, color .1s;
+}
+.flow-group:hover { background: var(--accent); color: var(--dim); }
 .flow-group .fg-dot { width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; flex-shrink: 0; }
+.flow-group .fg-chevron { display: inline-block; margin-right: 5px; flex-shrink: 0; transition: transform .12s; font-size: 9px; }
+.flow-group .fg-chevron.collapsed { transform: rotate(-90deg); }
+.flow-group .fg-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.flow-group .fg-count { flex-shrink: 0; color: var(--muted); font-weight: 600; margin-left: 6px; }
 .flow-item { position: relative; padding: 9px 10px 9px 17px; border-radius: var(--radius); cursor: pointer; display: flex; gap: 8px; align-items: center; transition: background .1s; }
 .flow-item::before { content: ''; position: absolute; left: 7px; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--kind, #3f3f46); }
 .flow-item:hover { background: var(--accent); }
@@ -59,8 +68,21 @@ body {
 .badge.hs { background: rgba(239,78,78,.18); color: #fca5a5; }
 /* main */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#flowheader { padding: 18px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); }
-#flowheader h2 { margin: 0 0 6px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+#flowheader { padding: 18px 24px 15px; border-bottom: 1px solid var(--line); background: var(--panel); position: relative; }
+/* ⋯ flow actions, pinned top-right so the header stays two short lines */
+.flow-menu-btn {
+  position: absolute; right: 18px; top: 14px; width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid transparent; background: none; color: var(--muted); cursor: pointer;
+  font-size: 17px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  transition: background .1s, color .1s, border-color .1s;
+}
+.flow-menu-btn:hover, .flow-menu-btn.open { background: var(--accent-2); color: #fff; border-color: var(--line); }
+/* a dot when the flow is already in the bundle — the state the old inline button used to show */
+.flow-menu-btn.in-bundle::after {
+  content: ''; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px;
+  border-radius: 99px; background: #74dc9b;
+}
+#flowheader h2 { margin: 0 0 6px; padding-right: 44px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
 #flowheader .summary { color: var(--muted); font-size: 12.5px; max-width: 900px; line-height: 1.55; }
 #flowheader .trigger { font-size: 12px; margin-top: 9px; color: var(--dim); }
 #flowheader .trigger b { color: var(--muted); font-weight: 600; }
@@ -75,6 +97,12 @@ body {
 .zoomctl { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 20; }
 .zoomctl button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); user-select: none; }
 .zoomctl button:hover { background: var(--line); }
+/* board Flow/Data toggle: a segmented control like #groupby's .gb pills, pinned top-left so it
+   never collides with .zoomctl (bottom-right). */
+.board-views { position: absolute; left: 14px; top: 14px; display: flex; gap: 5px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 4px; box-shadow: var(--shadow); }
+.bv { font: inherit; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 99px; border: 1px solid transparent; background: var(--input); color: var(--muted); cursor: pointer; transition: background .1s, color .1s, border-color .1s; }
+.bv:hover { color: var(--dim); background: var(--accent); }
+.bv.active { background: var(--accent-2); color: #fff; border-color: var(--ring); }
 svg.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .sticky {
   position: absolute; width: 176px; min-height: 92px; border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
@@ -98,12 +126,32 @@ svg.edges path { transition: opacity .13s; }
 .inv { position: absolute; width: 150px; border-radius: 7px; padding: 7px 10px; font-size: 10.5px; cursor: pointer; line-height: 1.35; transition: transform .1s; overflow-wrap: anywhere; z-index: 1; }
 .inv:hover { transform: translateY(-2px); z-index: 3; }
 .edge-verb { position: absolute; font-size: 9px; color: var(--muted); background: var(--bg); padding: 0 4px; border-radius: 3px; pointer-events: none; letter-spacing: .02em; white-space: nowrap; z-index: 2; transform: translate(-50%, -50%); }
-/* findings band: distinct panel surface below the dark board, scrolls if tall */
-#findings { background: var(--panel); border-top: 1px solid var(--line); flex-shrink: 0; max-height: 30vh; overflow-y: auto; }
-#hotspots { padding: 14px 24px 18px; }
-#hotspots h3, #instances h3 { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 11px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-#hotspots h3 { color: #e5645e; }
-#hotspots h3 .n, #instances h3 .n { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
+/* hotspots band: distinct panel surface above the board, scrolls if tall */
+/* findings drawers: thin bars pinned under the board. Collapsed they cost ~34px each, so the
+   board (flex:1) keeps the rest of the height; expanding scrolls inside the drawer body. */
+#drawers { flex-shrink: 0; background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.fdrawer { border-bottom: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.fdrawer:last-child { border-bottom: none; }
+.fdrawer.open { overflow: hidden; }
+.fdrawer-bar {
+  font: inherit; width: 100%; height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 24px; background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase; font-weight: 700; transition: background .1s, color .1s;
+}
+.fdrawer-bar:hover { background: var(--accent); color: var(--dim); }
+.fdrawer-bar .dw-chevron { font-size: 9px; transition: transform .12s; }
+.fdrawer:not(.open) .fdrawer-bar .dw-chevron { transform: rotate(-90deg); }
+.fdrawer-bar .dw-count { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
+.fdrawer-bar .dw-note { color: var(--muted); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 11px; }
+.fdrawer.dw-hotspots .fdrawer-bar { color: #e5645e; }
+.fdrawer-body { overflow-y: auto; max-height: 34vh; padding: 4px 24px 16px; min-height: 0; }
+/* these carried their own padding when they were standalone panels; the drawer body owns it now */
+.fdrawer-body #datatouched, .fdrawer-body #instances { padding: 0; }
+.fdrawer-body #datatouched > h3, .fdrawer-body #instances > h3 { display: none; }
+#datatouched { padding: 14px 24px 18px; }
+#datatouched h3, #instances h3 { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 11px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+#datatouched h3 { color: var(--muted); }
+#datatouched h3 .n, #instances h3 .n { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
 .hs-cards { display: flex; gap: 12px; flex-wrap: wrap; }
 .hs-card {
   background: rgba(229,100,94,.07); border: 1px solid rgba(229,100,94,.28); border-radius: var(--radius);

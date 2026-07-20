@@ -81,9 +81,14 @@ example) to `{SCRATCH}/trace-briefing.md`.
    "schema friction" section and fix the schema/briefing before spending on the rest. (This
    single step repeatedly pays for itself.)
 2. **Then run the rest in waves** (~7 concurrent). Each agent is a **recursion root**, not a leaf
-   (`prompts/recursive-exploration.md`): it reads the briefing, verifies **reachability** (this is
-   how dead/superseded flows get caught — chase `git log`/`git show` when a caller is missing),
-   traces the main spine itself, **spawns its own sub-agents to chase high-signal side-branches**
+   (`prompts/recursive-exploration.md`): it reads the briefing, verifies **reachability at both ends**
+   (outward to the actual actor-reachable trigger — NOT just "the handler exists and is DI-registered";
+   a control gated by a flag that is never set, or a popup nothing opens, is dead — and through to the
+   real state change; this is how dead/superseded flows get caught — chase `git log`/`git show` when a
+   trigger is missing. But `dead` is a *positive* claim: a path is only dead on an exhaustive repo-wide
+   search (incl. indirect DI/reflection/config invocation) or a verified removal commit; a trigger you
+   simply couldn't find becomes a reachability *hotspot*, never a `dead` guess — a false-dead erases a
+   real pathway), traces the main spine itself, **spawns its own sub-agents to chase high-signal side-branches**
    (hubs, contradictions, unfamiliar subsystems), and **writes two files itself** to the traces
    dir: `<flow-id>.json` and `<flow-id>.notes.md`. Its chat reply is a short summary only —
    never route large JSON (its own or its subtree's) back through your context.

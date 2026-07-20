@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useExplorer } from '../store.jsx';
 import {
   enforcesRelation, nodeUsages, anchorUrl, flowNodeIds,
   isDataNode, parentChain, datastoreConsumers, fieldConsumers, nodeStorageLinks,
 } from '../model.js';
+import { VERB_COLORS } from '../../lib/palette.mjs';
 import { getItem, fetchSource } from '../api.js';
+
+const VERB_ORDER = ['writes', 'persists to', 'projects from', 'reads', 'connects via'];
 
 const CONF_COLOR = { high: '#6FC993', medium: '#E9A23B', low: '#E5645E' };
 
@@ -53,6 +56,9 @@ function FieldsSection({ node, nodeById, openDetail }) {
 // Physical storage node (datastore or field): containment breadcrumb, what it contains, and what
 // depends on it. Technology-neutral — a datastore may be a server, a file, a queue, a cache, ...
 function StorageSection({ node, model, nodeById, openDetail }) {
+  const { PALETTE, detail } = useExplorer();
+  const focusVerb = detail && detail.id === node.id ? detail.focusVerb : null;
+  const groupRefs = useRef({});
   const chain = parentChain(nodeById, node);
   const subStores = node.type === 'datastore' ? model.nodes.filter((n) => n.type === 'datastore' && n.parent === node.id) : [];
   const fields = node.type === 'datastore' ? model.nodes.filter((n) => n.type === 'field' && n.parent === node.id) : [];
@@ -60,6 +66,25 @@ function StorageSection({ node, model, nodeById, openDetail }) {
     : node.type === 'field' ? fieldConsumers(model, node.id).map((c) => ({ node: c.node, verb: 'field ' + c.field.name }))
     : [];
   const relLabel = (n) => n.storeKind || n.fieldKind;
+
+  // group consumers by relationship verb, in canonical order
+  const gmap = new Map();
+  for (const c of consumers) { if (!gmap.has(c.verb)) gmap.set(c.verb, []); gmap.get(c.verb).push(c.node); }
+  const idx = (v) => { const i = VERB_ORDER.indexOf(v); return i < 0 ? 99 : i; };
+  const groups = [...gmap.keys()].sort((a, b) => (idx(a) - idx(b)) || a.localeCompare(b)).map((v) => ({ verb: v, nodes: gmap.get(v) }));
+
+  // when a pill was clicked (focusVerb set), scroll that verb group into view and flash it.
+  // deps on `detail` so re-clicking the same verb re-triggers (each openDetail is a new object).
+  useEffect(() => {
+    if (!focusVerb) return;
+    const g = groupRefs.current[focusVerb];
+    if (!g) return;
+    g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    g.classList.remove('flash'); void g.offsetWidth; g.classList.add('flash');
+    const t = setTimeout(() => g.classList.remove('flash'), 1500);
+    return () => clearTimeout(t);
+  }, [detail]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       {chain.length > 1 && (
@@ -93,16 +118,20 @@ function StorageSection({ node, model, nodeById, openDetail }) {
           ))}
         </>
       )}
-      {consumers.length > 0 && (
-        <>
-          <h4>{'Used by ' + consumers.length}</h4>
-          {consumers.map((c, i) => (
-            <div key={i} className="relrow" onClick={() => openDetail(c.node.id)}>
-              <div className="rlabel">{c.node.label}<span className="fr-role">{c.verb}</span></div>
-            </div>
-          ))}
-        </>
-      )}
+      {groups.map((g) => (
+        <div key={g.verb} className="dm-verb-group" ref={(elm) => { if (elm) groupRefs.current[g.verb] = elm; }}>
+          <h4><span className="vg-dot" style={{ background: VERB_COLORS[g.verb] || VERB_COLORS._default }} />{g.verb + ' (' + g.nodes.length + ')'}</h4>
+          {g.nodes.map((n, i) => {
+            const np = PALETTE[n.type] || PALETTE.invariant;
+            return (
+              <div key={i} className="relrow" onClick={() => openDetail(n.id)} title={np.name + ' — ' + n.label}>
+                <div className="rdot" style={{ background: np.fill, borderColor: np.edge }} />
+                <div className="rlabel">{n.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </>
   );
 }

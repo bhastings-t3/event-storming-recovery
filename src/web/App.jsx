@@ -10,6 +10,7 @@ import Overview from './components/Overview.jsx';
 import DataModel from './components/DataModel.jsx';
 import Detail from './components/Detail.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
+import CommentDialog from './components/CommentDialog.jsx';
 import ContextBundle from './components/ContextBundle.jsx';
 
 function Explorer() {
@@ -31,6 +32,7 @@ function Explorer() {
         <Detail />
       </div>
       <ContextMenu />
+      <CommentDialog />
       <ContextBundle />
     </>
   );

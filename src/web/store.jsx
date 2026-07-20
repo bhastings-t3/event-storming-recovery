@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
 import { PALETTE } from './palette.js';
 import { buildIndexes, galleryTypes } from './model.js';
-import { pushSelection, getContext, addContext, removeContext, clearContext } from './api.js';
+import { pushSelection, getContext, addContext, removeContext, clearContext, getComments, addComment, removeComment } from './api.js';
 
 const sameRef = (a, type, id) => a.type === type && a.id === id;
 
@@ -27,9 +27,12 @@ export function ExplorerProvider({ model, meta, children }) {
   const [bundleItems, setBundleItems] = useState([]); // [{ type, id }]
   const [bundleOpen, setBundleOpen] = useState(false);
   const [menu, setMenu] = useState(null); // { x, y, ref: { type, id, label } } | null
+  const [comments, setComments] = useState({}); // { "type:id": [{ id, text, at }] }
+  const [commentDialog, setCommentDialog] = useState(null); // { x, y, ref } | null
 
-  // load the bundle once (the server holds it; survives a page reload within a run)
+  // load the bundle + comments once (the server holds them; survive a page reload within a run)
   useEffect(() => { getContext().then((r) => setBundleItems(r.items || [])).catch(() => {}); }, []);
+  useEffect(() => { getComments().then((r) => setComments(r.comments || {})).catch(() => {}); }, []);
 
   const selectFlow = useCallback((id) => {
     setMode('flows');
@@ -37,9 +40,9 @@ export function ExplorerProvider({ model, meta, children }) {
     setSelectedNodeId(null);
     setDetail(null);
   }, []);
-  const openDetail = useCallback((id) => {
+  const openDetail = useCallback((id, opts) => {
     setSelectedNodeId(id);
-    setDetail({ kind: 'node', id });
+    setDetail({ kind: 'node', id, focusVerb: opts && opts.focusVerb ? opts.focusVerb : null });
     pushSelection(id); // mirror to the server so MCP get_current_selection sees it
   }, []);
   const openHotspot = useCallback((id) => { setDetail({ kind: 'hotspot', id }); }, []);
@@ -51,6 +54,12 @@ export function ExplorerProvider({ model, meta, children }) {
 
   const openMenu = useCallback((x, y, ref) => setMenu({ x, y, ref }), []);
   const closeMenu = useCallback(() => setMenu(null), []);
+
+  const openCommentDialog = useCallback((x, y, ref) => setCommentDialog({ x, y, ref }), []);
+  const closeCommentDialog = useCallback(() => setCommentDialog(null), []);
+  const setItemComments = (type, id, list) => setComments((c) => ({ ...c, [`${type}:${id}`]: list || [] }));
+  const addCommentTo = useCallback((type, id, text) => addComment(type, id, text).then((r) => setItemComments(type, id, r.comments)).catch(() => {}), []);
+  const removeCommentFrom = useCallback((type, id, commentId) => removeComment(type, id, commentId).then((r) => setItemComments(type, id, r.comments)).catch(() => {}), []);
 
   const value = {
     model, meta, PALETTE, nodeById, hotspotById, types,
@@ -67,6 +76,9 @@ export function ExplorerProvider({ model, meta, children }) {
     isInBundle: (type, id) => bundleItems.some((it) => sameRef(it, type, id)),
     bundleOpen, setBundleOpen,
     menu, openMenu, closeMenu,
+    comments,
+    commentsFor: (type, id) => comments[`${type}:${id}`] || [],
+    commentDialog, openCommentDialog, closeCommentDialog, addCommentTo, removeCommentFrom,
     selectFlow, openDetail, openHotspot, closeDetail,
   };
   return <ExplorerContext.Provider value={value}>{children}</ExplorerContext.Provider>;

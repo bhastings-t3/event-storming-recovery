@@ -41,13 +41,27 @@ export function renderDataFlowInto(flow, lane, ctx) {
     if (!ch) break;
   }
 
-  // --- position: x by rank, y centered within its rank ---
+  // --- position: x by rank, y by predecessor barycenter within the rank ---
+  // Ordering a column by insertion tangles arrows as soon as several nodes converge on one store;
+  // sorting by the mean y of already-placed predecessors is the same crossing-reduction pass the
+  // flow board does (layout.js:104-111). Ranks are walked left to right so predecessors are placed first.
   const byRank = {};
   nodes.forEach((n) => (byRank[rank[n.id]] ||= []).push(n));
-  const pos = {};
-  for (const r of Object.keys(byRank).map(Number)) {
+  const preds = {};
+  nodes.forEach((n) => (preds[n.id] = []));
+  for (const e of edges) if (preds[e.to]) preds[e.to].push(e.from);
+  const pos = {}, yOf = new Map(), bary = new Map();
+  for (const r of Object.keys(byRank).map(Number).sort((a, b) => a - b)) {
     const col = byRank[r];
-    col.forEach((n, i) => { pos[n.id] = { x: r * COLW, y: (i - (col.length - 1) / 2) * ROWH }; });
+    col.forEach((n, i) => {
+      const ps = preds[n.id].filter((p) => yOf.has(p));
+      bary.set(n.id, ps.length ? ps.reduce((s, p) => s + yOf.get(p), 0) / ps.length : i * 0.001);
+    });
+    col.sort((a, b) => bary.get(a.id) - bary.get(b.id));
+    col.forEach((n, i) => {
+      const y = (i - (col.length - 1) / 2) * ROWH;
+      yOf.set(n.id, y); pos[n.id] = { x: r * COLW, y };
+    });
   }
 
   // place cards, then measure (offsetWidth/Height only exist post-append, same as the flow engine)

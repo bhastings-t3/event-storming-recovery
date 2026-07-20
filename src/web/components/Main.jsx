@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useExplorer } from '../store.jsx';
 import { getItem } from '../api.js';
 import { flowNodeIds, isDataNode } from '../model.js';
@@ -70,6 +70,23 @@ function DataTouched({ flow, dataNodes, nodeById, PALETTE, openDetail, openMenu 
   );
 }
 
+// A findings panel that sits at the bottom of the flow view as a thin clickable bar, so the board
+// keeps the rest of the height. Expands in place (its body scrolls) rather than pushing the board
+// out of view; several can be open at once.
+function Drawer({ name, title, count, note, open, onToggle, children }) {
+  return (
+    <div className={'fdrawer dw-' + name + (open ? ' open' : '')}>
+      <button type="button" className="fdrawer-bar" aria-expanded={open} onClick={onToggle}>
+        <span className="dw-chevron">▾</span>
+        <span className="dw-title">{title}</span>
+        <span className="dw-count">{count}</span>
+        {note && <span className="dw-note">{note}</span>}
+      </button>
+      {open && <div className="fdrawer-body">{children}</div>}
+    </div>
+  );
+}
+
 export default function Main() {
   const { currentFlow, hotspotById, nodeById, PALETTE, openHotspot, openDetail, openMenu } = useExplorer();
   const f = currentFlow;
@@ -77,7 +94,12 @@ export default function Main() {
   const spots = f ? (f.hotspots || []).map((h) => hotspotById.get(h)).filter(Boolean) : [];
   const instances = f ? (f.instances || []) : [];
   const dataNodes = f ? [...flowNodeIds(f)].map((id) => nodeById.get(id)).filter(isDataNode) : [];
-  const showBottom = dataNodes.length > 0 || instances.length > 0;
+  const showDrawers = spots.length > 0 || dataNodes.length > 0 || instances.length > 0;
+
+  // all closed by default so the board gets the full height; collapse again on a flow change
+  const [open, setOpen] = useState({ hotspots: false, data: false, instances: false });
+  const toggleDrawer = (k) => setOpen((s) => ({ ...s, [k]: !s[k] }));
+  useEffect(() => { setOpen({ hotspots: false, data: false, instances: false }); }, [currentFlow]);
 
   return (
     <div id="main">
@@ -99,45 +121,44 @@ export default function Main() {
         )}
       </div>
 
-      {spots.length > 0 && (
-        <div id="hotspots">
-          <h3>
-            Hotspots<span className="n">{spots.length}</span>
-            <span style={{ color: 'var(--muted)', fontWeight: 600 }}>questions a human should answer</span>
-          </h3>
-          <div className="hs-cards">
-            {spots.map((s) => (
-              <div key={s.id} className="hs-card" title={(s.description || '') + '  ·  right-click to add to context'} onClick={() => openHotspot(s.id)} onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, { type: 'hotspot', id: s.id }); }}>
-                <b>{s.label}</b>
-                <span>{s.description}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <Board />
 
-      {showBottom && (
-        <div id="findings">
+      {showDrawers && (
+        <div id="drawers">
+          {spots.length > 0 && (
+            <Drawer name="hotspots" title="Hotspots" count={spots.length} note="questions a human should answer" open={open.hotspots} onToggle={() => toggleDrawer('hotspots')}>
+              <div className="hs-cards">
+                {spots.map((s) => (
+                  <div key={s.id} className="hs-card" title={(s.description || '') + '  ·  right-click to add to context'} onClick={() => openHotspot(s.id)} onContextMenu={(e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, { type: 'hotspot', id: s.id }); }}>
+                    <b>{s.label}</b>
+                    <span>{s.description}</span>
+                  </div>
+                ))}
+              </div>
+            </Drawer>
+          )}
           {dataNodes.length > 0 && (
-            <DataTouched flow={f} dataNodes={dataNodes} nodeById={nodeById} PALETTE={PALETTE} openDetail={openDetail} openMenu={openMenu} />
+            <Drawer name="data" title="Data touched" count={dataNodes.length} open={open.data} onToggle={() => toggleDrawer('data')}>
+              <DataTouched flow={f} dataNodes={dataNodes} nodeById={nodeById} PALETTE={PALETTE} openDetail={openDetail} openMenu={openMenu} />
+            </Drawer>
           )}
           {instances.length > 0 && (
-            <div id="instances">
-              <h3>Instances of this pattern<span className="n">{instances.length}</span></h3>
-              <table>
-                <tbody>
-                  {instances.map((i, idx) => (
-                    <tr key={idx}>
-                      <td className="i-label">{i.label || ''}</td>
-                      <td className="i-route">{i.route || ''}</td>
-                      <td className="i-file" title={i.file || ''}>{(i.file || '').split('/').pop()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Drawer name="instances" title="Instances of this pattern" count={instances.length} open={open.instances} onToggle={() => toggleDrawer('instances')}>
+              {/* the #instances wrapper still carries this table's styling */}
+              <div id="instances">
+                <table>
+                  <tbody>
+                    {instances.map((i, idx) => (
+                      <tr key={idx}>
+                        <td className="i-label">{i.label || ''}</td>
+                        <td className="i-route">{i.route || ''}</td>
+                        <td className="i-file" title={i.file || ''}>{(i.file || '').split('/').pop()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Drawer>
           )}
         </div>
       )}

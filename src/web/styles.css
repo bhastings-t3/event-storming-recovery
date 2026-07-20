@@ -114,14 +114,31 @@ svg.edges path { transition: opacity .13s; }
 .inv:hover { transform: translateY(-2px); z-index: 3; }
 .edge-verb { position: absolute; font-size: 9px; color: var(--muted); background: var(--bg); padding: 0 4px; border-radius: 3px; pointer-events: none; letter-spacing: .02em; white-space: nowrap; z-index: 2; transform: translate(-50%, -50%); }
 /* hotspots band: distinct panel surface above the board, scrolls if tall */
-#hotspots { background: var(--panel); border-bottom: 1px solid var(--line); padding: 14px 24px 18px; flex-shrink: 0; max-height: 30vh; overflow-y: auto; }
-/* findings band: distinct panel surface below the dark board (data touched + instances), scrolls if tall */
-#findings { background: var(--panel); border-top: 1px solid var(--line); flex-shrink: 0; max-height: 30vh; overflow-y: auto; }
+/* findings drawers: thin bars pinned under the board. Collapsed they cost ~34px each, so the
+   board (flex:1) keeps the rest of the height; expanding scrolls inside the drawer body. */
+#drawers { flex-shrink: 0; background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.fdrawer { border-bottom: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.fdrawer:last-child { border-bottom: none; }
+.fdrawer.open { overflow: hidden; }
+.fdrawer-bar {
+  font: inherit; width: 100%; height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 24px; background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase; font-weight: 700; transition: background .1s, color .1s;
+}
+.fdrawer-bar:hover { background: var(--accent); color: var(--dim); }
+.fdrawer-bar .dw-chevron { font-size: 9px; transition: transform .12s; }
+.fdrawer:not(.open) .fdrawer-bar .dw-chevron { transform: rotate(-90deg); }
+.fdrawer-bar .dw-count { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
+.fdrawer-bar .dw-note { color: var(--muted); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 11px; }
+.fdrawer.dw-hotspots .fdrawer-bar { color: #e5645e; }
+.fdrawer-body { overflow-y: auto; max-height: 34vh; padding: 4px 24px 16px; min-height: 0; }
+/* these carried their own padding when they were standalone panels; the drawer body owns it now */
+.fdrawer-body #datatouched, .fdrawer-body #instances { padding: 0; }
+.fdrawer-body #datatouched > h3, .fdrawer-body #instances > h3 { display: none; }
 #datatouched { padding: 14px 24px 18px; }
-#datatouched h3, #hotspots h3, #instances h3 { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 11px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-#hotspots h3 { color: #e5645e; }
+#datatouched h3, #instances h3 { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 11px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 #datatouched h3 { color: var(--muted); }
-#datatouched h3 .n, #hotspots h3 .n, #instances h3 .n { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
+#datatouched h3 .n, #instances h3 .n { font-size: 10px; background: var(--accent-2); color: var(--dim); border-radius: 99px; padding: 1px 7px; font-weight: 700; letter-spacing: 0; }
 .hs-cards { display: flex; gap: 12px; flex-wrap: wrap; }
 .hs-card {
   background: rgba(229,100,94,.07); border: 1px solid rgba(229,100,94,.28); border-radius: var(--radius);

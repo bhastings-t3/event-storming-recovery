@@ -27,6 +27,9 @@ export function renderDataFlowInto(flow, lane, ctx) {
   // them) are the whole node set. Nothing else makes it in.
   const edges = (flow.edges || []).filter((e) => dataIds.has(e.from) || dataIds.has(e.to));
   const nodeIds = new Set(edges.flatMap((e) => [e.from, e.to]));
+  // a data node reachable by no edge still belongs here as an isolated card, so this graph never
+  // shows less than the "Data touched" list below it (which has the same fallback)
+  for (const id of dataIds) nodeIds.add(id);
   const nodes = [...nodeIds].map((id) => nodeById.get(id)).filter(Boolean);
 
   // --- rank left-to-right by longest path over the kept edges (cycle-safe bounded relaxation,

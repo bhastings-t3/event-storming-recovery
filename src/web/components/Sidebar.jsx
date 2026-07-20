@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import { sidebarGroups, flowSearchText, queryTokens, matchesQuery } from '../model.js';
 
@@ -14,6 +14,13 @@ export default function Sidebar() {
     for (const fl of model.flows) m.set(fl.id, flowSearchText(model, nodeById, fl));
     return m;
   }, [model, nodeById]);
+  // collapsed group headings, keyed by `${groupMode}|${title}` since sidebarGroups has no stable id
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
+  const toggleGroup = (key) => setCollapsedGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   return (
     <aside id="sidebar">
@@ -34,13 +41,25 @@ export default function Sidebar() {
         {sidebarGroups(model, groupMode, nodeById).map((g, gi) => {
           const flows = model.flows.filter(g.pred).filter((fl) => !tokens.length || matchesQuery(flowHaystacks.get(fl.id), tokens));
           if (!flows.length) return null;
+          const groupKey = groupMode + '|' + g.title;
+          const listId = 'flow-group-' + gi;
+          // a non-empty filter always wins so search hits are never hidden by a collapsed group
+          const collapsed = !tokens.length && collapsedGroups.has(groupKey);
           return (
             <React.Fragment key={gi}>
-              <div className="flow-group">
+              <button
+                type="button"
+                className="flow-group"
+                aria-expanded={!collapsed}
+                aria-controls={listId}
+                onClick={() => toggleGroup(groupKey)}
+              >
+                <span className={'fg-chevron' + (collapsed ? ' collapsed' : '')}>▾</span>
                 {g.color && <span className="fg-dot" style={{ background: g.color }} />}
-                {g.title}
-              </div>
-              {flows.map((fl) => {
+                <span className="fg-title">{g.title}</span>
+                <span className="fg-count">{flows.length}</span>
+              </button>
+              {!collapsed && <div id={listId} className="flow-group-items">{flows.map((fl) => {
                 const dead = fl.status && fl.status !== 'live';
                 const hs = (fl.hotspots || []).length;
                 const active = currentFlow && currentFlow.id === fl.id;
@@ -62,7 +81,7 @@ export default function Sidebar() {
                     )}
                   </div>
                 );
-              })}
+              })}</div>}
             </React.Fragment>
           );
         })}

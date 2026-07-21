@@ -1,4 +1,6 @@
-# flows.json schema — the canonical strategic model
+# flows.json schema: the canonical strategic model
+
+*Reference. Part of the [documentation set](../README.md).*
 
 Every per-flow trace conforms to this schema. The merge tool combines many traces into
 one `flows.json`; the generator renders it to a DOT graph and an interactive explorer.
@@ -227,4 +229,4 @@ Rules:
 - Prefer few, meaningful events over one event per statement. A multi-table transactional write = one event from one aggregate.
 - Dataflow/pipeline stages (AI transforms, file parsing, ETL steps) are NOT aggregates or
   policies; keep the pipeline in the command's tactical detail and promote only
-  domain-significant facts to events (the two-plane model — see METHOD.md).
+  domain-significant facts to events (the two-plane model, see [`../explanation/METHOD.md`](../explanation/METHOD.md)).

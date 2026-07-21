@@ -13,7 +13,7 @@ and events are RECOVERED, so mark `inferred: true`.
 EXCLUDE from all searches: `{EXCLUDE}`.
 
 ## Required reading
-1. `docs/flows-schema.md` — the output schema. Follow it exactly.
+1. `docs/reference/flows-schema.md` — the output schema. Follow it exactly.
 2. `{EXAMPLE_PATH}` — a conformant reference trace from the pilot. Match its shape and depth.
 3. `prompts/recursive-exploration.md` — the recursion protocol you operate under (appended below
    if not readable). You are not a leaf: chase high-signal pathways by spawning your own agents.

@@ -74,7 +74,7 @@ deep traces, which collapse into pattern exemplars, what's excluded. Coverage ti
 ## Phase 3 — Deep-trace (a pilot, then waves)
 
 Write the shared **trace briefing** (`03-trace-briefing.md`, filled with `{REPO_ROOT}`,
-`{EXCLUDE}`, the shared-id glossary, and the path to `docs/flows-schema.md` + a conformant
+`{EXCLUDE}`, the shared-id glossary, and the path to `docs/reference/flows-schema.md` + a conformant
 example) to `{SCRATCH}/trace-briefing.md`.
 
 1. **Run ONE pilot trace first.** Pick a meaty write flow. When it returns, read its
@@ -127,7 +127,7 @@ and the physical storage (datastore/field — whatever the storage actually is) 
 cross-linked to the behavioral nodes. This is the layer the behavioral stickies deliberately abstract
 away, and it is what lets a developer answer "what does this read model return and where does it come
 from." Write the mapping briefing (`05-data-mapping.md`, filled with `{REPO_ROOT}`, `{EXCLUDE}`, the
-merged `flows.json` path, the **Data model** section of `docs/flows-schema.md`, and `{TRACES_DIR}`) and
+merged `flows.json` path, the **Data model** section of `docs/reference/flows-schema.md`, and `{TRACES_DIR}`) and
 dispatch a **wave of ~5-7 agents**, each owning a slice. Run **one pilot first**, read its
 schema-friction, then the rest. Each agent discovers storage from SQL literals + connection strings
 (corroborated by migrations when present), adds `datastore` (+`storeKind`) and `field` (+`fieldKind`)

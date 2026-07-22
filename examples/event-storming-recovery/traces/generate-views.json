@@ -14,13 +14,38 @@
       "inferred": true,
       "description": "Render the canonical flows.json into the two shipped views: a Graphviz flows.dot digraph (one cluster per flow, event-storming palette) and a single self-contained explorer.html with the whole model inlined. A deterministic, stateless projection: it reads the model and writes two files, mutating nothing.",
       "tactical": {
-        "explanation": "Entry tools/generate-views.js (the es-generate bin). Guards argv: missing <flows.json> or <outDir> prints usage and exits 2 (22). It then JSON.parses the flows file into `model` with NO try/catch and NO validation (24) -- it fully trusts es-merge's output contract. repoRoot/title resolve from --repo-root/--title, falling back to model.meta.repoRoot/title then './'Event Storming Explorer' (27-28). It indexes nodeById / hotspotById (30-31) and a DATA_TYPES filter that excludes datastore/field nodes and any edge touching them from the board + DOT (36-37). DOT pass: one `subgraph cluster_<flowid>` per flow, sticky per used node colored by PALETTE, dead flows dashed + greyed, node label URL='vscode://file/<repoRoot>/<path>:<line>' from the first anchor; written to <outDir>/flows.dot (60-89). HTML pass: the model is serialized with JSON.stringify(model).replace(/</g,'\\u003c') (92, the one injection guard) and inlined as `const MODEL` alongside REPO_ROOT + PALETTE (436-438) into a ~1400-line self-contained template (tabs: Flows, Gallery, Data model, Glossary, Overview); written to <outDir>/explorer.html (1519). Two sequential writeFileSync calls to the same outDir; no mkdir (outDir must pre-exist).",
+        "explanation": "Split across two layers by the refactor: src/adapters/cli/es-generate.ts (runGenerate) is the IO/CLI action, and src/application/commands/generate-views.ts (generateViews, renderDot, renderHtml) is the pure render — no fs, no argv, data in/strings out. runGenerate JSON.parses the flows file into `model` with NO try/catch and NO validation (line 26 of es-generate.ts) -- it fully trusts es-merge's output contract. repoRoot/title resolve from --repo-root/--title, falling back to model.meta.repoRoot/title then './'Event Storming Explorer' (es-generate.ts 28-29). The unified CLI's `generate` subcommand (cli.ts) now enforces the presence of <flowsJson>/<outDir> declaratively via commander's required arguments, replacing the old hand-rolled argv guard. DOT pass (renderDot, generate-views.ts): builds a local nodeById index and a DATA_TYPES filter that excludes datastore/field nodes and any edge touching them from the board + DOT; one `subgraph cluster_<flowid>` per flow, sticky per used node colored by PALETTE, dead flows dashed + greyed, node label URL='vscode://file/<repoRoot>/<path>:<line>' from the first anchor. HTML pass (renderHtml): the model is serialized with JSON.stringify(model).replace(/</g,'\\u003c') (the one injection guard) and inlined as `const MODEL` alongside REPO_ROOT + PALETTE into a ~1400-line self-contained template (tabs: Flows, Gallery, Data model, Glossary, Overview). writeViews (src/adapters/fs/generator-writer.ts) does the two sequential writeFileSync calls to outDir; no mkdir (outDir must pre-exist).",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 22, "symbol": "cli", "note": "argv guard: missing flows/outDir => usage + exit 2" },
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "cli", "note": "JSON.parse(readFileSync(flowsFile)) -- no try/catch, no validation" },
-          { "path": "tools/generate-views.js", "line": 89, "symbol": "cli", "note": "writeFileSync(outDir/flows.dot, dot.join)" },
-          { "path": "tools/generate-views.js", "line": 92, "symbol": "cli", "note": "modelJson = JSON.stringify(model).replace(/</g,'\\u003c') -- HTML injection guard" },
-          { "path": "tools/generate-views.js", "line": 1519, "symbol": "cli", "note": "writeFileSync(outDir/explorer.html, html)" }
+          {
+            "path": "src/adapters/cli/es-generate.ts",
+            "line": 25,
+            "symbol": "runGenerate",
+            "note": "CLI action: reads flowsFile, resolves repoRoot/title, calls generateViews + writeViews"
+          },
+          {
+            "path": "src/adapters/cli/es-generate.ts",
+            "line": 26,
+            "symbol": "runGenerate",
+            "note": "JSON.parse(readFileSync(flowsFile)) -- no try/catch, no validation"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 1488,
+            "symbol": "generateViews",
+            "note": "pure render: calls renderDot + renderHtml, returns { dot, html }"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 59,
+            "symbol": "renderHtml",
+            "note": "modelJson = JSON.stringify(model).replace(/</g,'\\u003c') -- HTML injection guard"
+          },
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 7,
+            "symbol": "writeViews",
+            "note": "writeFileSync(outDir/flows.dot) then writeFileSync(outDir/explorer.html)"
+          }
         ]
       }
     },
@@ -31,10 +56,20 @@
       "inferred": true,
       "description": "The canonical Event Storming model (flows.json): deduped nodes plus flows, hotspots, terms, and derived meta. In THIS flow it is a READ-ONLY input -- the generator projects it into views and never mutates or re-validates it. Its invariants are enforced upstream at merge time, not here.",
       "tactical": {
-        "explanation": "generate-views.js JSON.parses flows.json into `model` (24) and builds nodeById / hotspotById indexes (30-31) plus the DATA_TYPES exclusion filter (36-37). It reads model.meta.repoRoot / model.meta.title as fallbacks for the --repo-root / --title flags (27-28) and model.nodes / model.flows / model.hotspots throughout the DOT and HTML passes. The generator performs NO validation of its own -- it assumes the aggregate's merge-time invariants already held (see hot-generator-trusts-unvalidated-model).",
+        "explanation": "es-generate.ts's runGenerate JSON.parses flows.json into `model` (line 26) and reads model.meta.repoRoot / model.meta.title as fallbacks for the --repo-root / --title flags (lines 28-29). renderDot (generate-views.ts) builds its own nodeById index over model.nodes for the DOT pass; renderHtml inlines the whole model as-is for the client to index. The generator performs NO validation of its own -- it assumes the aggregate's merge-time invariants already held (see hot-generator-trusts-unvalidated-model). Unlike the merge-traces flow, this flow does not touch the explicit Model aggregate class (src/domain/model/model.ts) at all -- it works off the plain parsed JSON shape.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "cli", "note": "model = JSON.parse(readFileSync(flowsFile))" },
-          { "path": "tools/generate-views.js", "line": 30, "symbol": "cli", "note": "nodeById / hotspotById indexes over model.nodes / model.hotspots" }
+          {
+            "path": "src/adapters/cli/es-generate.ts",
+            "line": 26,
+            "symbol": "runGenerate",
+            "note": "model = JSON.parse(readFileSync(flowsFile))"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 21,
+            "symbol": "renderDot",
+            "note": "nodeById index over model.nodes (throws if absent)"
+          }
         ]
       }
     },
@@ -45,11 +80,26 @@
       "inferred": true,
       "description": "The Graphviz digraph the operator renders offline (e.g. `dot -Tsvg model/flows.dot`) or opens in a Graphviz viewer to read the whole board at a glance: one clustered subgraph per flow, event-storming-colored stickies, labeled edges, dead flows dashed and greyed. Physical storage nodes (datastore/field) and any edge touching them are deliberately excluded so the DOT stays behavioral.",
       "tactical": {
-        "explanation": "Built by the DOT pass (60-88) and written to <outDir>/flows.dot (89). Per flow it emits `subgraph cluster_<flowid>`, computes the `used` node set from steps + edges while skipping data-type ids via isDataId (70-72), and for each used node emits a filled/rounded box colored by PALETTE[type] with fontcolor = the palette's tonal text, a truncated description tooltip, and URL='vscode://file/<repoRoot>/<firstAnchor.path>:<line>' so a Graphviz SVG's nodes deep-link into the local checkout (73-84). Node ids are namespaced `<flowid>__<nodeid>` so a shared node appears once per flow cluster. Edges whose endpoints survived the data filter are drawn with the verb as label (82-85).",
+        "explanation": "Built by renderDot (src/application/commands/generate-views.ts), a pure function now separated from the CLI action; writeViews (src/adapters/fs/generator-writer.ts) persists its output to <outDir>/flows.dot. Per flow it emits `subgraph cluster_<flowid>`, computes the `used` node set from steps + edges while skipping data-type ids via isDataId, and for each used node emits a filled/rounded box colored by PALETTE[type] with fontcolor = the palette's tonal text, a truncated description tooltip, and URL='vscode://file/<repoRoot>/<firstAnchor.path>:<line>' so a Graphviz SVG's nodes deep-link into the local checkout. Node ids are namespaced `<flowid>__<nodeid>` so a shared node appears once per flow cluster. Edges whose endpoints survived the data filter are drawn with the verb as label.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 60, "symbol": "cli", "note": "DOT digraph header + per-flow cluster loop" },
-          { "path": "tools/generate-views.js", "line": 71, "symbol": "cli", "note": "used-node set excludes datastore/field via isDataId" },
-          { "path": "tools/generate-views.js", "line": 89, "symbol": "cli", "note": "writeFileSync(outDir/flows.dot)" }
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 20,
+            "symbol": "renderDot",
+            "note": "DOT digraph header + per-flow cluster loop"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 36,
+            "symbol": "renderDot",
+            "note": "used-node set excludes datastore/field via isDataId"
+          },
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 8,
+            "symbol": "writeViews",
+            "note": "writeFileSync(outDir/flows.dot, views.dot)"
+          }
         ]
       }
     },
@@ -60,11 +110,32 @@
       "inferred": true,
       "description": "The self-contained, no-server interactive explorer the operator opens in a browser: the whole model is inlined as a JS constant and rendered into five tabs (Flows board, Gallery of every sticky, Data model, Glossary, Overview) with a sticky-lane board, detail panel, search, group-by pivots, and vscode:// deep links to the analyzed source. This is the primary artifact the recovery produces.",
       "tactical": {
-        "explanation": "The whole `model` is serialized once (JSON.stringify(model).replace(/</g,'\\u003c') to neutralize </script> injection, 92) and inlined as `const MODEL` with REPO_ROOT + PALETTE (436-438) into a ~1400-line HTML/CSS/vanilla-JS template (94-1518), written to <outDir>/explorer.html (1519). No external dependencies are referenced -- the page is fully offline. Client anchors render as `vscode://file/<REPO_ROOT>/<path>:<line>` links (476) that open the analyzed checkout in VS Code. The client-side rendering (sidebar grouping, board layout, gallery, glossary, data-model tab) is the same projection logic later ported into the React SPA under src/web/*; here it is baked statically into one file.",
+        "explanation": "Built by renderHtml (src/application/commands/generate-views.ts). The whole `model` is serialized once (JSON.stringify(model).replace(/</g,'\\u003c') to neutralize </script> injection, line 59) and inlined as `const MODEL` with REPO_ROOT + PALETTE (lines 402-404) into a ~1400-line HTML/CSS/vanilla-JS template, written by writeViews (src/adapters/fs/generator-writer.ts) to <outDir>/explorer.html. No external dependencies are referenced -- the page is fully offline. Client anchors render as `vscode://file/<REPO_ROOT>/<path>:<line>` links (client-side anchorUrl helper, line 442) that open the analyzed checkout in VS Code. The client-side rendering (sidebar grouping, board layout, gallery, glossary, data-model tab) is the same projection logic later ported into the React SPA under src/web/*; here it is baked statically into one file.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 92, "symbol": "cli", "note": "modelJson escaped for safe inlining into the HTML" },
-          { "path": "tools/generate-views.js", "line": 436, "symbol": "cli", "note": "MODEL / REPO_ROOT / PALETTE inlined into the page" },
-          { "path": "tools/generate-views.js", "line": 1519, "symbol": "cli", "note": "writeFileSync(outDir/explorer.html, html)" }
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 57,
+            "symbol": "renderHtml",
+            "note": "builds the self-contained HTML string"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 59,
+            "symbol": "renderHtml",
+            "note": "modelJson escaped for safe inlining into the HTML"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 402,
+            "symbol": "renderHtml",
+            "note": "MODEL / REPO_ROOT / PALETTE inlined into the page"
+          },
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 9,
+            "symbol": "writeViews",
+            "note": "writeFileSync(outDir/explorer.html, views.html)"
+          }
         ]
       }
     },
@@ -89,9 +160,14 @@
       "inferred": true,
       "description": "The external Graphviz `dot` renderer the operator runs over flows.dot (e.g. `dot -Tsvg`) to produce a static image of the whole board. Not bundled; the generator only emits the .dot source.",
       "tactical": {
-        "explanation": "generate-views writes DOT source only; rendering is an out-of-process step the operator invokes (documented in the example README as `dot -Tsvg model/flows.dot -o flows.svg`). The emitted node URLs survive into a Graphviz SVG as clickable vscode:// links.",
+        "explanation": "renderDot writes DOT source only; rendering is an out-of-process step the operator invokes (documented in the example README as `dot -Tsvg model/flows.dot -o flows.svg`). The emitted node URLs survive into a Graphviz SVG as clickable vscode:// links.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 62, "symbol": "cli", "note": "digraph header written for the dot renderer" }
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 27,
+            "symbol": "renderDot",
+            "note": "digraph header written for the dot renderer"
+          }
         ]
       }
     },
@@ -103,9 +179,20 @@
       "inferred": false,
       "description": "The local filesystem reached through node:fs. Here it holds the input flows.json read by the generator and receives the two output view files written into outDir.",
       "tactical": {
-        "explanation": "Accessed via require('fs'): readFileSync(flowsFile) reads the input model; writeFileSync writes <outDir>/flows.dot and <outDir>/explorer.html. No mkdir is performed, so outDir must already exist.",
+        "explanation": "Accessed via node:fs on both sides of the ports-and-adapters split: es-generate.ts's runGenerate does fs.readFileSync(flowsFile) to read the input model; src/adapters/fs/generator-writer.ts's writeViews does the two fs.writeFileSync calls for <outDir>/flows.dot and <outDir>/explorer.html. No mkdir is performed, so outDir must already exist.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 16, "symbol": "require", "note": "const fs = require('fs') -- the filesystem boundary" }
+          {
+            "path": "src/adapters/cli/es-generate.ts",
+            "line": 15,
+            "symbol": "import fs",
+            "note": "node:fs is the filesystem boundary for reading flowsFile"
+          },
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 3,
+            "symbol": "import fs",
+            "note": "node:fs is the filesystem boundary for writing the two view files"
+          }
         ]
       }
     },
@@ -118,9 +205,14 @@
       "inferred": false,
       "description": "The canonical model file. Written by es-merge; consumed here as the read-only input of es-generate. Between the two CLIs (separate node processes) this on-disk file IS the hand-off store.",
       "tactical": {
-        "explanation": "generate-views.js reads it with fs.readFileSync(flowsFile,'utf8') and JSON.parses it into `model` (24); it is never written by this flow.",
+        "explanation": "es-generate.ts's runGenerate reads it with fs.readFileSync(flowsFile,'utf8') and JSON.parses it into `model` (line 26); it is never written by this flow.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "cli", "note": "readFileSync(flowsFile) -> JSON.parse" }
+          {
+            "path": "src/adapters/cli/es-generate.ts",
+            "line": 26,
+            "symbol": "runGenerate",
+            "note": "readFileSync(flowsFile) -> JSON.parse"
+          }
         ]
       }
     },
@@ -133,9 +225,14 @@
       "inferred": false,
       "description": "Output file: the Graphviz DOT source for the whole board, one cluster per flow. Written into outDir. Backing store for the rm-flows-dot read model.",
       "tactical": {
-        "explanation": "Serialized as dot.join('\\n') and written with fs.writeFileSync(path.join(outDir,'flows.dot'), ...) at the end of the DOT pass.",
+        "explanation": "renderDot returns the joined DOT string as part of { dot, html }; writeViews (src/adapters/fs/generator-writer.ts) writes it with fs.writeFileSync(path.join(outDir,'flows.dot'), views.dot) as the first IO step.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 89, "symbol": "cli", "note": "writeFileSync(outDir/flows.dot)" }
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 8,
+            "symbol": "writeViews",
+            "note": "writeFileSync(outDir/flows.dot)"
+          }
         ]
       }
     },
@@ -148,9 +245,14 @@
       "inferred": false,
       "description": "Output file: the single self-contained interactive explorer with the whole model inlined. Written into outDir. Backing store for the rm-explorer-html read model.",
       "tactical": {
-        "explanation": "The assembled HTML template string is written with fs.writeFileSync(path.join(outDir,'explorer.html'), html) as the last IO step; a success line then prints flow/node/hotspot counts.",
+        "explanation": "The assembled HTML template string is returned from renderHtml as part of { dot, html }; writeViews (src/adapters/fs/generator-writer.ts) writes it with fs.writeFileSync(path.join(outDir,'explorer.html'), views.html) as the second IO step. runGenerate (es-generate.ts) then prints a success line with flow/node/hotspot counts.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 1519, "symbol": "cli", "note": "writeFileSync(outDir/explorer.html, html)" }
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 9,
+            "symbol": "writeViews",
+            "note": "writeFileSync(outDir/explorer.html, views.html)"
+          }
         ]
       }
     }
@@ -163,7 +265,7 @@
       "kind": "write",
       "status": "live",
       "summary": "The operator runs es-generate (or the demo wrapper) over a validated flows.json and an output directory. The tool JSON.parses the model, then in one deterministic pass renders two artifacts: a Graphviz flows.dot digraph (one event-storming-colored cluster per flow, physical datastore/field nodes excluded) and a single self-contained explorer.html with the whole model inlined and no external dependencies. Both are written into outDir; the operator opens explorer.html in a browser and can render flows.dot with Graphviz, with vscode:// deep links from either back into the analyzed source. The generator is a pure projection: it reads the model read-only, enforces none of the model's invariants, and trusts that es-merge already validated the input.",
-      "trigger": "Operator runs `node tools/generate-views.js <flows.json> <outDir> [--repo-root <path>] [--title <text>]` (the `es-generate` bin), or `npm run demo` chains it after es-merge (scripts/build-example.mjs:14).",
+      "trigger": "Operator runs `node dist/node/adapters/cli/cli.js generate <flows.json> <outDir> [--repo-root <path>] [--title <text>]` (the unified CLI's `generate` subcommand -- cli.ts, backed by es-generate.ts's runGenerate), or `npm run demo` chains it after the `merge` subcommand (scripts/build-example.mjs:17).",
       "steps": [
         "actor-operator",
         "cmd-generate-views",
@@ -173,17 +275,61 @@
         "ext-browser"
       ],
       "edges": [
-        { "from": "actor-operator", "to": "cmd-generate-views", "verb": "issues" },
-        { "from": "cmd-generate-views", "to": "agg-model", "verb": "reads" },
-        { "from": "cmd-generate-views", "to": "ds-model-fs", "verb": "connects via" },
-        { "from": "cmd-generate-views", "to": "ds-flows-json", "verb": "reads" },
-        { "from": "cmd-generate-views", "to": "ds-flows-dot", "verb": "writes" },
-        { "from": "cmd-generate-views", "to": "ds-explorer-html", "verb": "writes" },
-        { "from": "rm-flows-dot", "to": "ds-flows-dot", "verb": "projects from" },
-        { "from": "rm-explorer-html", "to": "ds-explorer-html", "verb": "projects from" },
-        { "from": "rm-flows-dot", "to": "ext-graphviz", "verb": "read by" },
-        { "from": "rm-explorer-html", "to": "ext-browser", "verb": "read by" },
-        { "from": "rm-explorer-html", "to": "ext-vscode", "verb": "calls" }
+        {
+          "from": "actor-operator",
+          "to": "cmd-generate-views",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-model-fs",
+          "verb": "connects via"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-flows-json",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-flows-dot",
+          "verb": "writes"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-explorer-html",
+          "verb": "writes"
+        },
+        {
+          "from": "rm-flows-dot",
+          "to": "ds-flows-dot",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-explorer-html",
+          "to": "ds-explorer-html",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-flows-dot",
+          "to": "ext-graphviz",
+          "verb": "read by"
+        },
+        {
+          "from": "rm-explorer-html",
+          "to": "ext-browser",
+          "verb": "read by"
+        },
+        {
+          "from": "rm-explorer-html",
+          "to": "ext-vscode",
+          "verb": "calls"
+        }
       ],
       "hotspots": [
         "hot-generator-trusts-unvalidated-model"
@@ -195,13 +341,28 @@
     {
       "id": "hot-generator-trusts-unvalidated-model",
       "label": "es-generate renders any flows.json without validating it",
-      "description": "generate-views.js JSON.parses flows.json and immediately indexes model.nodes / model.hotspots / model.flows with no validation and no try/catch. Unlike the server's resolve-model.mjs (which re-runs the merge and throws on errors), the es-generate CLI performs zero checks. Combined with the merge writing flows.json even when validation fails (see hot-invalid-model-written), an operator can es-generate an invalid or partial model and get a silently broken/misleading explorer, or a raw crash: a missing top-level array (nodes/hotspots) throws an uncaught TypeError from .map (30-31), and a missing outDir throws from writeFileSync (no mkdir). Human question: should es-generate re-validate its input (import mergeTraceDocs, or at least assert the required arrays) and fail loudly before rendering, or is trusting es-merge's output contract intended? Today the two consumers of flows.json disagree on whether to trust it.",
+      "description": "runGenerate JSON.parses flows.json and immediately hands it to renderDot/renderHtml with no validation and no try/catch. Unlike the server's resolveModel (which re-runs the merge and throws on errors), the es-generate path performs zero checks. Combined with the merge writing flows.json even when validation fails (see hot-invalid-model-written), an operator can generate an invalid or partial model and get a silently broken/misleading explorer, or a raw crash: a missing top-level `nodes` or `flows` array throws an uncaught TypeError from renderDot's `.map`/`for...of` (lines 21 and 31), and a missing outDir throws from writeViews's writeFileSync (no mkdir). Human question: should es-generate re-validate its input (import the domain validate()/crossValidate, or at least assert the required arrays) and fail loudly before rendering, or is trusting es-merge's output contract intended? Today the two consumers of flows.json disagree on whether to trust it.",
       "tactical": {
-        "explanation": "tools/generate-views.js:24 `const model = JSON.parse(fs.readFileSync(flowsFile,'utf8'))` -- no try/catch, no schema check. Lines 30-31 `new Map(model.nodes.map(...))` / `new Map(model.hotspots.map(...))` assume those arrays exist; 1522 reads model.flows.length. No `require` of src/lib/merge.mjs anywhere in the file. Contrast src/server/resolve-model.mjs, which throws when merged.errors.length so the server never serves an unvalidated model. No fs.mkdirSync of outDir, so a non-existent output dir also throws from writeFileSync.",
+        "explanation": "es-generate.ts:26 `const model: Model = JSON.parse(fs.readFileSync(flowsFile, 'utf8'))` -- no try/catch, no schema check. generate-views.ts's renderDot:21 `new Map(model.nodes.map(...))` and :31 `for (const f of model.flows)` assume those arrays exist. No import of the domain validate()/crossValidate anywhere in es-generate.ts or generate-views.ts. Contrast src/application/commands/resolve-model.ts, which throws when merged.errors.length so the server never serves an unvalidated model. No fs.mkdirSync of outDir in generator-writer.ts, so a non-existent output dir also throws from writeFileSync. The old CLI's manual argv guard (missing flowsFile/outDir -> usage + exit 2) is gone; commander's required <flowsJson>/<outDir> arguments in cli.ts now enforce that instead, which is a genuine improvement but doesn't touch the model-validation gap this hotspot is about.",
         "anchors": [
-          { "path": "tools/generate-views.js", "line": 24, "symbol": "cli", "note": "JSON.parse with no try/catch and no validation" },
-          { "path": "tools/generate-views.js", "line": 30, "symbol": "cli", "note": "model.nodes / model.hotspots .map assume the arrays exist" },
-          { "path": "tools/generate-views.js", "line": 89, "symbol": "cli", "note": "writeFileSync with no mkdir of outDir" }
+          {
+            "path": "src/adapters/cli/es-generate.ts",
+            "line": 26,
+            "symbol": "runGenerate",
+            "note": "JSON.parse with no try/catch and no validation"
+          },
+          {
+            "path": "src/application/commands/generate-views.ts",
+            "line": 21,
+            "symbol": "renderDot",
+            "note": "model.nodes.map assumes the array exists"
+          },
+          {
+            "path": "src/adapters/fs/generator-writer.ts",
+            "line": 7,
+            "symbol": "writeViews",
+            "note": "writeFileSync with no mkdir of outDir"
+          }
         ]
       }
     }

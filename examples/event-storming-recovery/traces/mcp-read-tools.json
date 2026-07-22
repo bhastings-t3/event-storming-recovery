@@ -7,11 +7,26 @@
       "inferred": false,
       "description": "A Claude session across the process boundary that speaks MCP to POST /mcp over streamable HTTP. It is the consumer of the es-view read surface: it calls get_node / get_flow / list_model / list_data_model and reads the event-storming://selected-nodes resource to ground a refactor in the live model. (get_current_selection is the same client's selection-aware read, owned by a sibling trace.) The @modelcontextprotocol/sdk used server-side is an in-process LIBRARY, not this external system.",
       "tactical": {
-        "explanation": "SESSION TRANSPORT (plumbing, kept in tactical per the two-plane rule): createMcpHandler holds a `transports` Map keyed by Mcp-Session-Id. An `initialize` POST with no session id spins up a StreamableHTTPServerTransport (randomUUID sessionIdGenerator, enableJsonResponse) and connects a FRESH McpServer (buildMcpServer) that closes over the shared `services` + `state`; onsessioninitialized registers the transport. Later POST/GET/DELETE reuse it by session id; transport.onclose deletes the session. Request bodies are capped at 4MB (readJsonBody destroys the socket past 4_000_000 bytes). Unknown node/flow ids come back as a plain text result (not an MCP protocol error) so the client can recover without a retry loop. CONTRADICTION: the file header comment (line 4) calls the transport 'stateless', but the createMcpHandler JSDoc (line 115) and mcp.md both say STATEFUL, and the implementation is per-session stateful.",
+        "explanation": "SESSION TRANSPORT (plumbing, kept in tactical per the two-plane rule): createMcpHandler holds a `transports` Map keyed by Mcp-Session-Id. An `initialize` POST with no session id spins up a StreamableHTTPServerTransport (randomUUID sessionIdGenerator, enableJsonResponse) and connects a FRESH McpServer (buildMcpServer) that closes over the shared `services` + session (selection, bundle); onsessioninitialized registers the transport. Later POST/GET/DELETE reuse it by session id; transport.onclose deletes the session. Request bodies are capped at 4MB (readJsonBody destroys the socket past 4_000_000 bytes). Unknown node/flow ids come back as a plain text result (not an MCP protocol error) so the client can recover without a retry loop. RESOLVED: the pre-refactor mcp.mjs header comment called the transport 'stateless', contradicting the stateful per-session implementation and mcp.md. The refactored mcp-server.ts header comment drops that claim entirely, and its createMcpHandler JSDoc plainly states 'Stateful over streamable HTTP' — the old contradiction is gone.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 120, "symbol": "createMcpHandler", "note": "transports Map keyed by Mcp-Session-Id" },
-          { "path": "src/server/mcp.mjs", "line": 131, "symbol": "mcpHandler", "note": "initialize => new StreamableHTTPServerTransport + fresh McpServer over shared services/state" },
-          { "path": "src/server/mcp.mjs", "line": 4, "symbol": "header comment", "note": "says 'stateless'; contradicts the stateful per-session impl + mcp.md" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 117,
+            "symbol": "createMcpHandler",
+            "note": "transports Map keyed by Mcp-Session-Id"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 128,
+            "symbol": "mcpHandler",
+            "note": "initialize => new StreamableHTTPServerTransport + fresh McpServer over shared services/selection/bundle"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 1,
+            "symbol": "header comment",
+            "note": "no longer claims 'stateless'; createMcpHandler JSDoc (mcp-server.ts:111) now says 'Stateful over streamable HTTP' — the old contradiction with mcp.md is resolved"
+          }
         ]
       }
     },
@@ -22,10 +37,20 @@
       "inferred": true,
       "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then held in memory by the es-view server. Its invariants are the merge-time validations. On this read path it is a read-only source: every MCP projection looks nodes/flows up in it, nothing writes it.",
       "tactical": {
-        "explanation": "READ SIDE (this flow): buildServices resolves the model once at boot into `services` = { model, indexes: buildIndexes(model), repoRoot, comments }, shared same-process by the JSON API and the MCP tools. list_model iterates model.flows/model.nodes; buildNodeContext/buildFlowContext look up indexes.nodeById and derive fields/breadcrumb/usedBy/storage/enforces/flows via selectors; renderDataModelMarkdown walks the physical nodes via dataModelTree. No write occurs on the read path. Because services is built once, the read tools always project the boot-time model snapshot.",
+        "explanation": "READ SIDE (this flow): buildServices resolves the model once at boot into `services` = { model, indexes: buildIndexes(model), repoRoot, comments, readSource }, shared same-process by the JSON API and the MCP tools. list_model iterates model.flows/model.nodes; buildNodeContext/buildFlowContext look up indexes.nodeById and derive fields/breadcrumb/usedBy/storage/enforces/flows via selectors; renderDataModelMarkdown walks the physical nodes via dataModelTree. No write occurs on the read path. Because services is built once, the read tools always project the boot-time model snapshot.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "model + buildIndexes(model) + repoRoot + comments shared by API and MCP" },
-          { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext", "note": "reads indexes.nodeById + selectors to ground a node" }
+          {
+            "path": "src/application/services.ts",
+            "line": 31,
+            "symbol": "buildServices",
+            "note": "model + buildIndexes(model) + repoRoot + comments + readSource shared by API and MCP"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 81,
+            "symbol": "buildNodeContext",
+            "note": "reads indexes.nodeById + selectors to ground a node"
+          }
         ]
       }
     },
@@ -36,10 +61,20 @@
       "inferred": true,
       "description": "The insertion-ordered set of typed refs { type: 'node' | 'flow' | 'hotspot', id } the human has gathered in the explorer (right-click, 'Add to context bundle'). Purely in-memory session state; the read half consumed by the selected-nodes MCP resource. Shares one createState() closure with the current selection (agg-selection); modeled as a distinct aggregate here because the resource reads only the bundle.",
       "tactical": {
-        "explanation": "createState() closes over a `bundle` Map keyed by `type:id`. Written by the SPA (addToBundle/removeFromBundle via /api/context) and READ here by the selected-nodes resource callback via state.getBundle(), which returns the typed refs in insertion order. Non-persistent by design; lost when the process exits.",
+        "explanation": "ContextBundle (its own class) holds a private `bundle` Map keyed by `type:id`. Written by the SPA via the addContextItem/removeContextItem application commands (POST/DELETE /api/context) and READ here by the selected-nodes resource callback via bundle.list(), which returns the typed refs in insertion order. Non-persistent by design; lost when the process exits. It is now a standalone class, separate from Selection — the two used to share one createState() closure; they no longer do.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 20, "symbol": "getBundle", "note": "insertion-ordered typed refs returned to the resource" },
-          { "path": "src/server/state.mjs", "line": 9, "symbol": "createState", "note": "in-memory bundle Map, shares the closure with selection" }
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 22,
+            "symbol": "list",
+            "note": "insertion-ordered typed refs returned to the resource"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 17,
+            "symbol": "ContextBundle",
+            "note": "in-memory bundle Map, own class — no longer shares Selection's closure"
+          }
         ]
       }
     },
@@ -50,10 +85,20 @@
       "inferred": true,
       "description": "A compact index of the whole model: every flow id + name (+ status tag when not live), and every node id + label + type. The discovery surface Claude uses to find ids for get_node / get_flow. Returned by list_model. A pure in-memory projection: it does NOT ground source.",
       "tactical": {
-        "explanation": "list_model maps model.flows to `- \\`id\\` — name [status?]` and model.nodes to `- \\`id\\` — label _(type)_`, joins them under 'Flows (n)' / 'Nodes (n)' headings and returns the markdown as an MCP text result. Straight iteration over agg-model; no readSource, no filesystem touch.",
+        "explanation": "The list_model MCP tool handler (mcp-server.ts:70) delegates to the listModel query (application/queries/list-model.ts:5), which maps model.flows to `- \\`id\\` — name [status?]` and model.nodes to `- \\`id\\` — label _(type)_`, joins them under 'Flows (n)' / 'Nodes (n)' headings, and returns the markdown as an MCP text result. Straight iteration over agg-model; no readSource, no filesystem touch.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 63, "symbol": "list_model", "note": "registerTool: empty inputSchema" },
-          { "path": "src/server/mcp.mjs", "line": 70, "symbol": "list_model", "note": "map model.flows + model.nodes into a compact id index" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 63,
+            "symbol": "list_model",
+            "note": "registerTool: empty inputSchema"
+          },
+          {
+            "path": "src/application/queries/list-model.ts",
+            "line": 5,
+            "symbol": "listModel",
+            "note": "map model.flows + model.nodes into a compact id index"
+          }
         ]
       }
     },
@@ -64,11 +109,32 @@
       "inferred": true,
       "description": "The full grounded context for any node id: type, description, conceptual fields with lineage, physical breadcrumb / contained fields / consumers / storage links, the invariant enforces-relation (aggregate/invariant only), the flows it appears in, human comments, and every source anchor with a real code excerpt. Returned by get_node; the same projection backs the SPA detail panel.",
       "tactical": {
-        "explanation": "get_node(nodeId) (zod string arg) calls buildNodeContext(services, nodeId): looks up indexes.nodeById (agg-model); if missing, returns 'Unknown node — use list_model'. Otherwise maps fields (resolving each source ref to its physical node), derives breadcrumb/contained/usedBy/storage via selectors, computes enforcesRelation and nodeFlows, attaches services.comments.get('node', id) (empty when no comment store is wired), and for EVERY anchor pulls a repo-sandboxed source excerpt via readSource(repoRoot, path, line) (default true). renderNodeContextMarkdown formats it, fenced code included.",
+        "explanation": "get_node(nodeId) (zod string arg, mcp-server.ts:43) delegates to the getNode query (application/queries/get-node.ts:5), which calls buildNodeContext(services, nodeId): looks up indexes.nodeById (agg-model); if missing, returns 'Unknown node — use list_model'. Otherwise maps fields (resolving each source ref to its physical node), derives breadcrumb/contained/usedBy/storage via selectors, computes enforcesRelation and nodeFlows, attaches services.comments.get('node', id) (empty when no comment store is wired), and for EVERY anchor pulls a repo-sandboxed source excerpt via services.readSource(repoRoot, path, line) (default true). renderNodeContextMarkdown formats it, fenced code included.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 37, "symbol": "get_node", "note": "registerTool: nodeId string; buildNodeContext -> renderNodeContextMarkdown" },
-          { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext", "note": "fields/breadcrumb/contained/usedBy/storage/enforces/flows/comments/anchors" },
-          { "path": "src/server/context.mjs", "line": 98, "symbol": "renderNodeContextMarkdown", "note": "markdown projection incl. fenced source code" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 43,
+            "symbol": "get_node",
+            "note": "registerTool: nodeId string; delegates to the getNode query"
+          },
+          {
+            "path": "src/application/queries/get-node.ts",
+            "line": 5,
+            "symbol": "getNode",
+            "note": "buildNodeContext -> renderNodeContextMarkdown"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 81,
+            "symbol": "buildNodeContext",
+            "note": "fields/breadcrumb/contained/usedBy/storage/enforces/flows/comments/anchors"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 161,
+            "symbol": "renderNodeContextMarkdown",
+            "note": "markdown projection incl. fenced source code"
+          }
         ]
       }
     },
@@ -79,11 +145,32 @@
       "inferred": true,
       "description": "A whole flow grounded in code: trigger/summary, the edges as labeled verbs, hotspots (open questions), every node grounded with source excerpts, and a Mermaid flowchart colored by the event-storming palette so the model sees the graph structurally (exact labels, no OCR). Returned by get_flow. Note: the Mermaid graph is a documented feature (mcp.md) that the tool's own registered description omits.",
       "tactical": {
-        "explanation": "get_flow(flowId) (zod string arg) calls buildFlowContext(services, flowId): finds the flow in model.flows (agg-model); if missing, returns 'Unknown flow — use list_model'. Otherwise grounds each node id via buildNodeContext (-> readSource excerpts), maps edges to { from,to,verb,fromLabel,toLabel }, resolves hotspots via indexes.hotspotById, and builds a colored Mermaid flowchart via flowMermaid. renderFlowMarkdown assembles trigger/summary/edges/hotspots/mermaid/nodes.",
+        "explanation": "get_flow(flowId) (zod string arg, mcp-server.ts:53) delegates to the getFlow query (application/queries/get-flow.ts:5), which calls buildFlowContext(services, flowId): finds the flow in model.flows (agg-model); if missing, returns 'Unknown flow — use list_model'. Otherwise grounds each node id via buildNodeContext (-> readSource excerpts), maps edges to { from,to,verb,fromLabel,toLabel }, resolves hotspots via indexes.hotspotById, and builds a colored Mermaid flowchart via flowMermaid. renderFlowMarkdown assembles trigger/summary/edges/hotspots/mermaid/nodes.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 50, "symbol": "get_flow", "note": "registerTool: flowId string; buildFlowContext -> renderFlowMarkdown" },
-          { "path": "src/server/context.mjs", "line": 177, "symbol": "buildFlowContext", "note": "grounds every node + edges + hotspots + Mermaid" },
-          { "path": "src/server/context.mjs", "line": 201, "symbol": "flowMermaid", "note": "palette-colored Mermaid flowchart of the flow graph" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 53,
+            "symbol": "get_flow",
+            "note": "registerTool: flowId string; delegates to the getFlow query"
+          },
+          {
+            "path": "src/application/queries/get-flow.ts",
+            "line": 5,
+            "symbol": "getFlow",
+            "note": "buildFlowContext -> renderFlowMarkdown"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 240,
+            "symbol": "buildFlowContext",
+            "note": "grounds every node + edges + hotspots + Mermaid"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 264,
+            "symbol": "flowMermaid",
+            "note": "palette-colored Mermaid flowchart of the flow graph"
+          }
         ]
       }
     },
@@ -94,11 +181,32 @@
       "inferred": true,
       "description": "The physical storage the code actually touches, as a containment tree (server ▸ database ▸ table ▸ column, or filesystem ▸ directory ▸ file, or broker ▸ queue ▸ field — whatever storeKind fits), and for each record set the behavioral nodes that write/read/project it. Answers 'what tables does this touch / where does this data live / who writes this'. Returned by list_data_model; also the Data-model tab. Pure projection over agg-model, no source grounding.",
       "tactical": {
-        "explanation": "list_data_model calls renderDataModelMarkdown(services): dataModelTree(model, nodeById) folds the datastore/field nodes into a containment forest (storage-neutral, driven by parent pointers and storeKind), and for each record-set datastore (isRecordSet) datastoreConsumers lists the behavioral nodes + verb. Returns a 'run the data-mapping phase' placeholder when no datastore/field nodes exist. The registered tool description is relational-worded ('servers ▸ databases ▸ tables ▸ columns') whereas the implementation is storage-neutral.",
+        "explanation": "list_data_model (mcp-server.ts:73) delegates to the listDataModel query (application/queries/list-data-model.ts:5), which calls renderDataModelMarkdown(services): dataModelTree(model, nodeById) folds the datastore/field nodes into a containment forest (storage-neutral, driven by parent pointers and storeKind), and for each record-set datastore (isRecordSet) datastoreConsumers lists the behavioral nodes + verb. Returns a 'run the data-mapping phase' placeholder when no datastore/field nodes exist. The registered tool description is relational-worded ('servers ▸ databases ▸ tables ▸ columns') whereas the implementation is storage-neutral.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 77, "symbol": "list_data_model", "note": "registerTool -> renderDataModelMarkdown(services)" },
-          { "path": "src/server/context.mjs", "line": 257, "symbol": "renderDataModelMarkdown", "note": "dataModelTree walk + per-record-set consumers" },
-          { "path": "src/lib/selectors.mjs", "line": 69, "symbol": "dataModelTree", "note": "storage-neutral containment forest from parent pointers" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 73,
+            "symbol": "list_data_model",
+            "note": "registerTool -> delegates to the listDataModel query"
+          },
+          {
+            "path": "src/application/queries/list-data-model.ts",
+            "line": 5,
+            "symbol": "listDataModel",
+            "note": "renderDataModelMarkdown(services)"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 320,
+            "symbol": "renderDataModelMarkdown",
+            "note": "dataModelTree walk + per-record-set consumers"
+          },
+          {
+            "path": "src/application/read-models/indexes.ts",
+            "line": 98,
+            "symbol": "dataModelTree",
+            "note": "storage-neutral containment forest from parent pointers"
+          }
         ]
       }
     },
@@ -109,11 +217,26 @@
       "inferred": true,
       "description": "The items the human gathered in the explorer (nodes, whole flows each with a Mermaid graph, and hotspots) rendered as one grounded markdown document, each item carrying its fields, invariants, flows, comments, and source anchors, joined by '---'. Exposed as the @-mentionable MCP resource event-storming://selected-nodes (mimeType text/markdown).",
       "tactical": {
-        "explanation": "The selected-nodes resource callback reads state.getBundle() (agg-context-bundle: insertion-ordered typed refs) and calls renderBundleMarkdown -> renderItemMarkdown, dispatching each ref to buildFlowContext / buildHotspotContext / buildNodeContext (agg-model) with source excerpts via readSource, joined by '\\n\\n---\\n\\n'. An empty bundle yields a '_No items in the context bundle yet._' placeholder. Same projection is served to the SPA over GET /api/context.",
+        "explanation": "The selected-nodes resource callback (mcp-server.ts:92) reads bundle.list() (agg-context-bundle: insertion-ordered typed refs) and calls renderBundleMarkdown -> renderItemMarkdown, dispatching each ref to buildFlowContext / buildHotspotContext / buildNodeContext (agg-model) with source excerpts via services.readSource, joined by '\\n\\n---\\n\\n'. An empty bundle yields a '_No items in the context bundle yet._' placeholder. Same projection is served to the SPA over GET /api/context.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 87, "symbol": "selected-nodes", "note": "registerResource event-storming://selected-nodes; state.getBundle() -> renderBundleMarkdown" },
-          { "path": "src/server/context.mjs", "line": 171, "symbol": "renderBundleMarkdown", "note": "renders each typed item grounded, joined by ---" },
-          { "path": "src/server/context.mjs", "line": 164, "symbol": "renderItemMarkdown", "note": "dispatch node/flow/hotspot to its builder+renderer" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 83,
+            "symbol": "selected-nodes",
+            "note": "registerResource event-storming://selected-nodes; bundle.list() -> renderBundleMarkdown"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 234,
+            "symbol": "renderBundleMarkdown",
+            "note": "renders each typed item grounded, joined by ---"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 227,
+            "symbol": "renderItemMarkdown",
+            "note": "dispatch node/flow/hotspot to its builder+renderer"
+          }
         ]
       }
     },
@@ -125,9 +248,14 @@
       "inferred": false,
       "description": "The local filesystem outside the process, reached through node:fs. On this read path it is the source of the REAL code excerpts each grounded projection pulls behind an anchor (the repo source tree), read-only and sandboxed to repoRoot.",
       "tactical": {
-        "explanation": "readSource(repoRoot, relPath, line) resolves an absolute path, guards against ../ escapes (must stay inside repoRoot), and returns a +/-8-line excerpt from the file. Read-only; the read tools never write the filesystem.",
+        "explanation": "readSource(repoRoot, relPath, line) resolves an absolute path via the pure guardPath domain guard (rejects ../ escapes — must stay inside repoRoot), then reads the file and returns a +/-8-line excerpt. Read-only; the read tools never write the filesystem.",
         "anchors": [
-          { "path": "src/server/source.mjs", "line": 13, "symbol": "readSource", "note": "node:fs read; repo-root sandbox; +/-8 line excerpt" }
+          {
+            "path": "src/adapters/fs/source-gateway.ts",
+            "line": 8,
+            "symbol": "readSource",
+            "note": "node:fs read; repo-root sandbox (via guardPath); +/-8 line excerpt"
+          }
         ]
       }
     },
@@ -140,10 +268,20 @@
       "inferred": false,
       "description": "The recovered project's source directory (services.repoRoot). Every grounded read model (get_node, get_flow, the selected-nodes bundle) reads the actual source file behind each anchor from here, so Claude sees real code, not just a label. list_model and list_data_model never touch it.",
       "tactical": {
-        "explanation": "For each anchor {path,line}, readSource resolves path.resolve(repoRoot, relPath), rejects anything outside repoRoot + path.sep, and slices lines [line-8 .. line+8]. buildNodeContext calls it per anchor when includeSource is true (the default on the MCP path).",
+        "explanation": "For each anchor {path,line}, guardPath (domain/source/source-window.ts) resolves path.resolve(repoRoot, relPath) and rejects anything outside repoRoot + path.sep; source-gateway's readSource then reads the file and slices lines [line-8 .. line+8]. buildNodeContext calls it per anchor when includeSource is true (the default on the MCP path).",
         "anchors": [
-          { "path": "src/server/source.mjs", "line": 18, "symbol": "readSource", "note": "repoRoot sandbox guard against ../ escape" },
-          { "path": "src/server/context.mjs", "line": 58, "symbol": "buildNodeContext", "note": "readSource(repoRoot, a.path, a.line) per anchor" }
+          {
+            "path": "src/domain/source/source-window.ts",
+            "line": 26,
+            "symbol": "guardPath",
+            "note": "repoRoot sandbox guard against ../ escape"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 121,
+            "symbol": "buildNodeContext",
+            "note": "services.readSource(repoRoot, a.path, a.line) per anchor"
+          }
         ]
       }
     }
@@ -168,20 +306,76 @@
         "agg-context-bundle"
       ],
       "edges": [
-        { "from": "ext-claude-mcp", "to": "rm-model-listing", "verb": "reads" },
-        { "from": "ext-claude-mcp", "to": "rm-grounded-node", "verb": "reads" },
-        { "from": "ext-claude-mcp", "to": "rm-grounded-flow", "verb": "reads" },
-        { "from": "ext-claude-mcp", "to": "rm-data-model", "verb": "reads" },
-        { "from": "ext-claude-mcp", "to": "rm-selected-bundle", "verb": "reads" },
-        { "from": "rm-model-listing", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-grounded-node", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-grounded-node", "to": "ds-repo-fs", "verb": "projects from" },
-        { "from": "rm-grounded-flow", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-grounded-flow", "to": "ds-repo-fs", "verb": "projects from" },
-        { "from": "rm-data-model", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-selected-bundle", "to": "agg-context-bundle", "verb": "projects from" },
-        { "from": "rm-selected-bundle", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-selected-bundle", "to": "ds-repo-fs", "verb": "projects from" }
+        {
+          "from": "ext-claude-mcp",
+          "to": "rm-model-listing",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp",
+          "to": "rm-grounded-node",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp",
+          "to": "rm-grounded-flow",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp",
+          "to": "rm-data-model",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp",
+          "to": "rm-selected-bundle",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-model-listing",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "ds-repo-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-grounded-flow",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-grounded-flow",
+          "to": "ds-repo-fs",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-data-model",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-selected-bundle",
+          "to": "agg-context-bundle",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-selected-bundle",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-selected-bundle",
+          "to": "ds-repo-fs",
+          "verb": "projects from"
+        }
       ],
       "hotspots": [
         "hot-mcp-read-desc-drift",
@@ -196,11 +390,26 @@
       "label": "Read-tool registered descriptions drift from actual behavior / mcp.md",
       "description": "Two read tools advertise themselves inaccurately to a client selecting tools by description. get_flow's registered description lists 'trigger/summary, the command→aggregate→event chain, hotspots, and every node with its source anchors' but never mentions the Mermaid graph it returns — a feature mcp.md DOES document. list_data_model's registered description is relational-only ('servers ▸ databases ▸ tables ▸ columns') while the implementation (dataModelTree/renderDataModelMarkdown) is storage-neutral and mcp.md hedges with '(or the equivalent for non-relational storage)'. Human question: should the registered tool descriptions be regenerated from mcp.md/the implementation so a client picking tools by description isn't misled (get_flow yields a graph; list_data_model handles any storeKind)?",
       "tactical": {
-        "explanation": "get_flow registerTool description omits Mermaid, yet renderFlowMarkdown appends fc.mermaid built by flowMermaid. list_data_model registerTool description says 'servers ▸ databases ▸ tables ▸ columns', but renderDataModelMarkdown labels each node by its freeform storeKind and walks any containment tree. mcp.md is the corrected face (mentions the Mermaid graph and the non-relational equivalent); the in-code tool descriptions were not kept in sync.",
+        "explanation": "get_flow registerTool description (mcp-server.ts:57) omits Mermaid, yet renderFlowMarkdown appends fc.mermaid built by flowMermaid. list_data_model registerTool description (mcp-server.ts:77) says 'servers ▸ databases ▸ tables ▸ columns', but renderDataModelMarkdown labels each node by its freeform storeKind and walks any containment tree. mcp.md is the corrected face (mentions the Mermaid graph and the non-relational equivalent); the in-code tool descriptions were not kept in sync by the refactor.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 54, "symbol": "get_flow", "note": "description omits the Mermaid graph it returns" },
-          { "path": "src/server/mcp.mjs", "line": 81, "symbol": "list_data_model", "note": "relational-only wording vs storage-neutral impl" },
-          { "path": "src/server/context.mjs", "line": 297, "symbol": "renderFlowMarkdown", "note": "appends the Mermaid graph to every get_flow result" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 57,
+            "symbol": "get_flow",
+            "note": "description omits the Mermaid graph it returns"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 77,
+            "symbol": "list_data_model",
+            "note": "relational-only wording vs storage-neutral impl"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 360,
+            "symbol": "renderFlowMarkdown",
+            "note": "appends the Mermaid graph to every get_flow result"
+          }
         ]
       }
     },
@@ -211,9 +420,24 @@
       "tactical": {
         "explanation": "buildNodeContext({ includeSource = true }) reads a source excerpt per anchor; buildFlowContext and renderBundleMarkdown call it for every node/item and never pass includeSource:false. The MCP tools expose no way to opt out. Contrast: readJsonBody caps the INBOUND body at 4_000_000 bytes, but nothing bounds the OUTBOUND grounded markdown.",
         "anchors": [
-          { "path": "src/server/context.mjs", "line": 182, "symbol": "buildFlowContext", "note": "grounds every node with source (includeSource default true)" },
-          { "path": "src/server/context.mjs", "line": 55, "symbol": "buildNodeContext", "note": "readSource excerpt per anchor, no cap" },
-          { "path": "src/server/mcp.mjs", "line": 106, "symbol": "readJsonBody", "note": "4MB cap on inbound body only; no outbound cap" }
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 240,
+            "symbol": "buildFlowContext",
+            "note": "grounds every node with source (includeSource default true)"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 121,
+            "symbol": "buildNodeContext",
+            "note": "readSource excerpt per anchor, no cap"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 102,
+            "symbol": "readJsonBody",
+            "note": "4MB cap on inbound body only; no outbound cap"
+          }
         ]
       }
     }

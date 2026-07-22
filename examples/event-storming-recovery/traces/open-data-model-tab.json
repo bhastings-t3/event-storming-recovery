@@ -16,9 +16,24 @@
       "tactical": {
         "explanation": "Tabs.jsx lists a ['data','Data model'] tab whose onClick calls setMode('data'); App.jsx renders {mode==='data' && <DataModel/>}. DataModel.jsx pulls the already-loaded `model` from the ExplorerProvider context (fetched once via fetchModel -> GET /api/model) and runs the imperative layout into a ref. No network call happens on tab open.",
         "anchors": [
-          { "path": "src/web/components/Tabs.jsx", "line": 6, "symbol": "TABS", "note": "the ['data','Data model'] tab entry" },
-          { "path": "src/web/components/Tabs.jsx", "line": 17, "symbol": "Tabs", "note": "onClick => setMode('data')" },
-          { "path": "src/web/App.jsx", "line": 29, "symbol": "Explorer", "note": "mode==='data' mounts <DataModel/>" }
+          {
+            "path": "src/web/components/Tabs.jsx",
+            "line": 6,
+            "symbol": "TABS",
+            "note": "the ['data','Data model'] tab entry"
+          },
+          {
+            "path": "src/web/components/Tabs.jsx",
+            "line": 17,
+            "symbol": "Tabs",
+            "note": "onClick => setMode('data')"
+          },
+          {
+            "path": "src/web/App.jsx",
+            "line": 29,
+            "symbol": "Explorer",
+            "note": "mode==='data' mounts <DataModel/>"
+          }
         ]
       }
     },
@@ -29,10 +44,20 @@
       "inferred": false,
       "description": "A Claude session connected to the es-view MCP server over streamable HTTP. It calls the list_data_model tool to read the SAME recovered data model the operator sees in the Data-model tab, grounding a question like 'what stores does this touch / who writes this store' in the live model the human is exploring.",
       "tactical": {
-        "explanation": "POST /mcp is served in-process by createMcpHandler; buildMcpServer registers list_data_model whose handler returns renderDataModelMarkdown(services). The tool closes over the same shared `services` (model + indexes) the SPA API serves, so operator and Claude read one source of truth. list_data_model does NOT touch the filesystem (unlike the source-grounded tools) — it is a pure in-memory projection.",
+        "explanation": "POST /mcp is served in-process by createMcpHandler; buildMcpServer registers list_data_model whose handler calls the listDataModel query, which itself returns renderDataModelMarkdown(services). The tool closes over the same shared `services` (model + indexes) the SPA API serves, so operator and Claude read one source of truth. list_data_model does NOT touch the filesystem (unlike the source-grounded tools) — it is a pure in-memory projection.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 77, "symbol": "list_data_model", "note": "registerTool 'list_data_model'" },
-          { "path": "src/server/mcp.mjs", "line": 84, "symbol": "list_data_model", "note": "handler => renderDataModelMarkdown(services)" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 74,
+            "symbol": "list_data_model",
+            "note": "registerTool 'list_data_model'"
+          },
+          {
+            "path": "src/application/queries/list-data-model.ts",
+            "line": 6,
+            "symbol": "listDataModel",
+            "note": "handler's query => renderDataModelMarkdown(services)"
+          }
         ]
       }
     },
@@ -43,15 +68,50 @@
       "inferred": true,
       "description": "The physical storage the code actually touches, projected from the model as a containment tree of datastores (server/database/table, filesystem/directory/file, broker/queue, in-memory, …) with, for each record set, the behavioral nodes that write/read/project/persist/connect it and each store's demand-driven fields. Shown in the SPA Data-model tab as a pannable graph and returned by the MCP list_data_model tool as a markdown tree — two independent renderers over one projection.",
       "tactical": {
-        "explanation": "TWO renderers, ONE projection over agg-model. SPA: DataModel.jsx filters model.nodes for type datastore/field (dataCount), seeds a collapsed-set via defaultCollapsed (containers with > COLLAPSE_OVER=12 leaf descendants start collapsed), and calls renderDataModelInto — an imperative DOM+SVG layout that builds the datastore forest (isRoot/childStores), grid-packs each container's children ~square (packGrid: cols=ceil(sqrt(n)), shortest-column placement), draws parent->child containment arrows, and per store shows a header count badge + per-verb footer pills from datastoreConsumers (deduped by node+verb), record-set fields via fieldsOf. MCP: renderDataModelMarkdown(services) uses the SHARED selectors dataModelTree(model,nodeById) to build the same forest and lists per record-set consumers as an indented markdown tree. The layout/barycenter/grid math is presentation detail, not domain behavior. Both draw ONLY direct child fields of a record set (one level) and neither renders dataModelTree's looseFields nor nested sub-fields — see hot-data-model-drops-nested-loose-fields. isRecordSet decides card-vs-container. Pure read: no state is written on this path.",
+        "explanation": "TWO renderers, ONE projection over agg-model. SPA: DataModel.jsx filters model.nodes for type datastore/field (dataCount), seeds a collapsed-set via defaultCollapsed (containers with > COLLAPSE_OVER=12 leaf descendants start collapsed), and calls renderDataModelInto — an imperative DOM+SVG layout that builds the datastore forest (isRoot/childStores), grid-packs each container's children ~square (packGrid: cols=ceil(sqrt(n)), shortest-column placement), draws parent->child containment arrows, and per store shows a header count badge + per-verb footer pills from datastoreConsumers (deduped by node+verb), record-set fields via fieldsOf. MCP: renderDataModelMarkdown(services) (application/read-models/context.ts) uses the SHARED selectors dataModelTree(model,nodeById) (application/read-models/indexes.ts) to build the same forest and lists per record-set consumers as an indented markdown tree. The layout/barycenter/grid math is presentation detail, not domain behavior. Both draw ONLY direct child fields of a record set (one level) and neither renders dataModelTree's looseFields nor nested sub-fields — see hot-data-model-drops-nested-loose-fields. isRecordSet decides card-vs-container. Pure read: no state is written on this path.",
         "anchors": [
-          { "path": "src/web/components/DataModel.jsx", "line": 16, "symbol": "DataModel", "note": "dataCount = model.nodes filtered to datastore/field" },
-          { "path": "src/web/components/DataModel.jsx", "line": 25, "symbol": "DataModel", "note": "renderDataModelInto(model, nodeById, lane, ctx)" },
-          { "path": "src/web/lib/datamodel-layout.js", "line": 40, "symbol": "renderDataModelInto", "note": "SPA containment-graph layout (forest + grid + arrows + badges/pills)" },
-          { "path": "src/web/lib/datamodel-layout.js", "line": 146, "symbol": "packGrid", "note": "square grid packing of a container's children (presentation detail)" },
-          { "path": "src/server/mcp.mjs", "line": 84, "symbol": "list_data_model", "note": "MCP twin => renderDataModelMarkdown(services)" },
-          { "path": "src/server/context.mjs", "line": 257, "symbol": "renderDataModelMarkdown", "note": "markdown tree via shared dataModelTree + per-record-set consumers" },
-          { "path": "src/lib/selectors.mjs", "line": 112, "symbol": "datastoreConsumers", "note": "behavioral nodes touching a store, deduped by node+verb (both renderers)" }
+          {
+            "path": "src/web/components/DataModel.jsx",
+            "line": 16,
+            "symbol": "DataModel",
+            "note": "dataCount = model.nodes filtered to datastore/field"
+          },
+          {
+            "path": "src/web/components/DataModel.jsx",
+            "line": 25,
+            "symbol": "DataModel",
+            "note": "renderDataModelInto(model, nodeById, lane, ctx)"
+          },
+          {
+            "path": "src/web/lib/datamodel-layout.js",
+            "line": 40,
+            "symbol": "renderDataModelInto",
+            "note": "SPA containment-graph layout (forest + grid + arrows + badges/pills)"
+          },
+          {
+            "path": "src/web/lib/datamodel-layout.js",
+            "line": 146,
+            "symbol": "packGrid",
+            "note": "square grid packing of a container's children (presentation detail)"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 80,
+            "symbol": "list_data_model",
+            "note": "MCP twin: handler => listDataModel(services) => renderDataModelMarkdown(services)"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 320,
+            "symbol": "renderDataModelMarkdown",
+            "note": "markdown tree via shared dataModelTree + per-record-set consumers"
+          },
+          {
+            "path": "src/application/read-models/indexes.ts",
+            "line": 141,
+            "symbol": "datastoreConsumers",
+            "note": "behavioral nodes touching a store, deduped by node+verb (both renderers)"
+          }
         ]
       },
       "fields": [
@@ -61,13 +121,30 @@
           "dataType": "object",
           "derivation": "The datastore containment forest built by following each physical node's `parent` pointer over the model's datastore nodes (server>database>table, filesystem>directory>file, broker>queue, …). A datastore whose parent is missing or is not itself a datastore becomes a root, so nothing is dropped. The SPA grid-packs and draws it with arrows; the MCP renderer indents it as markdown.",
           "sources": [
-            { "ref": "ds-flows-json", "role": "filtered-by", "transform": "filter", "note": "physical (datastore) nodes read from the loaded model and grouped by parent pointer" }
+            {
+              "ref": "ds-flows-json",
+              "role": "filtered-by",
+              "transform": "filter",
+              "note": "physical (datastore) nodes read from the loaded model and grouped by parent pointer"
+            }
           ],
           "confidence": "high",
-          "provenance": ["inferred-from-dto"],
+          "provenance": [
+            "inferred-from-dto"
+          ],
           "evidence": [
-            { "path": "src/lib/selectors.mjs", "line": 69, "symbol": "dataModelTree", "note": "MCP forest from parent pointers" },
-            { "path": "src/web/lib/datamodel-layout.js", "line": 51, "symbol": "renderDataModelInto", "note": "SPA isRoot/childStores build the same forest independently" }
+            {
+              "path": "src/application/read-models/indexes.ts",
+              "line": 98,
+              "symbol": "dataModelTree",
+              "note": "MCP forest from parent pointers"
+            },
+            {
+              "path": "src/web/lib/datamodel-layout.js",
+              "line": 51,
+              "symbol": "renderDataModelInto",
+              "note": "SPA isRoot/childStores build the same forest independently"
+            }
           ]
         },
         {
@@ -76,13 +153,30 @@
           "dataType": "array<object>",
           "derivation": "Per record-set datastore, the behavioral nodes that touch it and the storage verb (writes / persists to / projects from / reads / connects via), gathered from every flow edge whose `to` is that store and deduped by (node,verb). SPA shows a header count badge plus one clickable pill per verb; MCP lists them under each record set.",
           "sources": [
-            { "ref": "ds-flows-json", "role": "joined-on", "transform": "join", "note": "flow edges pointing at each store, resolved to consumer node + verb" }
+            {
+              "ref": "ds-flows-json",
+              "role": "joined-on",
+              "transform": "join",
+              "note": "flow edges pointing at each store, resolved to consumer node + verb"
+            }
           ],
           "confidence": "high",
-          "provenance": ["inferred-from-dto"],
+          "provenance": [
+            "inferred-from-dto"
+          ],
           "evidence": [
-            { "path": "src/lib/selectors.mjs", "line": 112, "symbol": "datastoreConsumers", "note": "edges where e.to === storeId, deduped by node+verb" },
-            { "path": "src/web/lib/datamodel-layout.js", "line": 66, "symbol": "behavioralFooter", "note": "count badge + per-verb footer pills" }
+            {
+              "path": "src/application/read-models/indexes.ts",
+              "line": 141,
+              "symbol": "datastoreConsumers",
+              "note": "edges where e.to === storeId, deduped by node+verb"
+            },
+            {
+              "path": "src/web/lib/datamodel-layout.js",
+              "line": 66,
+              "symbol": "behavioralFooter",
+              "note": "count badge + per-verb footer pills"
+            }
           ]
         },
         {
@@ -91,13 +185,30 @@
           "dataType": "array<object>",
           "derivation": "For each record set, its DIRECT child `field` nodes (label, dataType, nullable), shown inside the store card / listed under the store in markdown. Demand-driven: only the fields a read model or aggregate actually references appear. One level only — nested sub-fields and orphaned fields are not rendered by either surface.",
           "sources": [
-            { "ref": "ds-flows-json", "role": "filtered-by", "transform": "filter", "note": "field nodes whose parent === this datastore id" }
+            {
+              "ref": "ds-flows-json",
+              "role": "filtered-by",
+              "transform": "filter",
+              "note": "field nodes whose parent === this datastore id"
+            }
           ],
           "confidence": "high",
-          "provenance": ["inferred-from-dto"],
+          "provenance": [
+            "inferred-from-dto"
+          ],
           "evidence": [
-            { "path": "src/web/lib/datamodel-layout.js", "line": 50, "symbol": "renderDataModelInto", "note": "fieldsOf(id): direct field children only" },
-            { "path": "src/server/context.mjs", "line": 270, "symbol": "renderDataModelMarkdown", "note": "per-store direct fields line" }
+            {
+              "path": "src/web/lib/datamodel-layout.js",
+              "line": 50,
+              "symbol": "renderDataModelInto",
+              "note": "fieldsOf(id): direct field children only"
+            },
+            {
+              "path": "src/application/read-models/context.ts",
+              "line": 333,
+              "symbol": "renderDataModelMarkdown",
+              "note": "per-store direct fields line"
+            }
           ]
         },
         {
@@ -107,10 +218,17 @@
           "derivation": "SPA-only presentation state: containers with more than COLLAPSE_OVER (12) leaf-table descendants start collapsed to a single header node (click to expand). The MCP markdown has no collapse and always emits the full tree, so a connected Claude may see more of the tree than the operator's default view.",
           "sources": [],
           "confidence": "high",
-          "provenance": ["inferred-from-dto"],
+          "provenance": [
+            "inferred-from-dto"
+          ],
           "notes": "Computed in the SPA from the datastore forest; not part of the model, not seen by the MCP renderer.",
           "evidence": [
-            { "path": "src/web/lib/datamodel-layout.js", "line": 31, "symbol": "defaultCollapsed", "note": "collapse containers with > COLLAPSE_OVER leaf descendants" }
+            {
+              "path": "src/web/lib/datamodel-layout.js",
+              "line": 31,
+              "symbol": "defaultCollapsed",
+              "note": "collapse containers with > COLLAPSE_OVER leaf descendants"
+            }
           ]
         }
       ]
@@ -122,10 +240,20 @@
       "inferred": true,
       "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then read by the es-view server and the DOT/explorer generator. Its invariants ARE the merge-time validation rules.",
       "tactical": {
-        "explanation": "READ SIDE (this flow): the resolved model is held in memory in `services` (model + indexes + repoRoot) built once by buildServices, and also shipped whole to the SPA via GET /api/model at boot. The Data-model projection reads only its physical sub-layer: model.nodes of type datastore/field plus the flow edges that link behavioral nodes to those stores. The SPA reads its in-memory copy; the MCP tool reads the server's `services.model`. No write occurs on this path.",
+        "explanation": "READ SIDE (this flow): the resolved model is held in memory in `services` (model + indexes + repoRoot) built once by buildServices (application/services.ts), and also shipped whole to the SPA via GET /api/model at boot. The Data-model projection reads only its physical sub-layer: model.nodes of type datastore/field plus the flow edges that link behavioral nodes to those stores. The SPA reads its in-memory copy; the MCP tool reads the server's `services.model`. No write occurs on this path.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "model + buildIndexes(model) + repoRoot shared by API and MCP" },
-          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "GET /api/model ships the whole model to the SPA once at boot" }
+          {
+            "path": "src/application/services.ts",
+            "line": 31,
+            "symbol": "buildServices",
+            "note": "model + buildIndexes(model) + repoRoot shared by API and MCP"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 115,
+            "symbol": "createServer",
+            "note": "GET /api/model ships the whole model to the SPA once at boot"
+          }
         ]
       }
     },
@@ -137,9 +265,14 @@
       "inferred": false,
       "description": "The local filesystem outside the process, reached through node:fs. Holds flows.json, the canonical model the es-view server resolves and serves. In this read flow it is only the ultimate origin of the model already loaded into memory; the Data-model projection never touches disk.",
       "tactical": {
-        "explanation": "The server resolves flows.json from disk at boot (resolve-model.mjs) into `services.model`; from then on both the SPA (via /api/model) and the MCP list_data_model read that in-memory model, so this flow's rendering does no filesystem IO.",
+        "explanation": "The server resolves flows.json from disk at boot (resolveModel in application/commands/resolve-model.ts, reading via readModelFile in the fs model-repository adapter) into `services.model`; from then on both the SPA (via /api/model) and the MCP list_data_model read that in-memory model, so this flow's rendering does no filesystem IO.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "the resolved model that originated from the filesystem" }
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 40,
+            "symbol": "readModelFile",
+            "note": "the fs read that produces the resolved model"
+          }
         ]
       }
     },
@@ -154,7 +287,12 @@
       "tactical": {
         "explanation": "Resolved once at server boot into services.model and served to the SPA via GET /api/model; the Data-model tab and list_data_model both project the datastore/field nodes and their edges out of that loaded copy.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "GET /api/model returns resolved.model (from flows.json)" }
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 115,
+            "symbol": "createServer",
+            "note": "GET /api/model returns resolved.model (from flows.json)"
+          }
         ]
       }
     }
@@ -176,11 +314,31 @@
         "agg-model"
       ],
       "edges": [
-        { "from": "actor-operator", "to": "ext-browser", "verb": "calls" },
-        { "from": "ext-browser", "to": "rm-data-model", "verb": "reads" },
-        { "from": "ext-claude-mcp", "to": "rm-data-model", "verb": "reads" },
-        { "from": "rm-data-model", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-data-model", "to": "ds-flows-json", "verb": "projects from" }
+        {
+          "from": "actor-operator",
+          "to": "ext-browser",
+          "verb": "calls"
+        },
+        {
+          "from": "ext-browser",
+          "to": "rm-data-model",
+          "verb": "reads"
+        },
+        {
+          "from": "ext-claude-mcp",
+          "to": "rm-data-model",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-data-model",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-data-model",
+          "to": "ds-flows-json",
+          "verb": "projects from"
+        }
       ],
       "hotspots": [
         "hot-data-model-drops-nested-loose-fields"
@@ -194,13 +352,38 @@
       "label": "Data-model tab counts fields it never renders (nested sub-fields and loose fields)",
       "description": "DataModel.jsx's header count (`dataCount`) counts EVERY datastore + field node in the model, but both renderers draw only the DIRECT `field` children of a rendered record set: the SPA's fieldsOf(id) and the MCP markdown's per-store fields line each go exactly one level deep. Nested sub-fields (a field whose parent is another field) and loose fields (a field parented to nothing or to a non-datastore) are counted but never shown on the canvas or in the markdown — even though selectors.mjs already provides fieldTree() for nested fields and dataModelTree()'s looseFields for orphans, which neither renderer wires up. Human question: is the one-level-of-fields rendering intentional (keep the graph shallow), or should the Data-model tab render nested/loose fields so the 'Data model N' badge matches what is actually drawn?",
       "tactical": {
-        "explanation": "DataModel.jsx:16 dataCount = model.nodes.filter(datastore|field).length feeds the header badge and the empty-state gate. datamodel-layout.js:50 fieldsOf(id) = fields with parent===id (direct only); buildCard iterates fieldsOf(ds.id) with no recursion into sub-fields. context.mjs renderDataModelMarkdown lists dataModelTree's per-node `fields` (childFields, one level) and walks only `roots`+`stores`, never emitting looseFields. selectors.mjs:104 fieldTree() (nested) and :88 looseFields (orphans) exist but are unused by both the tab and the tool, so any nested/loose field inflates the count without appearing.",
+        "explanation": "DataModel.jsx:16 dataCount = model.nodes.filter(datastore|field).length feeds the header badge and the empty-state gate. datamodel-layout.js:50 fieldsOf(id) = fields with parent===id (direct only); buildCard iterates fieldsOf(ds.id) with no recursion into sub-fields. context.ts renderDataModelMarkdown lists dataModelTree's per-node `fields` (childFields, one level) and walks only `roots`+`stores`, never emitting looseFields. indexes.ts fieldTree() (nested) and dataModelTree's looseFields (orphans) exist but are unused by both the tab and the tool, so any nested/loose field inflates the count without appearing.",
         "anchors": [
-          { "path": "src/web/components/DataModel.jsx", "line": 16, "symbol": "DataModel", "note": "dataCount counts ALL datastore+field nodes" },
-          { "path": "src/web/lib/datamodel-layout.js", "line": 50, "symbol": "renderDataModelInto", "note": "fieldsOf: direct field children only, no sub-field recursion" },
-          { "path": "src/lib/selectors.mjs", "line": 88, "symbol": "dataModelTree", "note": "looseFields computed but rendered by neither surface" },
-          { "path": "src/lib/selectors.mjs", "line": 104, "symbol": "fieldTree", "note": "nested-field support that the renderers do not use" },
-          { "path": "src/server/context.mjs", "line": 270, "symbol": "renderDataModelMarkdown", "note": "markdown per-store fields also one level; looseFields never emitted" }
+          {
+            "path": "src/web/components/DataModel.jsx",
+            "line": 16,
+            "symbol": "DataModel",
+            "note": "dataCount counts ALL datastore+field nodes"
+          },
+          {
+            "path": "src/web/lib/datamodel-layout.js",
+            "line": 50,
+            "symbol": "renderDataModelInto",
+            "note": "fieldsOf: direct field children only, no sub-field recursion"
+          },
+          {
+            "path": "src/application/read-models/indexes.ts",
+            "line": 98,
+            "symbol": "dataModelTree",
+            "note": "looseFields computed but rendered by neither surface"
+          },
+          {
+            "path": "src/application/read-models/indexes.ts",
+            "line": 133,
+            "symbol": "fieldTree",
+            "note": "nested-field support that the renderers do not use"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 333,
+            "symbol": "renderDataModelMarkdown",
+            "note": "markdown per-store fields also one level; looseFields never emitted"
+          }
         ]
       }
     }

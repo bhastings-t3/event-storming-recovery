@@ -14,16 +14,56 @@
       "inferred": true,
       "description": "Decide WHICH Event Storming model the es-view session will serve, from whatever the operator supplied (or nothing), and load it into memory. Applies a fixed 4-tier precedence, then derives a repoRoot for resolving source anchors. This is the single choke point that turns CLI options + the filesystem into the one model the server, API, and MCP all expose.",
       "tactical": {
-        "explanation": "resolveModel({ modelPath, tracesDir, repoRoot, cwd, packageRoot }) applies precedence highest-first: (1) --model <flows.json>: resolve against cwd and readModelFile it (source='model'); (2) --traces <dir>: resolve the dir and call mergeTracesDir to merge the per-flow traces on the fly (source='traces') -- on any validation error it THROWS so the server never serves an invalid model; (3) auto-discover: findFlowsFiles does a bounded recursive walk of cwd (maxDepth 6, skipping node_modules/.git/.claude/dist/.next/out/coverage and any dotdir), sorts hits (a file inside a model/ dir first, then shallower paths, then alphabetical) and reads hits[0] (source='discovered'), pushing a warning when >1 candidate exists; (4) fallback: read the bundled self-model at examples/event-storming-recovery/model/flows.json (source='example'). readModelFile JSON.parses the file and asserts nodes[] and flows[] are arrays (the load-path shape guard). Finally derives resolvedRepoRoot: explicit --repo-root flag > (example fallback -> packageRoot) > model.meta.repoRoot > cwd. Returns { model, source, sourcePath, repoRoot, warnings }. Pure selection/loading; the --traces branch is the only tier that runs the full merge validation.",
+        "explanation": "resolveModel({ modelPath, tracesDir, repoRoot, cwd, packageRoot }, repo: ModelRepository) (src/application/commands/resolve-model.ts) applies precedence highest-first: (1) --model <flows.json>: resolve against cwd and repo.readModelFile it (source='model'); (2) --traces <dir>: resolve the dir and call mergeTraces(sourcePath, repo) (src/application/commands/merge-traces.ts), which reads via repo.readTraceDocs and delegates to the pure mergeTraceDocs (src/domain/model/merge.ts) -- on any validation error resolveModel THROWS so the server never serves an invalid model; (3) auto-discover: repo.discoverFlowsFiles(cwd) (findFlowsFiles in src/adapters/fs/model-repository.ts) does a bounded recursive walk of cwd (maxDepth 6, skipping node_modules/.git/.claude/dist/.next/out/coverage and any dotdir), sorts hits (a file inside a model/ dir first, then shallower paths, then alphabetical) and reads hits[0] (source='discovered'), pushing a warning when >1 candidate exists; (4) fallback: repo.readModelFile the bundled self-model at examples/event-storming-recovery/model/flows.json (source='example'). readModelFile (src/adapters/fs/model-repository.ts) JSON.parses the file and asserts nodes[] and flows[] are arrays (the load-path shape guard). Finally derives resolvedRepoRoot: explicit --repo-root flag > (example fallback -> packageRoot) > model.meta.repoRoot > cwd. Returns { model, source, sourcePath, repoRoot, warnings }. Pure selection/loading logic (all fs I/O goes through the injected ModelRepository port); the --traces branch is the only tier that runs the full merge validation.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 66, "symbol": "resolveModel", "note": "entry: 4-tier precedence dispatcher" },
-          { "path": "src/server/resolve-model.mjs", "line": 70, "symbol": "resolveModel", "note": "tier 1 --model: readModelFile explicit path" },
-          { "path": "src/server/resolve-model.mjs", "line": 74, "symbol": "resolveModel", "note": "tier 2 --traces: mergeTracesDir + throw on merged.errors" },
-          { "path": "src/server/resolve-model.mjs", "line": 86, "symbol": "resolveModel", "note": "tier 3 auto-discover: findFlowsFiles + hits[0] + multi-candidate warning" },
-          { "path": "src/server/resolve-model.mjs", "line": 92, "symbol": "resolveModel", "note": "tier 4 fallback: bundled example flows.json" },
-          { "path": "src/server/resolve-model.mjs", "line": 21, "symbol": "findFlowsFiles", "note": "bounded recursive walk (maxDepth 6, IGNORE_DIRS + dotdirs)" },
-          { "path": "src/server/resolve-model.mjs", "line": 37, "symbol": "findFlowsFiles", "note": "candidate sort heuristic: model/ dir > shallower > alphabetical" },
-          { "path": "src/server/resolve-model.mjs", "line": 99, "symbol": "resolveModel", "note": "repoRoot derivation: flag > example->packageRoot > meta.repoRoot > cwd" }
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 26,
+            "symbol": "resolveModel",
+            "note": "entry: 4-tier precedence dispatcher"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 30,
+            "symbol": "resolveModel",
+            "note": "tier 1 --model: repo.readModelFile explicit path"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 34,
+            "symbol": "resolveModel",
+            "note": "tier 2 --traces: mergeTraces(sourcePath, repo) + throw on merged.errors"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 46,
+            "symbol": "resolveModel",
+            "note": "tier 3 auto-discover: repo.discoverFlowsFiles + hits[0] + multi-candidate warning"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 53,
+            "symbol": "resolveModel",
+            "note": "tier 4 fallback: bundled example flows.json"
+          },
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 13,
+            "symbol": "findFlowsFiles",
+            "note": "bounded recursive walk (maxDepth 6, IGNORE_DIRS + dotdirs)"
+          },
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 30,
+            "symbol": "findFlowsFiles",
+            "note": "candidate sort heuristic: model/ dir > shallower > alphabetical"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 61,
+            "symbol": "resolveModel",
+            "note": "repoRoot derivation: flag > example->packageRoot > meta.repoRoot > cwd"
+          }
         ]
       }
     },
@@ -34,12 +74,32 @@
       "inferred": true,
       "description": "One running es-view node process: the resolved model plus the shared in-memory state, serving the SPA, the JSON API, and the MCP endpoint on a single port. Boot-time resolution constitutes the session -- it fixes exactly which model this session serves and the repoRoot used to deep-link anchors back to source. MED confidence: partly infrastructure, but its identity (which model + repoRoot it exposes) is a domain-significant boundary because a connected Claude session reads whatever this session resolved.",
       "tactical": {
-        "explanation": "bin/es-view.mjs main() parses args, calls resolveModel to get { model, source, sourcePath, repoRoot, warnings }, builds the shared services (buildServices: model + indexes + repoRoot + comment store) and the shared in-memory state, then startServer binds the first free port and serves /api/model, /api/selection, /api/context, /api/source and /mcp off that one resolved model. On a resolveModel throw the process prints the error and exits 1 (no session comes up).",
+        "explanation": "runView() (src/adapters/cli/es-view.ts), invoked from the `view` subcommand's action in src/adapters/cli/cli.ts, calls resolveModel to get { model, source, sourcePath, repoRoot, warnings }, builds the shared services (buildServices in src/application/services.ts: model + indexes + repoRoot + comment store) and the shared in-memory state (Selection / ContextBundle, src/domain/session/*), then startServer (src/adapters/http/server.ts) binds the first free port and serves /api/model, /api/selection, /api/context, /api/source and /mcp off that one resolved model. On a resolveModel throw, runView's own try/catch prints the error and exits 1 (no session comes up).",
         "anchors": [
-          { "path": "bin/es-view.mjs", "line": 76, "symbol": "main", "note": "session boot: parse args -> resolveModel -> startServer" },
-          { "path": "bin/es-view.mjs", "line": 83, "symbol": "main", "note": "resolveModel call that constitutes the session's model" },
-          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "model + indexes + repoRoot bundled for API and MCP" },
-          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "/api/model serves the resolved model + provenance" }
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 48,
+            "symbol": "runView",
+            "note": "session boot: parse args (cli.ts) -> resolveModel -> startServer"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 52,
+            "symbol": "runView",
+            "note": "resolveModel call that constitutes the session's model"
+          },
+          {
+            "path": "src/application/services.ts",
+            "line": 31,
+            "symbol": "buildServices",
+            "note": "model + indexes + repoRoot bundled for API and MCP"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 115,
+            "symbol": "createServer",
+            "note": "/api/model serves the resolved model + provenance"
+          }
         ]
       }
     },
@@ -50,11 +110,26 @@
       "inferred": true,
       "description": "ERROR-level load guard: every model read from disk (tiers 1/3/4 -- explicit --model, auto-discovered, and the bundled example) must JSON.parse and carry Array nodes and Array flows, else readModelFile throws and the session refuses to boot (es-view catches and exits 1). This is the ONLY validation those three tiers run: they bypass the full merge invariants, which only the --traces tier enforces. So a structurally-shaped but semantically-invalid flows.json (dangling refs, an aggregate that issues a command, etc.) passes this guard and is served unchecked.",
       "tactical": {
-        "explanation": "readModelFile does JSON.parse(readFileSync(file)) then `if (!model || !Array.isArray(model.nodes) || !Array.isArray(model.flows)) throw`. It runs on the --model, discovered, and example branches (each calls readModelFile) but NOT on --traces, which instead goes through mergeTracesDir/mergeTraceDocs and its invariant suite. bin/es-view.mjs wraps resolveModel in try/catch and process.exit(1) on throw.",
+        "explanation": "readModelFile (src/adapters/fs/model-repository.ts) does JSON.parse(readFileSync(file)) then `if (!model || !Array.isArray(model.nodes) || !Array.isArray(model.flows)) throw`. It runs on the --model, discovered, and example branches of resolveModel (each calls repo.readModelFile) but NOT on --traces, which instead goes through mergeTraces/mergeTraceDocs and its invariant suite. runView() (src/adapters/cli/es-view.ts) wraps the resolveModel call in try/catch and process.exit(1) on throw.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 48, "symbol": "readModelFile", "note": "JSON.parse the model file" },
-          { "path": "src/server/resolve-model.mjs", "line": 51, "symbol": "readModelFile", "note": "throw unless nodes[] and flows[] are arrays" },
-          { "path": "bin/es-view.mjs", "line": 84, "symbol": "main", "note": "catch resolveModel throw -> exit 1, no session" }
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 42,
+            "symbol": "readModelFile",
+            "note": "JSON.parse the model file"
+          },
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 43,
+            "symbol": "readModelFile",
+            "note": "throw unless nodes[] and flows[] are arrays"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 53,
+            "symbol": "runView",
+            "note": "catch resolveModel throw -> exit 1, no session"
+          }
         ]
       }
     },
@@ -67,7 +142,12 @@
       "tactical": {
         "explanation": "resolveModel returns { model, source, sourcePath, repoRoot, warnings }. `source` records which of the four tiers won; `warnings` carries any multi-candidate discovery note; `repoRoot` is the anchor base. Realized once, at boot, and then frozen for the life of the process. On the --traces tier this fact only holds after the merge validated cleanly (otherwise resolveModel threw before returning).",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 107, "symbol": "resolveModel", "note": "return { model, source, sourcePath, repoRoot, warnings }" }
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 67,
+            "symbol": "resolveModel",
+            "note": "return { model, source, sourcePath, repoRoot, warnings }"
+          }
         ]
       }
     },
@@ -78,11 +158,26 @@
       "inferred": true,
       "description": "What the operator reads to know WHERE the served model came from and whether to trust or redirect it: the console banner es-view prints at boot (a human-readable source label, the from-path, the repo-root, the flow/node/hotspot counts, and any warnings) and the same provenance echoed on /api/model's meta. This is how the operator catches 'it served the wrong flows.json' or 'it fell back to the bundled example because nothing was found here'.",
       "tactical": {
-        "explanation": "es-view.mjs prints `model: <SOURCE_LABEL[source]>`, `from: <rel-or-abs sourcePath>`, `repo-root: <repoRoot>`, `contents: N flows, M nodes, K hotspots`, then one `! <warning>` line per resolved.warnings entry. The server also exposes { source, sourcePath, repoRoot, warnings } under /api/model's meta so the SPA can show the same provenance.",
+        "explanation": "runView() (src/adapters/cli/es-view.ts) prints `model: <SOURCE_LABEL[source]>`, `from: <rel-or-abs sourcePath>`, `repo-root: <repoRoot>`, `contents: N flows, M nodes, K hotspots`, then one `! <warning>` line per resolved.warnings entry. The server (src/adapters/http/server.ts) also exposes { source, sourcePath, repoRoot, warnings } under /api/model's meta so the SPA can show the same provenance.",
         "anchors": [
-          { "path": "bin/es-view.mjs", "line": 103, "symbol": "main", "note": "banner: model/from/repo-root/contents + per-warning lines" },
-          { "path": "bin/es-view.mjs", "line": 69, "symbol": "SOURCE_LABEL", "note": "human labels for each source tier" },
-          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "/api/model meta echoes source/sourcePath/repoRoot/warnings" }
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 73,
+            "symbol": "runView",
+            "note": "banner: model/from/repo-root/contents + per-warning lines"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 40,
+            "symbol": "SOURCE_LABEL",
+            "note": "human labels for each source tier"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 115,
+            "symbol": "createServer",
+            "note": "/api/model meta echoes source/sourcePath/repoRoot/warnings"
+          }
         ]
       }
     },
@@ -93,10 +188,20 @@
       "inferred": true,
       "description": "The canonical Event Storming model (flows.json): deduped nodes plus flows, hotspots, terms, and derived meta. Here it is the thing being resolved -- loaded from disk (tiers 1/3/4) or produced by the on-the-fly merge (tier 2) -- and then held in memory and served for the life of the session. Its invariant boundary is the merge validation in mergeTraceDocs.",
       "tactical": {
-        "explanation": "On the load tiers, agg-model's state is JSON.parsed straight out of a flows.json file by readModelFile. On the --traces tier it is assembled by mergeTraceDocs. Either way resolveModel hands the same in-memory model to buildServices, which indexes it for the API and MCP.",
+        "explanation": "On the load tiers, agg-model's state is JSON.parsed straight out of a flows.json file by readModelFile (src/adapters/fs/model-repository.ts). On the --traces tier it is assembled by mergeTraceDocs (src/domain/model/merge.ts). Either way resolveModel hands the same in-memory model to buildServices, which indexes it for the API and MCP.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 48, "symbol": "readModelFile", "note": "model loaded from a flows.json file (load tiers)" },
-          { "path": "src/lib/merge.mjs", "line": 217, "symbol": "mergeTraceDocs", "note": "model assembled by the merge (--traces tier)" }
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 40,
+            "symbol": "readModelFile",
+            "note": "model loaded from a flows.json file (load tiers)"
+          },
+          {
+            "path": "src/domain/model/merge.ts",
+            "line": 21,
+            "symbol": "mergeTraceDocs",
+            "note": "model assembled by the merge (--traces tier)"
+          }
         ]
       }
     },
@@ -107,10 +212,20 @@
       "inferred": true,
       "description": "Fold every per-flow trace document into one canonical, validated model. Invoked in-process by ResolveModel's --traces tier (merge-on-the-fly) instead of via the es-merge CLI; resolveModel throws if the merge reports any validation error, so the session never serves an invalid merged model.",
       "tactical": {
-        "explanation": "resolveModel's tier-2 branch calls mergeTracesDir(sourcePath), spreads merged.warnings into the resolution warnings, and throws (attaching merged as err.validation) when merged.errors.length > 0. See the merge-traces flow for the full ETL/validation detail.",
+        "explanation": "resolveModel's tier-2 branch calls mergeTraces(sourcePath, repo) (src/application/commands/merge-traces.ts), which reads every *.json via repo.readTraceDocs and delegates to mergeTraceDocs; resolveModel spreads merged.warnings into the resolution warnings, and throws (attaching merged as err.validation) when merged.errors.length > 0. See the merge-traces flow for the full ETL/validation detail.",
         "anchors": [
-          { "path": "src/lib/merge.mjs", "line": 240, "symbol": "mergeTracesDir", "note": "read dir, parse *.json, delegate to mergeTraceDocs" },
-          { "path": "src/server/resolve-model.mjs", "line": 76, "symbol": "resolveModel", "note": "in-memory --traces call; throws on any validation error" }
+          {
+            "path": "src/application/commands/merge-traces.ts",
+            "line": 16,
+            "symbol": "mergeTraces",
+            "note": "read dir via repo.readTraceDocs, parse errors + delegate to mergeTraceDocs"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 34,
+            "symbol": "resolveModel",
+            "note": "in-memory --traces call; throws on any validation error"
+          }
         ]
       }
     },
@@ -122,9 +237,14 @@
       "inferred": false,
       "description": "The local filesystem outside the process, reached through node:fs. ResolveModel reads it three ways: readFileSync of an explicit/discovered/example flows.json, and readdirSync during the bounded recursive auto-discovery walk of the cwd tree.",
       "tactical": {
-        "explanation": "findFlowsFiles walks the tree with fs.readdirSync(withFileTypes) collecting files named flows.json; readModelFile does fs.readFileSync on the chosen file.",
+        "explanation": "findFlowsFiles (src/adapters/fs/model-repository.ts) walks the tree with fs.readdirSync(withFileTypes) collecting files named flows.json; readModelFile does fs.readFileSync on the chosen file.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 26, "symbol": "findFlowsFiles", "note": "readdirSync walk of the cwd subtree" }
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 18,
+            "symbol": "findFlowsFiles",
+            "note": "readdirSync walk of the cwd subtree"
+          }
         ]
       }
     },
@@ -137,9 +257,14 @@
       "inferred": false,
       "description": "A canonical model file on disk. ResolveModel READS it on the --model tier (an explicit path) and the discovered tier (the winning hits[0] from the auto-discovery walk). This is the same file the es-merge CLI writes as output; here it is consumed as input.",
       "tactical": {
-        "explanation": "readModelFile(fs.readFileSync) parses this file on the --model and discovered tiers. On --traces the model is held in memory and this file is never touched.",
+        "explanation": "readModelFile (fs.readFileSync, src/adapters/fs/model-repository.ts) parses this file on the --model and discovered tiers. On --traces the model is held in memory and this file is never touched.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 89, "symbol": "resolveModel", "note": "discovered tier reads hits[0] flows.json" }
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 49,
+            "symbol": "resolveModel",
+            "note": "discovered tier reads hits[0] flows.json"
+          }
         ]
       }
     },
@@ -152,9 +277,14 @@
       "inferred": false,
       "description": "The tool's own recovered self-model shipped inside the package at examples/event-storming-recovery/model/flows.json. It is the tier-4 fallback ResolveModel reads when no --model, no --traces, and no auto-discovered flows.json is found, so es-view always has something to show.",
       "tactical": {
-        "explanation": "resolveModel builds the path as path.join(packageRoot, 'examples', 'event-storming-recovery', 'model', 'flows.json') and readModelFiles it; source is tagged 'example' and repoRoot is set to packageRoot (so the example's anchors point at the package's own src/ and tools/).",
+        "explanation": "resolveModel builds the path as path.join(packageRoot, 'examples', 'event-storming-recovery', 'model', 'flows.json') and repo.readModelFiles it; source is tagged 'example' and repoRoot is set to packageRoot (so the example's anchors point at the package's own src/ and tools/).",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 93, "symbol": "resolveModel", "note": "packageRoot/examples/.../model/flows.json fallback" }
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 53,
+            "symbol": "resolveModel",
+            "note": "packageRoot/examples/.../model/flows.json fallback"
+          }
         ]
       }
     }
@@ -167,7 +297,7 @@
       "kind": "read",
       "status": "live",
       "summary": "At boot, es-view must decide which Event Storming model this session will serve. ResolveModel applies a fixed 4-tier precedence -- explicit --model wins, else --traces merges the per-flow traces on the fly (and refuses to serve if that merge fails validation), else it auto-discovers a flows.json by a bounded recursive walk of the current directory, else it falls back to the bundled self-model shipped in the package. It loads the chosen model into memory, tags it with provenance, derives a repoRoot for deep-linking source anchors, and prints a banner so the operator can see which tier won. The recovered intent is 'always come up with SOME model, but make the source unambiguous to the human', with the --traces tier the only one that runs full merge validation.",
-      "trigger": "Operator runs `npx event-storming-recovery view [--model|--traces|...]`; bin/es-view.mjs main() calls resolveModel at boot.",
+      "trigger": "Operator runs `npx event-storming-recovery view [--model|--traces|...]`; src/adapters/cli/cli.ts's `view` action invokes runView(), which calls resolveModel at boot (src/adapters/cli/es-view.ts).",
       "steps": [
         "actor-operator",
         "cmd-resolve-model",
@@ -177,17 +307,61 @@
         "rm-model-provenance"
       ],
       "edges": [
-        { "from": "actor-operator", "to": "cmd-resolve-model", "verb": "issues" },
-        { "from": "cmd-resolve-model", "to": "agg-server-session", "verb": "handled by" },
-        { "from": "cmd-resolve-model", "to": "ds-flows-json", "verb": "reads" },
-        { "from": "cmd-resolve-model", "to": "ds-model-fs", "verb": "connects via" },
-        { "from": "cmd-resolve-model", "to": "ds-example-model", "verb": "reads" },
-        { "from": "cmd-resolve-model", "to": "cmd-merge-traces", "verb": "calls" },
-        { "from": "cmd-resolve-model", "to": "agg-model", "verb": "reads" },
-        { "from": "agg-server-session", "to": "inv-model-shape", "verb": "enforces" },
-        { "from": "agg-server-session", "to": "evt-model-resolved", "verb": "emits" },
-        { "from": "evt-model-resolved", "to": "rm-model-provenance", "verb": "updates" },
-        { "from": "rm-model-provenance", "to": "actor-operator", "verb": "read by" }
+        {
+          "from": "actor-operator",
+          "to": "cmd-resolve-model",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-resolve-model",
+          "to": "agg-server-session",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-resolve-model",
+          "to": "ds-flows-json",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-resolve-model",
+          "to": "ds-model-fs",
+          "verb": "connects via"
+        },
+        {
+          "from": "cmd-resolve-model",
+          "to": "ds-example-model",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-resolve-model",
+          "to": "cmd-merge-traces",
+          "verb": "calls"
+        },
+        {
+          "from": "cmd-resolve-model",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "agg-server-session",
+          "to": "inv-model-shape",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-server-session",
+          "to": "evt-model-resolved",
+          "verb": "emits"
+        },
+        {
+          "from": "evt-model-resolved",
+          "to": "rm-model-provenance",
+          "verb": "updates"
+        },
+        {
+          "from": "rm-model-provenance",
+          "to": "actor-operator",
+          "verb": "read by"
+        }
       ],
       "hotspots": [
         "hot-discovery-ambiguity",
@@ -201,12 +375,22 @@
     {
       "id": "hot-discovery-ambiguity",
       "label": "Auto-discovery silently picks one flows.json among many",
-      "description": "When no --model/--traces is given and the cwd subtree contains more than one flows.json, ResolveModel serves hits[0] chosen purely by a heuristic sort (a file inside a model/ dir wins, then the shallowest path, then alphabetical) and only emits a warning line -- it does not stop or prompt. Human question: is the heuristic the right default, and is a warning enough, or should multiple candidates be a hard error that forces the operator to pass --model? A stale or example flows.json left in a subdirectory can quietly win over the intended one.",
+      "description": "When no --model/--traces is given and the cwd subtree contains more than one flows.json, ResolveModel serves hits[0] chosen purely by a heuristic sort (a file inside a model/ directory wins, then the shallowest path, then alphabetical) and only emits a warning line -- it does not stop or prompt. Human question: is the heuristic the right default, and is a warning enough, or should multiple candidates be a hard error that forces the operator to pass --model? A stale or example flows.json left in a subdirectory can quietly win over the intended one.",
       "tactical": {
-        "explanation": "findFlowsFiles walks cwd (maxDepth 6) and sorts: model/flows.json first (regex on the path), then fewer path segments, then localeCompare. resolveModel takes discovered[0] and, only when discovered.length > 1, pushes `found N flows.json files; using <rel>. Pass --model to choose another.` into warnings. The selection is otherwise silent and non-blocking.",
+        "explanation": "findFlowsFiles (src/adapters/fs/model-repository.ts) walks cwd (maxDepth 6) and sorts: model/flows.json first (regex on the path), then fewer path segments, then localeCompare. resolveModel takes discovered[0] and, only when discovered.length > 1, pushes `found N flows.json files; using <rel>. Pass --model to choose another.` into warnings. The selection is otherwise silent and non-blocking.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 37, "symbol": "findFlowsFiles", "note": "sort heuristic that decides the winner" },
-          { "path": "src/server/resolve-model.mjs", "line": 86, "symbol": "resolveModel", "note": "take discovered[0]; warn only when >1 candidate" }
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 30,
+            "symbol": "findFlowsFiles",
+            "note": "sort heuristic that decides the winner"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 46,
+            "symbol": "resolveModel",
+            "note": "take discovered[0]; warn only when >1 candidate"
+          }
         ]
       }
     },
@@ -215,10 +399,20 @@
       "label": "Derived repoRoot can point at a path that doesn't exist here",
       "description": "The repoRoot used to resolve every /api/source anchor deep-link is derived, not verified. When no --repo-root flag is passed and the source is a loaded flows.json, repoRoot = model.meta.repoRoot || cwd. The merge NEVER sets meta.repoRoot, so a --traces or freshly merged model falls back to cwd; but a hand-authored or generator-stamped flows.json can carry an absolute meta.repoRoot from the machine that produced it, making anchors resolve against a directory that doesn't exist on this machine (source lookups then fail). Human question: should es-view validate that the derived repoRoot exists / contains the anchored files, and warn or fall back to cwd when it doesn't?",
       "tactical": {
-        "explanation": "resolveModel: resolvedRepoRoot = repoRoot flag ? resolve(cwd,flag) : source==='example' ? packageRoot : (model.meta && model.meta.repoRoot) || cwd. mergeTraceDocs builds meta = { generatedFrom, counts, deadFlows, sharedGlossary } with NO repoRoot key, so merged models always land on cwd; only a pre-existing flows.json with a meta.repoRoot (e.g. an absolute path baked in elsewhere) diverges. No existence check is done on the result.",
+        "explanation": "resolveModel: resolvedRepoRoot = repoRoot flag ? resolve(cwd,flag) : source==='example' ? packageRoot : (model.meta && model.meta.repoRoot) || cwd. mergeTraceDocs (src/domain/model/merge.ts) builds meta = { generatedFrom, counts, deadFlows, sharedGlossary } with NO repoRoot key, so merged models always land on cwd; only a pre-existing flows.json with a meta.repoRoot (e.g. an absolute path baked in elsewhere) diverges. No existence check is done on the result.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 99, "symbol": "resolveModel", "note": "repoRoot derivation chain, unvalidated" },
-          { "path": "src/lib/merge.mjs", "line": 219, "symbol": "mergeTraceDocs", "note": "meta built WITHOUT a repoRoot key" }
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 61,
+            "symbol": "resolveModel",
+            "note": "repoRoot derivation chain, unvalidated"
+          },
+          {
+            "path": "src/domain/model/merge.ts",
+            "line": 109,
+            "symbol": "mergeTraceDocs",
+            "note": "meta built WITHOUT a repoRoot key"
+          }
         ]
       }
     },
@@ -227,10 +421,20 @@
       "label": "Only --traces validates; --model/discovered/example are served unchecked",
       "description": "Three of the four tiers (--model, auto-discovered, bundled example) load via readModelFile, whose ONLY check is that nodes[] and flows[] are arrays. They completely bypass the merge's invariant suite (referential integrity, ES grammar, term contract, data lineage). So a structurally-shaped but semantically-broken flows.json -- including one that es-merge itself wrote to disk despite failing validation (see hot-invalid-model-written) and that auto-discovery later picks up -- is served without complaint, while the same content passed via --traces would be rejected. Human question: should the load tiers also run the merge validation (or at least a referential-integrity pass) before serving, so the two entry paths agree?",
       "tactical": {
-        "explanation": "readModelFile does JSON.parse + Array.isArray(nodes)/Array.isArray(flows) only. The --traces tier alone routes through mergeTracesDir/mergeTraceDocs and throws on merged.errors. This mirrors, on the read side, the CLI's write-before-validate gap: es-merge can leave an invalid flows.json on disk, and the discovered tier would serve it after only the shape check.",
+        "explanation": "readModelFile (src/adapters/fs/model-repository.ts) does JSON.parse + Array.isArray(nodes)/Array.isArray(flows) only. The --traces tier alone routes through mergeTraces/mergeTraceDocs and throws on merged.errors. This mirrors, on the read side, the CLI's write-before-validate gap: es-merge can leave an invalid flows.json on disk, and the discovered tier would serve it after only the shape check.",
         "anchors": [
-          { "path": "src/server/resolve-model.mjs", "line": 51, "symbol": "readModelFile", "note": "sole check on load tiers: nodes/flows are arrays" },
-          { "path": "src/server/resolve-model.mjs", "line": 74, "symbol": "resolveModel", "note": "only --traces runs full merge validation (throws on error)" }
+          {
+            "path": "src/adapters/fs/model-repository.ts",
+            "line": 43,
+            "symbol": "readModelFile",
+            "note": "sole check on load tiers: nodes/flows are arrays"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 34,
+            "symbol": "resolveModel",
+            "note": "only --traces runs full merge validation (throws on error)"
+          }
         ]
       }
     }

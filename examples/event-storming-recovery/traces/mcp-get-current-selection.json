@@ -7,10 +7,20 @@
       "inferred": true,
       "description": "A Claude session connected to the es-view MCP server over streamable HTTP (registered via `claude mcp add`). It is the consumer of this flow: when the user refers to \"the selected node\", the session calls get_current_selection to read whatever the human is currently looking at in the explorer. It lives outside the deploy boundary and issues the read across the /mcp boundary.",
       "tactical": {
-        "explanation": "Reaches the tool through POST /mcp, handled by createMcpHandler: an `initialize` POST spins up a per-session StreamableHTTP transport, and each session's tools close over the ONE shared services + state, so the client always reads the live selection. The tool result is markdown the session pastes into its own context.",
+        "explanation": "Reaches the tool through POST /mcp, handled by createMcpHandler: an `initialize` POST spins up a per-session StreamableHTTP transport, and each session's tools close over the ONE shared services + session (selection, bundle), so the client always reads the live selection. The tool result is markdown the session pastes into its own context.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 120, "symbol": "createMcpHandler", "note": "streamable-HTTP transport per MCP session; all sessions share services+state" },
-          { "path": "src/server/mcp.mjs", "line": 20, "symbol": "buildMcpServer", "note": "McpServer 'event-storming-recovery' the client connects to" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 116,
+            "symbol": "createMcpHandler",
+            "note": "streamable-HTTP transport per MCP session; all sessions share services+selection+bundle"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 26,
+            "symbol": "buildMcpServer",
+            "note": "McpServer 'event-storming-recovery' the client connects to"
+          }
         ]
       }
     },
@@ -21,10 +31,20 @@
       "inferred": true,
       "description": "The read request a connected Claude session issues to learn what the human is currently looking at. A stateless MCP tool with an empty input schema: it reads the shared in-memory selection pointer and, when set, returns the grounded context for that node. Its whole purpose is to bridge a browser click to the model's context.",
       "tactical": {
-        "explanation": "Registered as the 'get_current_selection' MCP tool (empty inputSchema). The async handler calls state.getSelection(): (1) EMPTY case -> if no selection, returns a plain-text nudge ('No node is currently selected... Ask the user to click a node, or use get_node / list_model') and stops. (2) HIT case -> buildNodeContext(services, sel.nodeId) assembles the grounded projection, rendered to markdown by renderNodeContextMarkdown. (3) STALE case -> if buildNodeContext returns null (the selected id is not in the model) it returns 'The selected node ... is no longer in the model.' The command reads the selection aggregate and the grounded read model; it neither validates nor mutates state.",
+        "explanation": "Registered as the 'get_current_selection' MCP tool (empty inputSchema). The async handler calls selection.get(): (1) EMPTY case -> if no selection, returns a plain-text nudge ('No node is currently selected... Ask the user to click a node, or use get_node / list_model') and stops. (2) HIT case -> buildNodeContext(services, sel.nodeId) assembles the grounded projection, rendered to markdown by renderNodeContextMarkdown. (3) STALE case -> if buildNodeContext returns null (the selected id is not in the model) it returns 'The selected node ... is no longer in the model.' The command reads the selection aggregate and the grounded read model; it neither validates nor mutates state.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 22, "symbol": "get_current_selection", "note": "registerTool: title/description/empty inputSchema" },
-          { "path": "src/server/mcp.mjs", "line": 29, "symbol": "get_current_selection", "note": "handler: getSelection() -> empty / stale / buildNodeContext branches" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 28,
+            "symbol": "get_current_selection",
+            "note": "registerTool: title/description/empty inputSchema"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 35,
+            "symbol": "get_current_selection",
+            "note": "handler: selection.get() -> empty / stale / buildNodeContext branches"
+          }
         ]
       }
     },
@@ -35,10 +55,20 @@
       "inferred": true,
       "description": "The single in-memory pointer to the node the human last clicked in the explorer: { nodeId, at }, or null. Process-global and non-persistent — one selection shared by the web UI and every connected MCP session. This read flow only READS it; it is written by the select-node flow (POST /api/selection), which validates the id exists before setting it.",
       "tactical": {
-        "explanation": "createState() closes over a single `selection` variable exposed via getSelection/setSelection/clearSelection. get_current_selection calls state.getSelection() to read the { nodeId, at } pointer. The write side (select-node) is the only mutator; there is no per-session scoping and no expiry, so whatever the human last clicked is what every reader sees.",
+        "explanation": "Selection is a small class holding a private `selection` field, exposed via get()/set()/clear(). get_current_selection calls selection.get() to read the { nodeId, at } pointer. The write side (select-node) is the only mutator; there is no per-session scoping and no expiry, so whatever the human last clicked is what every reader sees. It is now a standalone class distinct from ContextBundle — the two used to share one createState() closure; they no longer do.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 16, "symbol": "getSelection", "note": "getSelection returns the shared { nodeId, at } pointer" },
-          { "path": "src/server/state.mjs", "line": 9, "symbol": "createState", "note": "single in-memory selection shared by UI + MCP (non-persistent)" }
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 14,
+            "symbol": "get",
+            "note": "get() returns the shared { nodeId, at } pointer"
+          },
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 9,
+            "symbol": "Selection",
+            "note": "single in-memory selection instance shared by UI + MCP (non-persistent); own class, no longer shares a closure with the bundle"
+          }
         ]
       }
     },
@@ -51,9 +81,24 @@
       "tactical": {
         "explanation": "buildNodeContext looks the node up in indexes.nodeById, then draws its containing flows from nodeFlows and its aggregate<->invariant cross-references from enforcesRelation (both scan model.flows edges). These selectors are the read paths this flow uses against the model; the model itself is built by the merge (see merge-traces).",
         "anchors": [
-          { "path": "src/server/context.mjs", "line": 19, "symbol": "buildNodeContext", "note": "indexes.nodeById.get(nodeId) — the node lookup" },
-          { "path": "src/lib/selectors.mjs", "line": 16, "symbol": "nodeFlows", "note": "flows this node appears in (steps or edge endpoints)" },
-          { "path": "src/lib/selectors.mjs", "line": 23, "symbol": "enforcesRelation", "note": "aggregate<->invariant cross-reference over flow edges" }
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 83,
+            "symbol": "buildNodeContext",
+            "note": "indexes.nodeById.get(nodeId) — the node lookup"
+          },
+          {
+            "path": "src/application/read-models/indexes.ts",
+            "line": 45,
+            "symbol": "nodeFlows",
+            "note": "flows this node appears in (steps or edge endpoints)"
+          },
+          {
+            "path": "src/application/read-models/indexes.ts",
+            "line": 52,
+            "symbol": "enforcesRelation",
+            "note": "aggregate<->invariant cross-reference over flow edges"
+          }
         ]
       }
     },
@@ -64,10 +109,20 @@
       "inferred": true,
       "description": "Human notes on model items (node / flow / hotspot), kept in memory and persisted to a comments.json sidecar next to flows.json (so they survive a model rebuild that regenerates flows.json). This read flow reads it: the grounded node context includes any human comments on the selected node.",
       "tactical": {
-        "explanation": "createCommentStore keys notes by 'type:id'. buildNodeContext calls services.comments.get('node', n.id) and folds the result into the projection, so the markdown the MCP client receives carries the human's notes alongside the recovered concept. Read-only here; writes come from POST /api/comments.",
+        "explanation": "CommentStore keys notes by 'type:id'. buildNodeContext calls services.comments.get('node', n.id) and folds the result into the projection, so the markdown the MCP client receives carries the human's notes alongside the recovered concept. Read-only here; writes come from POST /api/comments. The in-memory Map + validation live in the domain CommentStore class; loading/persisting the comments.json sidecar is a separate fs adapter (createCommentStore) that wires the store's onChange to persist.",
         "anchors": [
-          { "path": "src/server/comments.mjs", "line": 35, "symbol": "get", "note": "get(type,id) returns the human notes for the node" },
-          { "path": "src/server/comments.mjs", "line": 11, "symbol": "createCommentStore", "note": "in-memory + comments.json sidecar store" }
+          {
+            "path": "src/domain/comment-store/comment-store.ts",
+            "line": 50,
+            "symbol": "get",
+            "note": "get(type,id) returns the human notes for the node"
+          },
+          {
+            "path": "src/adapters/fs/comment-repository.ts",
+            "line": 9,
+            "symbol": "createCommentStore",
+            "note": "in-memory CommentStore wired to load/persist the comments.json sidecar"
+          }
         ]
       }
     },
@@ -78,11 +133,26 @@
       "inferred": true,
       "description": "The projection a connected Claude session reads for the selected node: its label/type/description, the invariants it enforces (or that enforce it), the flows it appears in, any human comments, and the REAL source code behind each tactical anchor. This is the core grounding artifact — it turns a bare node id into an answer anchored to actual files, not just a label. Rendered to markdown for the MCP tool result.",
       "tactical": {
-        "explanation": "buildNodeContext(services, nodeId) assembles the object: identity + flags, fields, containment (for data nodes), enforcesRelation (invariants), nodeFlows (flows), per-anchor source via readSource(repoRoot, path, line), and comments via services.comments.get. renderNodeContextMarkdown formats it. It projects from agg-model (identity/invariants/flows/anchors) and agg-selection (which node), reads agg-comment-store for notes, and reads the repo checkout for the anchor source. Returns null when the selected id is absent from the model (the command's STALE branch).",
+        "explanation": "buildNodeContext(services, nodeId) assembles the object: identity + flags, fields, containment (for data nodes), enforcesRelation (invariants), nodeFlows (flows), per-anchor source via services.readSource(repoRoot, path, line), and comments via services.comments.get. renderNodeContextMarkdown formats it. It projects from agg-model (identity/invariants/flows/anchors) and agg-selection (which node), reads agg-comment-store for notes, and reads the repo checkout for the anchor source. Returns null when the selected id is absent from the model (the command's STALE branch).",
         "anchors": [
-          { "path": "src/server/context.mjs", "line": 18, "symbol": "buildNodeContext", "note": "assemble grounded node: invariants, flows, anchors, comments" },
-          { "path": "src/server/context.mjs", "line": 63, "symbol": "buildNodeContext", "note": "the returned projection object" },
-          { "path": "src/server/context.mjs", "line": 98, "symbol": "renderNodeContextMarkdown", "note": "render to markdown for the MCP tool result" }
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 81,
+            "symbol": "buildNodeContext",
+            "note": "assemble grounded node: invariants, flows, anchors, comments"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 126,
+            "symbol": "buildNodeContext",
+            "note": "the returned projection object"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 161,
+            "symbol": "renderNodeContextMarkdown",
+            "note": "render to markdown for the MCP tool result"
+          }
         ]
       },
       "fields": [
@@ -93,8 +163,17 @@
           "derivation": "For an aggregate (or invariant) node, the set of invariants it enforces (or the aggregates that enforce it), computed by scanning every flow's aggregate--enforces-->invariant edge. Empty for other node types.",
           "sources": [],
           "confidence": "high",
-          "provenance": ["inferred"],
-          "evidence": [ { "path": "src/lib/selectors.mjs", "line": 23, "symbol": "enforcesRelation", "note": "cross-reference over flow edges" } ]
+          "provenance": [
+            "inferred"
+          ],
+          "evidence": [
+            {
+              "path": "src/application/read-models/indexes.ts",
+              "line": 52,
+              "symbol": "enforcesRelation",
+              "note": "cross-reference over flow edges"
+            }
+          ]
         },
         {
           "name": "flows",
@@ -103,8 +182,17 @@
           "derivation": "The flows the selected node appears in (by step or edge endpoint), each projected to { id, name, status, kind }. Tells the reader where this node lives in the map.",
           "sources": [],
           "confidence": "high",
-          "provenance": ["inferred"],
-          "evidence": [ { "path": "src/server/context.mjs", "line": 24, "symbol": "buildNodeContext", "note": "nodeFlows(model, nodeId) projected to {id,name,status,kind}" } ]
+          "provenance": [
+            "inferred"
+          ],
+          "evidence": [
+            {
+              "path": "src/application/read-models/context.ts",
+              "line": 87,
+              "symbol": "buildNodeContext",
+              "note": "nodeFlows(model, nodeId) projected to {id,name,status,kind}"
+            }
+          ]
         },
         {
           "name": "sourceAnchors",
@@ -112,11 +200,25 @@
           "dataType": "array",
           "derivation": "Each tactical anchor with the REAL code read from the repo checkout at that path/line (±8 lines of context), sandboxed to repoRoot. This is the grounding: a recovered label deep-links to actual source the model can quote.",
           "sources": [
-            { "ref": "ds-repo-fs", "role": "derived-from", "transform": "lookup", "note": "readSource reads the file behind each anchor" }
+            {
+              "ref": "ds-repo-fs",
+              "role": "derived-from",
+              "transform": "lookup",
+              "note": "readSource reads the file behind each anchor"
+            }
           ],
           "confidence": "high",
-          "provenance": ["inferred"],
-          "evidence": [ { "path": "src/server/context.mjs", "line": 54, "symbol": "buildNodeContext", "note": "per-anchor readSource(repoRoot, a.path, a.line)" } ]
+          "provenance": [
+            "inferred"
+          ],
+          "evidence": [
+            {
+              "path": "src/application/read-models/context.ts",
+              "line": 121,
+              "symbol": "buildNodeContext",
+              "note": "per-anchor services.readSource(repoRoot, a.path, a.line)"
+            }
+          ]
         },
         {
           "name": "comments",
@@ -125,8 +227,17 @@
           "derivation": "Human notes on the selected node from the comments.json sidecar (keyed by 'node:<id>'). Empty when there is no comment store or no notes for the node.",
           "sources": [],
           "confidence": "high",
-          "provenance": ["inferred"],
-          "evidence": [ { "path": "src/server/context.mjs", "line": 85, "symbol": "buildNodeContext", "note": "services.comments.get('node', n.id)" } ]
+          "provenance": [
+            "inferred"
+          ],
+          "evidence": [
+            {
+              "path": "src/application/read-models/context.ts",
+              "line": 148,
+              "symbol": "buildNodeContext",
+              "note": "services.comments.get('node', n.id)"
+            }
+          ]
         }
       ]
     },
@@ -138,10 +249,20 @@
       "inferred": false,
       "description": "The target codebase checkout at repoRoot, on the local filesystem. The grounding layer reads the real code behind each tactical anchor from here (±8 lines), sandboxed so a path cannot escape repoRoot. It is read-only from this flow's perspective.",
       "tactical": {
-        "explanation": "readSource resolves the anchor path against repoRoot, rejects any path that escapes the root, then reads the file and slices a window around the anchor line. buildNodeContext calls it once per anchor to embed source in the projection.",
+        "explanation": "readSource resolves the anchor path against repoRoot, rejects any path that escapes the root (a pure domain guard), then reads the file and slices a window around the anchor line. buildNodeContext calls it once per anchor to embed source in the projection.",
         "anchors": [
-          { "path": "src/server/source.mjs", "line": 13, "symbol": "readSource", "note": "read real code behind an anchor, sandboxed to repoRoot" },
-          { "path": "src/server/source.mjs", "line": 18, "symbol": "readSource", "note": "guard: reject paths that escape repoRoot" }
+          {
+            "path": "src/adapters/fs/source-gateway.ts",
+            "line": 8,
+            "symbol": "readSource",
+            "note": "read real code behind an anchor, sandboxed to repoRoot"
+          },
+          {
+            "path": "src/domain/source/source-window.ts",
+            "line": 26,
+            "symbol": "guardPath",
+            "note": "guard: reject paths that escape repoRoot"
+          }
         ]
       }
     }
@@ -154,7 +275,7 @@
       "kind": "read",
       "status": "live",
       "summary": "A Claude session connected to the es-view MCP server calls get_current_selection to see what the human is currently looking at in the explorer. The tool reads the single shared in-memory selection pointer (set by the browser via the select-node flow); if a node is selected it builds a grounded projection of that node — identity, the invariants it enforces, the flows it appears in, human comments, and the real source code behind every anchor — and returns it as markdown. If nothing is selected it returns a nudge to click a node. This is the core grounding bridge: a browser click becomes context a connected Claude session can act on, anchored to actual files rather than a bare label.",
-      "trigger": "MCP tool `get_current_selection` invoked over POST /mcp by a connected Claude session (src/server/mcp.mjs:22).",
+      "trigger": "MCP tool `get_current_selection` invoked over POST /mcp by a connected Claude session (src/adapters/mcp/mcp-server.ts:28).",
       "steps": [
         "ext-claude-mcp",
         "cmd-get-current-selection",
@@ -162,14 +283,46 @@
         "rm-grounded-node"
       ],
       "edges": [
-        { "from": "ext-claude-mcp", "to": "cmd-get-current-selection", "verb": "issues" },
-        { "from": "cmd-get-current-selection", "to": "agg-selection", "verb": "reads" },
-        { "from": "cmd-get-current-selection", "to": "rm-grounded-node", "verb": "reads" },
-        { "from": "rm-grounded-node", "to": "agg-selection", "verb": "projects from" },
-        { "from": "rm-grounded-node", "to": "agg-model", "verb": "projects from" },
-        { "from": "rm-grounded-node", "to": "agg-comment-store", "verb": "reads" },
-        { "from": "rm-grounded-node", "to": "ds-repo-fs", "verb": "reads" },
-        { "from": "rm-grounded-node", "to": "ext-claude-mcp", "verb": "read by" }
+        {
+          "from": "ext-claude-mcp",
+          "to": "cmd-get-current-selection",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-get-current-selection",
+          "to": "agg-selection",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-get-current-selection",
+          "to": "rm-grounded-node",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "agg-selection",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "agg-comment-store",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "ds-repo-fs",
+          "verb": "reads"
+        },
+        {
+          "from": "rm-grounded-node",
+          "to": "ext-claude-mcp",
+          "verb": "read by"
+        }
       ],
       "hotspots": [
         "hot-selection-global-shared"
@@ -181,13 +334,28 @@
     {
       "id": "hot-selection-global-shared",
       "label": "One process-global selection, read with no freshness or ownership signal",
-      "description": "The selection is a single process-global pointer shared by the web UI and EVERY connected MCP session, with no per-session scoping and no expiry. get_current_selection returns the node with no timestamp or age, even though state stores `at`, and nothing invalidates the selection when the human navigates away. So a connected Claude session can read a selection another person set, or one the human clicked minutes ago, and cannot tell. Human questions: when more than one Claude session (or more than one person) connects, is a single shared selection intended, or should it be scoped per client? Should the tool surface the selection's age so a stale click is visible?",
+      "description": "The selection is a single process-global pointer shared by the web UI and EVERY connected MCP session, with no per-session scoping and no expiry. get_current_selection returns the node with no timestamp or age, even though the Selection stores `at`, and nothing invalidates the selection when the human navigates away. So a connected Claude session can read a selection another person set, or one the human clicked minutes ago, and cannot tell. Human questions: when more than one Claude session (or more than one person) connects, is a single shared selection intended, or should it be scoped per client? Should the tool surface the selection's age so a stale click is visible?",
       "tactical": {
-        "explanation": "state.mjs holds one `selection` variable for the whole process; getSelection returns { nodeId, at } but get_current_selection's handler discards `at` and renders only the node context, so the age never reaches the client. There is no TTL and no clear-on-navigate. Every MCP session's tools close over the same state (createMcpHandler), so all readers see the one selection.",
+        "explanation": "Selection holds one private `selection` field for the whole process; get() returns { nodeId, at } but get_current_selection's handler discards `at` and renders only the node context, so the age never reaches the client. There is no TTL and no clear-on-navigate. Every MCP session's tools close over the same services + selection + bundle (createMcpHandler), so all readers see the one selection.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 16, "symbol": "getSelection", "note": "single shared { nodeId, at }; `at` captured but unused by the reader" },
-          { "path": "src/server/mcp.mjs", "line": 29, "symbol": "get_current_selection", "note": "renders node context only; drops the selection timestamp" },
-          { "path": "src/server/mcp.mjs", "line": 120, "symbol": "createMcpHandler", "note": "all MCP sessions share one services+state" }
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 14,
+            "symbol": "get",
+            "note": "single shared { nodeId, at }; `at` captured but unused by the reader"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 36,
+            "symbol": "get_current_selection",
+            "note": "renders node context only; drops the selection timestamp"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 116,
+            "symbol": "createMcpHandler",
+            "note": "all MCP sessions share one services+selection+bundle"
+          }
         ]
       }
     }

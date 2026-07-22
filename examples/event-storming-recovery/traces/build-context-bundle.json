@@ -14,13 +14,44 @@
       "inferred": true,
       "description": "Add one typed reference { type: node | flow | hotspot, id } to the curated context bundle. Idempotent: re-adding an already-present item is a silent no-op that preserves insertion order.",
       "tactical": {
-        "explanation": "Triggered by the right-click 'Add ... to context bundle' menu item (ContextMenu.jsx) or, for removal's inverse, the same toggle. The React store's addToContext(type, id) calls api.js addContext -> POST /api/context { type, id }. The server route validates the ref via itemExists (see inv-bundle-item-exists) and, on success, calls state.addToBundle(type, id), which inserts into the in-memory Map keyed by `type:id` only when the key is absent. The response returns the whole ordered bundle, which the store writes to bundleItems so the pill count and drawer re-render.",
+        "explanation": "Triggered by the right-click 'Add ... to context bundle' menu item (ContextMenu.jsx) or, for removal's inverse, the same toggle. The React store's addToContext(type, id) calls api.js addContext -> POST /api/context { type, id }. The server route delegates to the addContextItem command (application/commands/add-context-item.ts), which validates the ref via itemExists (see inv-bundle-item-exists) and, on success, calls bundle.add(type, id), which inserts into the in-memory Map keyed by `type:id` only when the key is absent. The response returns the whole ordered bundle, which the store writes to bundleItems so the pill count and drawer re-render.",
         "anchors": [
-          { "path": "src/web/components/ContextMenu.jsx", "line": 46, "symbol": "ContextMenu", "note": "add/remove toggle button" },
-          { "path": "src/web/store.jsx", "line": 51, "symbol": "addToContext", "note": "store action -> addContext -> setBundleItems" },
-          { "path": "src/web/api.js", "line": 23, "symbol": "addContext", "note": "POST /api/context { type, id }" },
-          { "path": "src/server/server.mjs", "line": 143, "symbol": "requestListener", "note": "POST /api/context branch: guard then addToBundle" },
-          { "path": "src/server/state.mjs", "line": 21, "symbol": "addToBundle", "note": "Map.set only when key absent (dedup, insertion-ordered)" }
+          {
+            "path": "src/web/components/ContextMenu.jsx",
+            "line": 46,
+            "symbol": "ContextMenu",
+            "note": "add/remove toggle button"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 51,
+            "symbol": "addToContext",
+            "note": "store action -> addContext -> setBundleItems"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 23,
+            "symbol": "addContext",
+            "note": "POST /api/context { type, id }"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 137,
+            "symbol": "createServer",
+            "note": "POST /api/context branch: calls addContextItem(services, bundle, type, id)"
+          },
+          {
+            "path": "src/application/commands/add-context-item.ts",
+            "line": 11,
+            "symbol": "addContextItem",
+            "note": "guard via itemExists then bundle.add(type, id)"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 27,
+            "symbol": "add",
+            "note": "Map.set only when key absent (dedup, insertion-ordered)"
+          }
         ]
       }
     },
@@ -31,14 +62,50 @@
       "inferred": true,
       "description": "Remove one typed reference from the context bundle. Idempotent and unguarded: removing an item that is not present succeeds as a no-op, and unlike add it does NOT check that the id exists in the model.",
       "tactical": {
-        "explanation": "Triggered two ways: the right-click 'Remove ... from context bundle' toggle (ContextMenu.jsx) or the per-row ✕ in the drawer (ContextBundle.jsx). Both call the store's removeFromContext(type, id) -> api.js removeContext -> DELETE /api/context { type, id }. The DELETE branch does NOT run itemExists; it calls state.removeFromBundle(type, id), which is a plain Map.delete on `type:id` (no-op if absent). Returns the updated ordered bundle.",
+        "explanation": "Triggered two ways: the right-click 'Remove ... from context bundle' toggle (ContextMenu.jsx) or the per-row ✕ in the drawer (ContextBundle.jsx). Both call the store's removeFromContext(type, id) -> api.js removeContext -> DELETE /api/context { type, id }. The DELETE branch does NOT run itemExists; it calls the removeContextItem command (application/commands/remove-context-item.ts), which calls bundle.remove(type, id), a plain Map.delete on `type:id` (no-op if absent). Returns the updated ordered bundle.",
         "anchors": [
-          { "path": "src/web/components/ContextMenu.jsx", "line": 46, "symbol": "ContextMenu", "note": "remove branch of the toggle" },
-          { "path": "src/web/components/ContextBundle.jsx", "line": 50, "symbol": "ContextBundle", "note": "per-row ✕ remove button" },
-          { "path": "src/web/store.jsx", "line": 52, "symbol": "removeFromContext", "note": "store action -> removeContext" },
-          { "path": "src/web/api.js", "line": 24, "symbol": "removeContext", "note": "DELETE /api/context { type, id }" },
-          { "path": "src/server/server.mjs", "line": 152, "symbol": "requestListener", "note": "DELETE with id -> removeFromBundle (no existence guard)" },
-          { "path": "src/server/state.mjs", "line": 22, "symbol": "removeFromBundle", "note": "Map.delete on type:id" }
+          {
+            "path": "src/web/components/ContextMenu.jsx",
+            "line": 46,
+            "symbol": "ContextMenu",
+            "note": "remove branch of the toggle"
+          },
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 50,
+            "symbol": "ContextBundle",
+            "note": "per-row ✕ remove button"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 52,
+            "symbol": "removeFromContext",
+            "note": "store action -> removeContext"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 24,
+            "symbol": "removeContext",
+            "note": "DELETE /api/context { type, id }"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 147,
+            "symbol": "createServer",
+            "note": "DELETE with id -> removeContextItem (no existence guard)"
+          },
+          {
+            "path": "src/application/commands/remove-context-item.ts",
+            "line": 4,
+            "symbol": "removeContextItem",
+            "note": "bundle.remove(type, id)"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 32,
+            "symbol": "remove",
+            "note": "Map.delete on type:id"
+          }
         ]
       }
     },
@@ -49,13 +116,44 @@
       "inferred": true,
       "description": "Empty the entire context bundle in one action. Distinguished from RemoveContextItem by the absence of an id in the DELETE body.",
       "tactical": {
-        "explanation": "Triggered by the drawer's 'Clear' button (ContextBundle.jsx) -> store clearBundle() -> api.js clearContext -> DELETE /api/context with NO body. The server DELETE branch: when body.id is falsy it falls through to state.clearBundle() (Map.clear) and returns { items: [] }. The store then sets bundleItems to []. So add/remove/clear all share the DELETE verb but branch on presence of an id.",
+        "explanation": "Triggered by the drawer's 'Clear' button (ContextBundle.jsx) -> store clearBundle() -> api.js clearContext -> DELETE /api/context with NO body. The server DELETE branch: when body.id is falsy it falls through to the clearContextBundle command (application/commands/clear-context-bundle.ts) -> bundle.clear() (Map.clear) and returns { items: [] }. The store then sets bundleItems to []. So add/remove/clear all share the DELETE verb but branch on presence of an id.",
         "anchors": [
-          { "path": "src/web/components/ContextBundle.jsx", "line": 59, "symbol": "ContextBundle", "note": "'Clear' ghost button" },
-          { "path": "src/web/store.jsx", "line": 53, "symbol": "clearBundle", "note": "store action -> clearContext" },
-          { "path": "src/web/api.js", "line": 25, "symbol": "clearContext", "note": "DELETE /api/context (no body)" },
-          { "path": "src/server/server.mjs", "line": 153, "symbol": "requestListener", "note": "DELETE with no id -> clearBundle -> { items: [] }" },
-          { "path": "src/server/state.mjs", "line": 23, "symbol": "clearBundle", "note": "Map.clear()" }
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 59,
+            "symbol": "ContextBundle",
+            "note": "'Clear' ghost button"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 53,
+            "symbol": "clearBundle",
+            "note": "store action -> clearContext"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 25,
+            "symbol": "clearContext",
+            "note": "DELETE /api/context (no body)"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 148,
+            "symbol": "createServer",
+            "note": "DELETE with no id -> clearContextBundle -> { items: [] }"
+          },
+          {
+            "path": "src/application/commands/clear-context-bundle.ts",
+            "line": 4,
+            "symbol": "clearContextBundle",
+            "note": "bundle.clear()"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 37,
+            "symbol": "clear",
+            "note": "Map.clear()"
+          }
         ]
       }
     },
@@ -66,11 +164,26 @@
       "inferred": true,
       "description": "The curated set of items the operator has gathered for Claude: an insertion-ordered collection of typed refs { type: node | flow | hotspot, id }, deduped by `type:id`. Lives purely in the shared in-memory server state (never persisted); the same Map is read by the SPA drawer AND by connected Claude/MCP sessions. Its consistency boundary is the add-time existence guard.",
       "tactical": {
-        "explanation": "Implemented by createState() in state.mjs as `const bundle = new Map()` keyed `${type}:${id}` -> { type, id, at }. addToBundle inserts only when the key is absent (dedup + preserves order); removeFromBundle deletes by key; clearBundle empties it; getBundle projects to [{ type, id }] in insertion order. There is no aggregate class: the closure over the Map is the whole boundary, and its only enforced rule (a valid model ref) is applied by the server route before addToBundle, not inside state.mjs. Rendering to markdown (context.mjs renderBundleMarkdown) is a read-side projection, not aggregate state.",
+        "explanation": "Implemented by the ContextBundle class (domain/session/context-bundle.ts) as `private readonly bundle = new Map()` keyed `${type}:${id}` -> { type, id, at }. add() inserts only when the key is absent (dedup + preserves order); remove() deletes by key; clear() empties it; list() projects to [{ type, id }] in insertion order. The aggregate's only enforced rule (a valid model ref) is applied by the addContextItem command before bundle.add, not inside the ContextBundle class itself. Rendering to markdown (application/read-models/context.ts renderBundleMarkdown) is a read-side projection, not aggregate state.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 10, "symbol": "createState", "note": "bundle = new Map(); the aggregate's state" },
-          { "path": "src/server/state.mjs", "line": 13, "symbol": "key", "note": "dedup key `type:id`" },
-          { "path": "src/server/state.mjs", "line": 20, "symbol": "getBundle", "note": "insertion-ordered projection to [{ type, id }]" }
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 18,
+            "symbol": "ContextBundle",
+            "note": "bundle = new Map(); the aggregate's state"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 15,
+            "symbol": "key",
+            "note": "dedup key `type:id`"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 22,
+            "symbol": "list",
+            "note": "insertion-ordered projection to [{ type, id }]"
+          }
         ]
       },
       "fields": [
@@ -80,11 +193,25 @@
           "dataType": "array",
           "derivation": "The ordered list of gathered refs, one per gathered node/flow/hotspot, each { type, id }. Backed by a Map keyed `type:id`, so at most one entry per (type,id); iteration order is insertion order. Held only in process memory (a stored `at` timestamp per entry is dropped by getBundle and not exposed).",
           "sources": [
-            { "ref": "ds-session-state", "role": "derived-from", "transform": "identity", "note": "the in-memory bundle Map" }
+            {
+              "ref": "ds-session-state",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "the in-memory bundle Map"
+            }
           ],
           "confidence": "high",
-          "provenance": ["inferred-from-dto"],
-          "evidence": [ { "path": "src/server/state.mjs", "line": 21, "symbol": "addToBundle", "note": "Map<type:id, {type,id,at}> insertion-ordered, deduped" } ]
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "evidence": [
+            {
+              "path": "src/domain/session/context-bundle.ts",
+              "line": 28,
+              "symbol": "add",
+              "note": "Map<type:id, {type,id,at}> insertion-ordered, deduped"
+            }
+          ]
         }
       ]
     },
@@ -95,10 +222,20 @@
       "inferred": true,
       "description": "ERROR-level guard on AddContextItem: the POST /api/context route rejects (404) any add whose { type, id } does not resolve to an existing node, flow, or hotspot of that type, so the bundle can never hold a dangling ref. NOTE the guard is asymmetric: it runs only on add (POST); RemoveContextItem (DELETE) is unguarded but idempotent, so no stale ref can survive.",
       "tactical": {
-        "explanation": "In the POST /api/context branch, `if (!id || !itemExists(services, type, id)) return sendJson(res, 404, ...)` runs before addToBundle. itemExists dispatches by type: flow -> model.flows.some(id); hotspot -> indexes.hotspotById.has(id); else -> indexes.nodeById.has(id). The same guard backs POST /api/comments and GET /api/item. The dedup rule (no duplicate `type:id`) is enforced inside addToBundle itself but is a silent no-op, not a rejection, so it is folded here rather than modeled as a second invariant.",
+        "explanation": "In the addContextItem command (application/commands/add-context-item.ts), `if (!id || !itemExists(services, type, id)) return { ok: false, error: ... }` runs before bundle.add, and the server route maps a not-ok result to HTTP 404. itemExists (application/read-models/items.ts) dispatches by type: flow -> model.flows.some(id); hotspot -> indexes.hotspotById.has(id); else -> indexes.nodeById.has(id). The same guard backs POST /api/comments and GET /api/item. The dedup rule (no duplicate `type:id`) is enforced inside ContextBundle.add itself but is a silent no-op, not a rejection, so it is folded here rather than modeled as a second invariant.",
         "anchors": [
-          { "path": "src/server/server.mjs", "line": 147, "symbol": "requestListener", "note": "POST guard: 404 when !itemExists" },
-          { "path": "src/server/server.mjs", "line": 27, "symbol": "itemExists", "note": "type-dispatched existence check against the model/indexes" }
+          {
+            "path": "src/application/commands/add-context-item.ts",
+            "line": 12,
+            "symbol": "addContextItem",
+            "note": "guard: not-found when !itemExists, mapped to HTTP 404 by the route"
+          },
+          {
+            "path": "src/application/read-models/items.ts",
+            "line": 5,
+            "symbol": "itemExists",
+            "note": "type-dispatched existence check against the model/indexes"
+          }
         ]
       }
     },
@@ -109,10 +246,20 @@
       "inferred": true,
       "description": "A node, flow, or hotspot has been gathered into the context bundle. The fact holds only for a genuinely new ref; re-adding an existing item is absorbed silently and raises nothing.",
       "tactical": {
-        "explanation": "Realized by addToBundle inserting a new `type:id` entry into the Map and returning the updated ordered bundle. Observable to the operator as the pill count incrementing and a new drawer row, and to a connected Claude session as an extra item in the event-storming://selected-nodes resource on its next read.",
+        "explanation": "Realized by ContextBundle.add inserting a new `type:id` entry into the Map and returning the updated ordered bundle. Observable to the operator as the pill count incrementing and a new drawer row, and to a connected Claude session as an extra item in the event-storming://selected-nodes resource on its next read.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 21, "symbol": "addToBundle", "note": "bundle.set(key, ...) when absent; return getBundle()" },
-          { "path": "src/server/server.mjs", "line": 148, "symbol": "requestListener", "note": "respond { items: state.addToBundle(...) }" }
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 28,
+            "symbol": "add",
+            "note": "bundle.set(key, ...) when absent; return list()"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 143,
+            "symbol": "createServer",
+            "note": "respond { items: result.items } from addContextItem"
+          }
         ]
       }
     },
@@ -123,10 +270,20 @@
       "inferred": true,
       "description": "A single item has been dropped from the context bundle (via the right-click toggle or the drawer ✕). Idempotent: a remove of an absent item still returns the (unchanged) bundle.",
       "tactical": {
-        "explanation": "Realized by removeFromBundle deleting the `type:id` key and returning the updated ordered bundle. Surfaced by the store overwriting bundleItems, shrinking the drawer list and pill count.",
+        "explanation": "Realized by ContextBundle.remove deleting the `type:id` key and returning the updated ordered bundle. Surfaced by the store overwriting bundleItems, shrinking the drawer list and pill count.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 22, "symbol": "removeFromBundle", "note": "bundle.delete(key); return getBundle()" },
-          { "path": "src/server/server.mjs", "line": 152, "symbol": "requestListener", "note": "respond { items: state.removeFromBundle(...) }" }
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 32,
+            "symbol": "remove",
+            "note": "bundle.delete(key); return list()"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 147,
+            "symbol": "createServer",
+            "note": "respond { items: removeContextItem(...) }"
+          }
         ]
       }
     },
@@ -137,10 +294,20 @@
       "inferred": true,
       "description": "The entire context bundle has been emptied in one action, resetting it to the boot state.",
       "tactical": {
-        "explanation": "Realized by clearBundle() calling Map.clear(); the server returns { items: [] } and the store sets bundleItems to []. Modeled as a distinct event from ContextItemRemoved because it is a separate command (bulk reset, no id) with its own DELETE branch.",
+        "explanation": "Realized by ContextBundle.clear() calling Map.clear(); the server returns { items: [] } and the store sets bundleItems to []. Modeled as a distinct event from ContextItemRemoved because it is a separate command (bulk reset, no id) with its own DELETE branch.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 23, "symbol": "clearBundle", "note": "bundle.clear()" },
-          { "path": "src/server/server.mjs", "line": 153, "symbol": "requestListener", "note": "clearBundle then respond { items: [] }" }
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 37,
+            "symbol": "clear",
+            "note": "bundle.clear()"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 148,
+            "symbol": "createServer",
+            "note": "clearContextBundle then respond { items: [] }"
+          }
         ]
       }
     },
@@ -151,12 +318,32 @@
       "inferred": true,
       "description": "What the operator reads to review the gathered set: the slide-over drawer listing each item as a colored row (label, type, ✕) plus the count on the Context pill. Backed by the bundleItems array the store keeps in sync from every add/remove/clear response. GET /api/context also returns a rendered markdown projection of the same set, which the 'Copy all for Claude' clipboard export and the MCP resource reuse (both modeled by other flows).",
       "tactical": {
-        "explanation": "The store loads the bundle once on mount (getContext -> setBundleItems) and thereafter overwrites bundleItems from each mutation response, so the drawer/pill reflect server truth without re-fetching. ContextBundle.jsx maps bundleItems to rows via meta(item), resolving each ref's label/color from nodeById / hotspotById / model.flows. GET /api/context on the server returns { items, markdown } where markdown = renderBundleMarkdown(services, items) (context.mjs) — that markdown is the read-side projection the copy-for-claude flow and the event-storming://selected-nodes MCP resource render; this flow only writes the underlying set.",
+        "explanation": "The store loads the bundle once on mount (getContext -> setBundleItems) and thereafter overwrites bundleItems from each mutation response, so the drawer/pill reflect server truth without re-fetching. ContextBundle.jsx maps bundleItems to rows via meta(item), resolving each ref's label/color from nodeById / hotspotById / model.flows. GET /api/context on the server calls the listContextBundle query (application/queries/list-context-bundle.ts), which returns { items, markdown } where markdown = renderBundleMarkdown(services, items) (application/read-models/context.ts) — that markdown is the read-side projection the copy-for-claude flow and the event-storming://selected-nodes MCP resource render; this flow only writes the underlying set.",
         "anchors": [
-          { "path": "src/web/components/ContextBundle.jsx", "line": 43, "symbol": "ContextBundle", "note": "render bundleItems as drawer rows" },
-          { "path": "src/web/store.jsx", "line": 34, "symbol": "ExplorerProvider", "note": "getContext().then(setBundleItems) on mount" },
-          { "path": "src/server/server.mjs", "line": 139, "symbol": "requestListener", "note": "GET /api/context -> { items, markdown }" },
-          { "path": "src/server/context.mjs", "line": 171, "symbol": "renderBundleMarkdown", "note": "markdown projection reused by copy/MCP flows" }
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 43,
+            "symbol": "ContextBundle",
+            "note": "render bundleItems as drawer rows"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 34,
+            "symbol": "ExplorerProvider",
+            "note": "getContext().then(setBundleItems) on mount"
+          },
+          {
+            "path": "src/application/queries/list-context-bundle.ts",
+            "line": 6,
+            "symbol": "listContextBundle",
+            "note": "GET /api/context -> { items, markdown }"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 234,
+            "symbol": "renderBundleMarkdown",
+            "note": "markdown projection reused by copy/MCP flows"
+          }
         ]
       }
     },
@@ -167,9 +354,14 @@
       "inferred": true,
       "description": "A Claude session connected to the es-view MCP endpoint over streamable HTTP. It reads the bundle the operator built by @-mentioning the event-storming://selected-nodes resource, which returns the same in-memory set rendered as grounded markdown. The MCP read itself is a separate flow; this flow only references it as the downstream consumer.",
       "tactical": {
-        "explanation": "mcp.mjs registers the resource 'selected-nodes' at event-storming://selected-nodes; its read handler returns renderBundleMarkdown(services, state.getBundle()) over the SAME shared state object the /api/context routes mutate, so a browser add is visible to Claude on its next resource read.",
+        "explanation": "mcp-server.ts registers the resource 'selected-nodes' at event-storming://selected-nodes; its read handler returns renderBundleMarkdown(services, bundle.list()) over the SAME shared ContextBundle instance the /api/context routes mutate, so a browser add is visible to Claude on its next resource read.",
         "anchors": [
-          { "path": "src/server/mcp.mjs", "line": 87, "symbol": "registerResource", "note": "event-storming://selected-nodes reads state.getBundle()" }
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 83,
+            "symbol": "buildMcpServer",
+            "note": "event-storming://selected-nodes reads bundle.list()"
+          }
         ]
       }
     },
@@ -179,11 +371,16 @@
       "storeKind": "memory",
       "label": "In-process session state",
       "inferred": false,
-      "description": "The single in-memory state object created at server boot by createState(), holding the current selection and the context-bundle Map. Non-persistent (lost on restart, never written to disk) and process-global: one object is shared by all browser tabs and all MCP sessions in the run. The bundle sub-store is what this flow writes.",
+      "description": "The single in-memory Selection and ContextBundle instances created at server boot in the CLI composition root, holding the current selection and the context-bundle Map. Non-persistent (lost on restart, never written to disk) and process-global: one pair of instances is shared by all browser tabs and all MCP sessions in the run. The bundle instance is what this flow writes.",
       "tactical": {
-        "explanation": "createState() closes over `let selection` and `const bundle = new Map()`; the server constructs it once and passes the same instance to both the HTTP route handlers and every MCP session, which is why a click in the SPA is what a connected Claude reads.",
+        "explanation": "adapters/cli/es-view.ts's runView constructs `new Selection()` and `new ContextBundle()` once and passes both instances to startServer/createServer (HTTP route handlers) and createMcpHandler (every MCP session), which is why a click in the SPA is what a connected Claude reads.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 9, "symbol": "createState", "note": "single shared in-memory state (selection + bundle Map)" }
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 59,
+            "symbol": "runView",
+            "note": "single shared Selection + ContextBundle instances constructed once"
+          }
         ]
       }
     }
@@ -205,22 +402,86 @@
         "rm-context-bundle"
       ],
       "edges": [
-        { "from": "actor-operator", "to": "cmd-add-context-item", "verb": "issues" },
-        { "from": "actor-operator", "to": "cmd-remove-context-item", "verb": "issues" },
-        { "from": "actor-operator", "to": "cmd-clear-context-bundle", "verb": "issues" },
-        { "from": "cmd-add-context-item", "to": "agg-context-bundle", "verb": "handled by" },
-        { "from": "cmd-remove-context-item", "to": "agg-context-bundle", "verb": "handled by" },
-        { "from": "cmd-clear-context-bundle", "to": "agg-context-bundle", "verb": "handled by" },
-        { "from": "agg-context-bundle", "to": "inv-bundle-item-exists", "verb": "enforces" },
-        { "from": "agg-context-bundle", "to": "evt-context-item-added", "verb": "emits" },
-        { "from": "agg-context-bundle", "to": "evt-context-item-removed", "verb": "emits" },
-        { "from": "agg-context-bundle", "to": "evt-context-bundle-cleared", "verb": "emits" },
-        { "from": "agg-context-bundle", "to": "ds-session-state", "verb": "persists to" },
-        { "from": "evt-context-item-added", "to": "rm-context-bundle", "verb": "updates" },
-        { "from": "evt-context-item-removed", "to": "rm-context-bundle", "verb": "updates" },
-        { "from": "evt-context-bundle-cleared", "to": "rm-context-bundle", "verb": "updates" },
-        { "from": "rm-context-bundle", "to": "actor-operator", "verb": "read by" },
-        { "from": "rm-context-bundle", "to": "ext-claude-mcp", "verb": "read by" }
+        {
+          "from": "actor-operator",
+          "to": "cmd-add-context-item",
+          "verb": "issues"
+        },
+        {
+          "from": "actor-operator",
+          "to": "cmd-remove-context-item",
+          "verb": "issues"
+        },
+        {
+          "from": "actor-operator",
+          "to": "cmd-clear-context-bundle",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-add-context-item",
+          "to": "agg-context-bundle",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-remove-context-item",
+          "to": "agg-context-bundle",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-clear-context-bundle",
+          "to": "agg-context-bundle",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "inv-bundle-item-exists",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "evt-context-item-added",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "evt-context-item-removed",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "evt-context-bundle-cleared",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "ds-session-state",
+          "verb": "persists to"
+        },
+        {
+          "from": "evt-context-item-added",
+          "to": "rm-context-bundle",
+          "verb": "updates"
+        },
+        {
+          "from": "evt-context-item-removed",
+          "to": "rm-context-bundle",
+          "verb": "updates"
+        },
+        {
+          "from": "evt-context-bundle-cleared",
+          "to": "rm-context-bundle",
+          "verb": "updates"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "actor-operator",
+          "verb": "read by"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "ext-claude-mcp",
+          "verb": "read by"
+        }
       ],
       "hotspots": [
         "hot-bundle-single-global-state"
@@ -234,11 +495,26 @@
       "label": "One process-global bundle is shared by every browser tab and every Claude session",
       "description": "The context bundle is a single in-memory Map on the one shared state object, with no per-client or per-session scoping. If two browser tabs (or two people on the same es-view URL) are open, or one operator curates while a Claude session reads, they all mutate and see the SAME bundle: an add in one tab appears in the other, and a 'Clear' wipes everyone's set. For the intended single-local-developer workflow this is the feature (the SPA click is exactly what Claude reads). Human question: is single-user, single-run the only supported mode, or should the bundle be scoped per browser session / per MCP session once es-view is ever shared or multi-tab? Restart also silently drops the bundle (no persistence).",
       "tactical": {
-        "explanation": "createState() builds one state object with one `bundle` Map (state.mjs:9-10); the server passes that same instance to all HTTP handlers and every MCP session, and getBundle/addToBundle/removeFromBundle/clearBundle all operate on it with no client identity. The MCP resource reads the identical Map (mcp.mjs:96). There is no keying by tab, cookie, or Mcp-Session-Id.",
+        "explanation": "runView constructs one `ContextBundle` instance (adapters/cli/es-view.ts:60); the server passes that same instance to all HTTP handlers and every MCP session, and list/add/remove/clear all operate on it with no client identity. The MCP resource reads the identical instance (mcp-server.ts:92). There is no keying by tab, cookie, or Mcp-Session-Id.",
         "anchors": [
-          { "path": "src/server/state.mjs", "line": 10, "symbol": "createState", "note": "single global bundle Map, no per-client scope" },
-          { "path": "src/server/server.mjs", "line": 138, "symbol": "requestListener", "note": "all /api/context calls mutate the one shared state" },
-          { "path": "src/server/mcp.mjs", "line": 96, "symbol": "registerResource", "note": "MCP resource reads the same getBundle()" }
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 17,
+            "symbol": "ContextBundle",
+            "note": "single global bundle Map, no per-client scope"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 133,
+            "symbol": "createServer",
+            "note": "all /api/context calls mutate the one shared bundle instance"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 92,
+            "symbol": "buildMcpServer",
+            "note": "MCP resource reads the same bundle.list()"
+          }
         ]
       }
     }

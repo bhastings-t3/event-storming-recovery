@@ -1,7 +1,7 @@
 # Ubiquitous language mining (Phase 5)
 
 Run this **after the model is merged** (`{MODEL_PATH}` exists). The orchestrator fills the
-placeholders below, appends the **term schema** (`docs/flows-schema.md` → *Term*), and dispatches
+placeholders below, appends the **term schema** (`docs/reference/flows-schema.md` → *Term*), and dispatches
 each agent with a short, area-scoped task that points here. Terms feed the explorer's **Glossary**
 tab; the whole point is a curated **domain vocabulary**, not a list of stickies.
 
@@ -9,7 +9,7 @@ Placeholders:
 - `{REPO_ROOT}` — absolute path to the target checkout.
 - `{EXCLUDE}` — globs/paths to skip (build output, vendored deps, generated code).
 - `{MODEL_PATH}` — the merged `flows.json` (nodes + descriptions already hold most candidate terms).
-- `{SCHEMA_PATH}` — `docs/flows-schema.md` (the *Term* section is the output contract).
+- `{SCHEMA_PATH}` — `docs/reference/flows-schema.md` (the *Term* section is the output contract).
 - `{TRACES_DIR}` — where you write your output (the same dir the flow traces live in; the merge
   tool folds every `*.json` in it into the model).
 - `{AREA}` — the slice you own (a bounded area / aggregate cluster), so the wave parallelizes.

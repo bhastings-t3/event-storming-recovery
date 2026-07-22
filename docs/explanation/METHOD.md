@@ -1,5 +1,7 @@
 # The method
 
+*Explanation. Part of the [documentation set](../README.md).*
+
 This is the reasoning behind the six phases — why the process is shaped the way it is, so you can
 adapt it rather than follow it blindly. The runnable version is `prompts/00-orchestrator.md`; this
 document explains it.

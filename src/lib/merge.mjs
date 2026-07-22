@@ -16,7 +16,7 @@ const ANCHOR_REQUIRED = new Set(['command', 'aggregate', 'event', 'policy', 'rea
 const TERM_STATUS = new Set(['resolved', 'partial', 'unresolved']);
 const TERM_CATEGORIES = new Set(['concept', 'jargon', 'acronym', 'role', 'system', 'state', 'metric']);
 
-// Data-model field lineage enums (see docs/flows-schema.md). Nonstandard values are warnings, not
+// Data-model field lineage enums (see docs/reference/flows-schema.md). Nonstandard values are warnings, not
 // errors, mirroring the forgiving treatment of nonstandard edge verbs.
 const FIELD_CONFIDENCE = new Set(['high', 'medium', 'low']);
 // Physical-storage containment (the data-model layer is technology-neutral): a `datastore` nests

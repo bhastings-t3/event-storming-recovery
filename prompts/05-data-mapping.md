@@ -5,14 +5,14 @@ the **data model**: what each read model / aggregate actually returns, and the p
 code touches (datastores and fields — whatever the storage actually is), cross-linked to the
 behavioral nodes. It feeds the explorer's **Data model** tab and the `fields` sections of the detail panel.
 
-The orchestrator fills the placeholders, appends the **Data model** section of `docs/flows-schema.md`,
+The orchestrator fills the placeholders, appends the **Data model** section of `docs/reference/flows-schema.md`,
 and dispatches each agent with a short, area-scoped task that points here.
 
 Placeholders:
 - `{REPO_ROOT}` — absolute path to the target checkout.
 - `{EXCLUDE}` — globs/paths to skip (build output, vendored deps, generated code).
 - `{MODEL_PATH}` — the merged `flows.json` (the read models / aggregates you annotate already exist).
-- `{SCHEMA_PATH}` — `docs/flows-schema.md` (the **Data model** section is the output contract).
+- `{SCHEMA_PATH}` — `docs/reference/flows-schema.md` (the **Data model** section is the output contract).
 - `{TRACES_DIR}` — where you write output (the merge tool folds every `*.json` in it into the model).
 - `{AREA}` — the slice you own (a bounded area / aggregate cluster), so the wave parallelizes.
 

@@ -41,7 +41,7 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 2. **Triage** (`prompts/02-triage.md`) — put the flow list to the human; agree which flows get
    individual traces vs. pattern exemplars; agree coverage depth and delivery.
 3. **Deep-trace** — write the shared briefing (`prompts/03-trace-briefing.md`, filled with repo
-   root, excludes, the glossary, and a link to `docs/flows-schema.md`). **Run one pilot trace,
+   root, excludes, the glossary, and a link to `docs/reference/flows-schema.md`). **Run one pilot trace,
    read its "schema friction", fix the schema/briefing**, then run the rest in waves (~7
    concurrent). Each trace agent verifies **reachability** (catches dead/superseded flows), traces
    end to end, and **writes its own `<flow-id>.json` + `.notes.md`** — never route large JSON back
@@ -89,7 +89,7 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 - `prompts/` — the orchestrator playbook, the five scout templates, the triage step, the trace
   briefing, the glossary-mining briefing, and `recursive-exploration.md` (the shared recursion
   protocol every sub-agent inherits).
-- `docs/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
+- `docs/reference/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
 - `tools/merge-flows.js`, `tools/generate-views.js` — merge+validate, and render DOT+explorer.
 - `examples/event-storming-recovery/` — the bundled example (this tool's own recovered self-model);
   rebuild it in seconds to see the output shape: `npm run demo`. A small synthetic fixture also lives

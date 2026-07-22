@@ -11,15 +11,14 @@ import { mergeTraceDocs } from '../dist/node/domain/model/merge.js';
 import { mergeTracesDir } from '../dist/node/adapters/fs/model-repository.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const merge = join(root, 'dist', 'node', 'adapters', 'cli', 'es-merge.js');
-const generate = join(root, 'dist', 'node', 'adapters', 'cli', 'es-generate.js');
+const cli = join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js');
 const toyTraces = join(root, 'tests', 'fixtures', 'toy-shop', 'traces');
 
 test('merge validates the toy-shop traces and emits the expected model', () => {
   const out = mkdtempSync(join(tmpdir(), 'es-'));
   try {
     const model = join(out, 'flows.json');
-    execFileSync('node', [merge, toyTraces, model], { stdio: 'pipe' });
+    execFileSync('node', [cli, 'merge', toyTraces, model], { stdio: 'pipe' });
     const m = JSON.parse(readFileSync(model, 'utf8'));
 
     assert.equal(m.flows.length, 2, 'two flows');
@@ -49,8 +48,8 @@ test('generate-views emits a self-contained explorer and a valid DOT', () => {
   const out = mkdtempSync(join(tmpdir(), 'es-'));
   try {
     const model = join(out, 'flows.json');
-    execFileSync('node', [merge, toyTraces, model], { stdio: 'pipe' });
-    execFileSync('node', [generate, model, out, '--title', 'Smoke Title'], { stdio: 'pipe' });
+    execFileSync('node', [cli, 'merge', toyTraces, model], { stdio: 'pipe' });
+    execFileSync('node', [cli, 'generate', model, out, '--title', 'Smoke Title'], { stdio: 'pipe' });
 
     const html = readFileSync(join(out, 'explorer.html'), 'utf8');
     assert.match(html, /<title>Smoke Title<\/title>/, 'title is injected');
@@ -82,7 +81,7 @@ test('merge REJECTS an invalid glossary term (dangling relatedNodes / unflagged 
   }));
   try {
     assert.throws(
-      () => execFileSync('node', [merge, traces, join(out, 'flows.json')], { stdio: 'pipe' }),
+      () => execFileSync('node', [cli, 'merge', traces, join(out, 'flows.json')], { stdio: 'pipe' }),
       'merge should exit non-zero on a dangling relatedNodes ref and an unresolved term missing its openQuestion'
     );
   } finally {
@@ -110,7 +109,7 @@ test('merge REJECTS an invalid model (aggregate issuing a command)', () => {
   }));
   try {
     assert.throws(
-      () => execFileSync('node', [merge, traces, join(out, 'flows.json')], { stdio: 'pipe' }),
+      () => execFileSync('node', [cli, 'merge', traces, join(out, 'flows.json')], { stdio: 'pipe' }),
       'merge should exit non-zero on an aggregate that issues a command'
     );
   } finally {

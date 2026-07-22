@@ -19,10 +19,8 @@
     "node": ">=20"
   },
   "bin": {
-    "event-storming-recovery": "dist/node/adapters/cli/es-view.js",
-    "es-view": "dist/node/adapters/cli/es-view.js",
-    "es-merge": "dist/node/adapters/cli/es-merge.js",
-    "es-generate": "dist/node/adapters/cli/es-generate.js"
+    "event-storming-recovery": "dist/node/adapters/cli/cli.js",
+    "es-view": "dist/node/adapters/cli/cli.js"
   },
   "files": [
     "dist",
@@ -41,7 +39,7 @@
     "build:web": "vite build",
     "build": "npm run build:node && npm run build:web",
     "typecheck": "tsc --noEmit -p tsconfig.node.json",
-    "preview": "npm run build && node dist/node/adapters/cli/es-view.js",
+    "preview": "npm run build && node dist/node/adapters/cli/cli.js",
     "demo": "node scripts/build-example.mjs",
     "pretest": "npm run build:node",
     "test": "node --test",
@@ -66,6 +64,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^15.0.0",
     "zod": "^4.4.3"
   }
 }

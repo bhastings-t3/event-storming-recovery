@@ -7,11 +7,12 @@ import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mergeTraceDocs, mergeTracesDir } from '../src/lib/merge.mjs';
+import { mergeTraceDocs } from '../dist/node/domain/model/merge.js';
+import { mergeTracesDir } from '../dist/node/adapters/fs/model-repository.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const merge = join(root, 'tools', 'merge-flows.js');
-const generate = join(root, 'tools', 'generate-views.js');
+const merge = join(root, 'dist', 'node', 'adapters', 'cli', 'es-merge.js');
+const generate = join(root, 'dist', 'node', 'adapters', 'cli', 'es-generate.js');
 const toyTraces = join(root, 'tests', 'fixtures', 'toy-shop', 'traces');
 
 test('merge validates the toy-shop traces and emits the expected model', () => {

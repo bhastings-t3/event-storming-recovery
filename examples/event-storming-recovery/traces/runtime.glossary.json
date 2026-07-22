@@ -1,0 +1,284 @@
+{
+  "terms": [
+    {
+      "id": "term-rt-es-view",
+      "term": "es-view",
+      "category": "system",
+      "aka": ["event-storming-recovery view", "the viewer", "the explorer server"],
+      "definition": "The npm bin (`bin/es-view.mjs`) that boots a running Explorer session: it resolves which model to serve, wires shared in-memory state and the comment sidecar, mounts the SPA + JSON API + MCP endpoint on one local `http.Server`, binds a port, and best-effort opens the browser. Run via `npx event-storming-recovery view` (aliased `es-view`).",
+      "relatedNodes": ["agg-server-session", "cmd-launch-explorer"],
+      "anchors": [
+        { "path": "bin/es-view.mjs", "line": 76, "symbol": "main", "note": "the whole boot orchestration" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-explorer",
+      "term": "Explorer",
+      "category": "system",
+      "aka": ["the SPA", "explorer.html", "the app"],
+      "definition": "The interactive React single-page app es-view serves (Flows board, Gallery, Overview, Glossary, Data model tabs plus a source-linked Detail panel). The same model also renders to a self-contained static `explorer.html` via `es-generate`, so 'Explorer' names both the running app and its generated offline twin.",
+      "relatedNodes": ["rm-flows-board", "rm-gallery", "rm-overview", "rm-glossary", "rm-detail-panel"],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-mcp-server",
+      "term": "MCP server",
+      "category": "system",
+      "aka": ["the /mcp endpoint", "the MCP bridge"],
+      "definition": "The Model Context Protocol face es-view mounts at `POST /mcp`, in the SAME process as the web UI so it shares the same in-memory selection and context-bundle state. A connected Claude session is an MCP client of it (`ext-claude-mcp`); the plugin declares it in `.claude-plugin/plugin.json` so it can be one-command-connected.",
+      "relatedNodes": ["agg-server-session", "ext-claude-mcp"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 1, "symbol": "createMcpHandler", "note": "\"Runs in the SAME process as the web UI and shares its in-memory state\"" }
+      ],
+      "status": "partial",
+      "openQuestion": "src/server/mcp.mjs's own header comment (line 4) calls the transport 'stateless', but createMcpHandler's JSDoc and mcp.md both call it STATEFUL, and the implementation keeps a `transports` Map keyed by Mcp-Session-Id (per-session state) — which description is authoritative, and should the stale comment be fixed? (Flagged in the model as hot-mcp-read-desc-drift's neighbor; no hotspot currently names this specific stateless/stateful self-contradiction.)"
+    },
+    {
+      "id": "term-rt-mcp-tool",
+      "term": "MCP tool",
+      "category": "concept",
+      "definition": "A pull-based, always-fresh MCP call the connected Claude session invokes on demand (no subscription): `get_current_selection`, `get_node`, `get_flow`, `list_model`, `list_data_model`. Chosen deliberately over a resource for 'current selection' because a tool call always re-reads live state, per the design note in mcp.mjs.",
+      "aka": ["get_current_selection", "get_node", "get_flow", "list_model", "list_data_model"],
+      "relatedNodes": ["cmd-get-current-selection", "rm-model-listing", "rm-grounded-node", "rm-data-model"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 5, "symbol": "buildMcpServer", "note": "\"current selection\" is a TOOL (always fresh, no subscription needed)" },
+        { "path": "src/server/mcp.mjs", "line": 22, "symbol": "get_current_selection" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-mcp-resource",
+      "term": "MCP resource",
+      "category": "concept",
+      "definition": "An @-mentionable MCP artifact the user (or Claude) can attach to a chat turn wholesale, rather than call. The Explorer exposes exactly one: `event-storming://selected-nodes`, the curated context bundle rendered as one grounded Markdown document (mimeType text/markdown).",
+      "aka": ["event-storming://selected-nodes"],
+      "relatedNodes": ["rm-selected-bundle"],
+      "anchors": [
+        { "path": "src/server/mcp.mjs", "line": 6, "symbol": "buildMcpServer", "note": "the curated bundle is a RESOURCE the user can @-mention" },
+        { "path": "src/server/mcp.mjs", "line": 87, "symbol": "registerResource", "note": "selected-nodes / event-storming://selected-nodes" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-context-bundle",
+      "term": "Context bundle",
+      "category": "concept",
+      "aka": ["the bundle", "Add to context bundle"],
+      "definition": "The insertion-ordered, deduped set of typed refs (`{ type: node|flow|hotspot, id }`) the operator gathers via right-click → 'Add to context bundle' across the SPA. Purely in-memory per server run; it is the read side both the clipboard's 'Copy all for Claude' and the `event-storming://selected-nodes` MCP resource render from.",
+      "relatedNodes": ["agg-context-bundle", "rm-context-bundle", "rm-selected-bundle"],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-current-selection",
+      "term": "Current selection",
+      "category": "state",
+      "aka": ["the selected node", "\"the node the user is looking at\""],
+      "definition": "The single node id (plus click timestamp) the operator most recently opened in the Detail panel, held in the same in-memory slot the API write side and the MCP read side both close over. This is the mechanism behind 'explain the selected node/aggregate' — a browser click becomes instantly readable to a connected Claude session with no polling.",
+      "relatedNodes": ["agg-selection", "cmd-select-node", "evt-node-selected", "cmd-get-current-selection"],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-grounded-markdown",
+      "term": "Grounded Markdown",
+      "category": "concept",
+      "aka": ["Copy for Claude", "Copy all for Claude", "grounded context"],
+      "definition": "The ready-to-paste Markdown rendering of a node, flow, hotspot, or the whole context bundle: label, description, fields, invariants/related, flows, human comments, and — for every tactical anchor — the ACTUAL source code re-read fresh from disk. It is the one projection shared by the clipboard 'Copy for Claude' actions, the MCP tools, and the `selected-nodes` MCP resource, so 'grounded' means every claim is backed by a live source-file read, not a cached label.",
+      "relatedNodes": ["rm-grounded-markdown", "cmd-copy-for-claude", "rm-grounded-node"],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-sidecar",
+      "term": "Sidecar",
+      "category": "concept",
+      "aka": ["comments.json"],
+      "definition": "A persisted file kept deliberately OUTSIDE the canonical `flows.json`, next to the model, so a pipeline re-run (merge/generate) never wipes it. The only current instance is `comments.json` — human notes keyed by an item's stable `type:id` so they survive a full model rebuild.",
+      "relatedNodes": ["ds-comments-json", "agg-comment-store"],
+      "anchors": [
+        { "path": "src/server/comments.mjs", "line": 15, "symbol": "createCommentStore" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-provenance-banner",
+      "term": "Provenance banner",
+      "category": "concept",
+      "definition": "The console output es-view prints at boot (and echoes on `/api/model`'s meta) stating WHERE the served model came from: a source tag (model/traces/discovered/example), the sourcePath, the derived repoRoot, flow/node/hotspot counts, and any resolution warnings. It is how an operator catches 'it served the wrong flows.json' or 'it silently fell back to the bundled example'.",
+      "relatedNodes": ["rm-model-provenance", "evt-model-resolved"],
+      "anchors": [
+        { "path": "bin/es-view.mjs", "line": 103, "symbol": "main", "note": "banner: model/from/repo-root/contents + per-warning lines" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-model-resolution",
+      "term": "Model resolution",
+      "category": "concept",
+      "aka": ["the 4-tier precedence", "ResolveModel"],
+      "definition": "The single choke point (`resolveModel`) that decides which flows.json a running es-view session serves, in fixed highest-first precedence: (1) `--model <flows.json>` explicit path, (2) `--traces <dir>` merge-on-the-fly (full validation; throws on error), (3) auto-discovered flows.json under cwd (bounded recursive walk, warns on multiple candidates), (4) the bundled self-model example as a last-resort fallback. It also derives `repoRoot` for resolving source anchors.",
+      "relatedNodes": ["cmd-resolve-model", "evt-model-resolved", "inv-model-shape"],
+      "anchors": [
+        { "path": "src/server/resolve-model.mjs", "line": 66, "symbol": "resolveModel", "note": "entry: 4-tier precedence dispatcher" }
+      ],
+      "status": "partial",
+      "openQuestion": "Only the --traces tier runs full merge-invariant validation (inv-model-shape is the only guard on tiers 1/3/4); a structurally-shaped but semantically-invalid flows.json (dangling refs, an aggregate that issues a command) passes tiers 1/3/4 unchecked. Is that an accepted tradeoff (trust the file on the other three tiers) or a gap to close?"
+    },
+    {
+      "id": "term-rt-merge",
+      "term": "Merge",
+      "category": "concept",
+      "aka": ["es-merge", "merge-flows.js", "MergeTraces"],
+      "definition": "The deterministic ETL step (`tools/merge-flows.js`, bin name `es-merge`) that folds every per-flow trace document in a traces directory into one canonical, validated `flows.json`: nodes unioned by global id (first-seen type/label wins, longest description wins, fields unioned by name), flows/hotspots/terms deduped, then checked against every structural invariant. `resolveModel`'s `--traces` tier calls the same merge logic in-process rather than shelling out to the CLI.",
+      "relatedNodes": ["cmd-merge-traces", "evt-model-merged", "evt-model-validated"],
+      "anchors": [
+        { "path": "src/lib/merge.mjs", "line": 65, "symbol": "mergeTraceDocs", "note": "seed/union nodes, accumulate flows, validate, build model" },
+        { "path": "tools/merge-flows.js", "line": 24, "symbol": "cli" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-generate",
+      "term": "Generate",
+      "category": "concept",
+      "aka": ["es-generate", "generate-views.js", "GenerateViews"],
+      "definition": "The deterministic, stateless render step (`tools/generate-views.js`, bin name `es-generate`) that reads a canonical `flows.json` and writes two files: `flows.dot` (a Graphviz digraph, one cluster per flow) and a single self-contained `explorer.html` with the whole model inlined. It trusts the merge's output contract fully — no re-validation on the generate side.",
+      "relatedNodes": ["cmd-generate-views", "rm-flows-dot", "rm-explorer-html"],
+      "anchors": [
+        { "path": "tools/generate-views.js", "line": 24, "symbol": "cli", "note": "JSON.parse(readFileSync(flowsFile)) -- no try/catch, no validation" }
+      ],
+      "status": "partial",
+      "openQuestion": "es-generate fully trusts es-merge's output and never validates; is that an acceptable division of labor (validate-once-at-merge) given a hand-edited or externally-produced flows.json could reach es-generate directly (see hot-generator-trusts-unvalidated-model)?"
+    },
+    {
+      "id": "term-rt-scout",
+      "term": "Scout",
+      "category": "role",
+      "definition": "One of five Phase-1 inventory agents (UI, automations/background, API/auth/protocol, external integrations, data layer) that run concurrently and read-only over the target codebase to find every entry point. Their combined output is a flow-candidate inventory plus a shared-id glossary of the recurring aggregates/external systems/actors every later trace agent reuses. A scout must be spawned as a recursion-capable agent type (`general-purpose`/`claude`), never `Explore`, so it can itself spawn children per the recursive-exploration protocol.",
+      "anchors": [
+        { "path": "prompts/01-scouts.md", "line": 1, "symbol": null, "note": "Scout templates (Phase 1)" },
+        { "path": "docs/METHOD.md", "line": 69, "symbol": null, "note": "Phase 1 — Inventory: five scouts, five lanes" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-deep-trace",
+      "term": "Deep-trace",
+      "category": "role",
+      "aka": ["trace agent", "tracer"],
+      "definition": "A Phase-3 agent that owns one domain flow end to end: verifies reachability at both ends (a real actor-reachable trigger, and a real final effect — 'dead-but-armed' code that compiles and is wired but nothing can start is not reachable), traces the main spine, spawns its own children to chase high-signal side-branches, and writes its own `<flow-id>.json` + `<flow-id>.notes.md` into the traces directory. One pilot trace runs before the rest, specifically to surface schema/briefing gaps cheaply.",
+      "relatedNodes": ["ds-trace-json"],
+      "anchors": [
+        { "path": "prompts/03-trace-briefing.md", "line": 1, "symbol": null, "note": "Deep-trace agent briefing (Phase 3)" },
+        { "path": "docs/METHOD.md", "line": 99, "symbol": null, "note": "Phase 3 — Deep-trace: pilot first, then waves" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-orchestrator",
+      "term": "Orchestrator",
+      "category": "role",
+      "definition": "The top-level driver of the recovery workflow (`prompts/00-orchestrator.md`). It never reads the target codebase itself — it dispatches scouts, trace agents, and glossary miners, persists every sub-agent's return to disk immediately, and makes the human-facing judgment calls (triage, coverage tiers). Its context stays clean specifically because file-reading happens inside sub-agents, not in its own turn.",
+      "anchors": [
+        { "path": "prompts/00-orchestrator.md", "line": 1, "symbol": null, "note": "# Orchestrator playbook" },
+        { "path": "prompts/00-orchestrator.md", "line": 3, "symbol": null, "note": "\"You are the orchestrator. You do not read the whole codebase yourself\"" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-recovery-workflow",
+      "term": "Recovery workflow",
+      "category": "concept",
+      "aka": ["the six phases", "the pipeline"],
+      "definition": "The end-to-end, agent-orchestrated process this repo encodes: Phase 1 Inventory (scouts) → Phase 2 Triage (human checkpoint) → Phase 3 Deep-trace (pilot then waves) → Phase 4 Merge & consistency → Phase 5 Ubiquitous-language mining → optional Phase 5.5 Data mapping → Phase 6 Generate & verify. Only the schema, merge/validate, and render are deterministic; the reading and judgment throughout are agent-driven.",
+      "anchors": [
+        { "path": "docs/METHOD.md", "line": 1, "symbol": null, "note": "# The method — reasoning behind the six phases" },
+        { "path": "README.md", "line": 140, "symbol": null, "note": "How it works — mermaid flowchart of all six (+5.5) phases" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-recursive-exploration",
+      "term": "Recursive exploration",
+      "category": "concept",
+      "definition": "The shared sub-agent protocol (`prompts/recursive-exploration.md`) every scout, trace agent, and glossary miner inherits: no agent is a leaf by default — hitting a high-signal pathway (a hub, a contradiction, an unfamiliar subsystem, a model-forking branch) means spawning your own children to chase it, aggressively (3-4 levels deep, as much fan-out as the pathway has branches), bounded by convergence (a child that changes nothing is the brake) and the harness's hard depth cap of 5. Every agent in the tree still writes its own artifacts to files and returns only short conclusions plus code anchors.",
+      "anchors": [
+        { "path": "prompts/recursive-exploration.md", "line": 1, "symbol": null },
+        { "path": "prompts/recursive-exploration.md", "line": 24, "symbol": null, "note": "Hard depth cap = 5, fixed and non-configurable" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-npx-delivery",
+      "term": "npx delivery",
+      "category": "concept",
+      "definition": "Running the Explorer straight from the published npm package with no local install step: `npx event-storming-recovery view`. The package exposes four bins (`event-storming-recovery`/`es-view` → `bin/es-view.mjs`, `es-merge` → `tools/merge-flows.js`, `es-generate` → `tools/generate-views.js`). As of this glossary's writing the README flags this is not yet published to npm, so it currently works for local development via `npm link`.",
+      "anchors": [
+        { "path": "package.json", "line": 1, "symbol": "bin", "note": "four bins: event-storming-recovery/es-view, es-merge, es-generate" }
+      ],
+      "status": "partial",
+      "openQuestion": "README states the npx flow needs the event-storming-recovery npm package published, tracked as an open repo issue. Has it since been published, and is npx delivery now the default install path rather than npm link?"
+    },
+    {
+      "id": "term-rt-plugin",
+      "term": "Plugin",
+      "category": "system",
+      "definition": "The Claude Code plugin form of this repo (`.claude-plugin/plugin.json`): installing it bundles both skills (`event-storming-recovery`, `event-storming-explorer`), the MCP server declaration (so the Explorer's `/mcp` endpoint auto-connects once running), and the bundled prompts/tools — so a user never runs the raw CLI commands by hand.",
+      "anchors": [
+        { "path": ".claude-plugin/plugin.json", "line": 1 }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-marketplace",
+      "term": "Marketplace",
+      "category": "system",
+      "definition": "The Claude Code plugin-distribution manifest (`.claude-plugin/marketplace.json`) that lists this repo's own plugin so it is installable via `/plugin marketplace add bhastings-t3/event-storming-recovery` then `/plugin install event-storming-recovery@event-storming-recovery`. This repo is simultaneously the marketplace and the one plugin it hosts.",
+      "anchors": [
+        { "path": ".claude-plugin/marketplace.json", "line": 1 }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-repo-root",
+      "term": "Repo root",
+      "category": "concept",
+      "aka": ["repoRoot", "--repo-root"],
+      "definition": "The absolute base directory every tactical anchor's relative `path` is resolved against, and the sandbox boundary source reads may not escape. Derived by model resolution in precedence order: explicit `--repo-root` flag > (bundled-example fallback → the package's own root) > the model file's `meta.repoRoot` > the process's cwd.",
+      "relatedNodes": ["ds-repo-fs", "agg-source-reader", "inv-repo-root-sandbox"],
+      "anchors": [
+        { "path": "src/server/resolve-model.mjs", "line": 99, "symbol": "resolveModel", "note": "repoRoot derivation: flag > example->packageRoot > meta.repoRoot > cwd" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-anchor",
+      "term": "Anchor",
+      "category": "concept",
+      "aka": ["tactical.anchors", "source anchor"],
+      "definition": "A `{ path, line, symbol }` pointer from a model node to the exact source that implements it. Anchors are how the Explorer moves between the strategic (sticky) and tactical (code) planes: they back the inline 'view source' excerpt, the VS Code deep link, and every grounded Markdown export's inlined code. `symbol` (method/handler/class) is strongly encouraged because it survives rebases; `line` alone rots.",
+      "relatedNodes": ["cmd-view-source", "rm-source-excerpt", "ds-repo-source-file"],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-vscode-deep-link",
+      "term": "VS Code deep link",
+      "category": "concept",
+      "definition": "A `vscode://file/<repoRoot>/<path>:<line>` URL built from an anchor and baked into every node's rendered anchors in both the DOT graph and the Explorer, so clicking a recovered concept opens the exact source line in the analyzed checkout, in the local editor. Resolution is entirely handed off to the OS/browser's `vscode://` scheme handler; the app has no further involvement once the link is clicked.",
+      "relatedNodes": ["ext-vscode"],
+      "anchors": [
+        { "path": "src/web/model.js", "line": 43, "symbol": "anchorUrl", "note": "build 'vscode://file/' + repoRoot + '/' + a.path + ':' + line" }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-rt-self-model-example",
+      "term": "Self-model example",
+      "category": "concept",
+      "aka": ["the bundled example", "examples/event-storming-recovery"],
+      "definition": "This tool's own recovered Event Storming model — the recovery workflow run against this repository itself, covering the CLI, the es-view server, and the MCP bridge. Shipped at `examples/event-storming-recovery/` (traces, model/flows.json, flows.dot, explorer.html) and rebuilt by `npm run demo` (BuildExample: es-merge then es-generate over the committed traces). It doubles as model resolution's tier-4 fallback, so `es-view` always has something to show even with no model of its own.",
+      "relatedNodes": ["ds-example-model", "cmd-build-example", "ds-traces-dir"],
+      "status": "partial",
+      "openQuestion": "hot-demo-example-drift notes CI re-runs `npm run demo` on every push but never diffs the regenerated output against the committed example — so the checked-in self-model example can silently drift from what `npm run demo` would currently produce. Should CI fail the build on a diff instead of only smoke-testing that the pipeline runs?"
+    }
+  ]
+}

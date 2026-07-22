@@ -5,53 +5,20 @@
       "type": "actor",
       "label": "Operator",
       "inferred": true,
-      "description": "The developer/orchestrator who runs the recovery CLIs (es-merge, es-generate, demo) and launches es-view. Here they invoke the merge to fold per-flow traces into the canonical model."
-    },
-    {
-      "id": "ext-source-fs",
-      "type": "externalSystem",
-      "label": "Local filesystem",
-      "inferred": false,
-      "description": "The local filesystem outside the process boundary. Holds the per-flow trace JSONs read as input and receives the merged flows.json written as output (CLI path only; the server keeps the merged model in memory).",
-      "tactical": {
-        "explanation": "Reached via node:fs. mergeTracesDir does fs.readdirSync(tracesDir) + fs.readFileSync(file) to load *.json inputs; the CLI front end (merge-flows.js) does fs.writeFileSync(outFile, JSON) to persist the result. The in-memory --traces server path never touches the write side.",
-        "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 239,
-            "symbol": "mergeTracesDir",
-            "note": "readdirSync + readFileSync of *.json"
-          },
-          {
-            "path": "tools/merge-flows.js",
-            "line": 31,
-            "symbol": "cli",
-            "note": "writeFileSync(outFile, model)"
-          }
-        ]
-      }
+      "description": "The developer/orchestrator who runs the recovery CLIs (es-merge, es-generate, demo) and launches es-view. Here they invoke the merge to fold a directory of per-flow trace JSONs into the one canonical, validated model."
     },
     {
       "id": "rm-trace",
       "type": "readModel",
       "label": "Per-flow trace JSON",
       "inferred": true,
-      "description": "A single per-flow trace document authored by a deep-trace agent: { nodes, flows, hotspots, terms } for one flow. The merge reads every such file in the traces directory as the raw material for the model.",
+      "description": "A single per-flow trace document authored by a deep-trace agent: { nodes, flows, hotspots, terms } for one flow. Every such file in the traces directory is the raw material the merge consumes; a parse failure is collected and the file skipped rather than aborting the run.",
       "tactical": {
-        "explanation": "Each *.json in the traces dir is JSON.parsed into a { doc, name } source. mergeTraceDocs iterates doc.nodes / doc.flows / doc.hotspots / doc.terms. A parse failure is collected as a parseError (the file is skipped) rather than aborting the whole merge.",
+        "explanation": "mergeTracesDir reads every *.json in the directory (sorted) and JSON.parses each into a { doc, name } source; an unparseable file becomes a parseError and is skipped, not fatal. mergeTraceDocs then iterates each source's doc.nodes / doc.flows / doc.hotspots / doc.terms. This read model is what the command projects from the trace files on disk.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 244,
-            "symbol": "mergeTracesDir",
-            "note": "JSON.parse each file into a source doc; parse errors collected"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 71,
-            "symbol": "mergeTraceDocs",
-            "note": "iterate each source doc's nodes/flows/hotspots/terms"
-          }
+          { "path": "src/lib/merge.mjs", "line": 241, "symbol": "mergeTracesDir", "note": "readdirSync + filter *.json, sorted" },
+          { "path": "src/lib/merge.mjs", "line": 248, "symbol": "mergeTracesDir", "note": "JSON.parse each file into a source doc; parse errors collected, file skipped" },
+          { "path": "src/lib/merge.mjs", "line": 76, "symbol": "mergeTraceDocs", "note": "iterate each source doc's nodes/flows/hotspots/terms" }
         ]
       }
     },
@@ -60,34 +27,14 @@
       "type": "command",
       "label": "MergeTraces",
       "inferred": true,
-      "description": "Fold every per-flow trace document into one canonical, validated model. Nodes are unioned by global id, flows/hotspots/terms accumulated, derived meta computed, and all invariants checked before the model is returned.",
+      "description": "Fold every per-flow trace document into one canonical, validated model: union shared nodes by global id, accumulate flows/hotspots/terms, compute derived meta, and check every invariant before the model is returned to the caller.",
       "tactical": {
-        "explanation": "ETL transform (single plane, kept in tactical per the two-plane rule): (1) mergeTracesDir reads the dir and JSON.parses each *.json; (2) mergeTraceDocs SEEDS/UNIONS nodes into a Map keyed by global id -- first-seen type/label wins, longest description wins, ownedBy/synchronous/inferred-false/physical attrs fill forward, fields[] union by name (later data-pass authoritative), provenance appended (set-union), and each source's tactical detail is appended as a per-flow `usages` entry; (3) flows deduped by id, hotspots/terms deduped; (4) VALIDATE against all invariants (referential integrity, ES grammar, terms contract, data lineage), accumulating errors/warnings; (5) build the model object with derived meta (counts, sharedGlossary, deadFlows). Callers own IO: merge-flows.js writes the file and maps errors->exit 1; resolve-model.mjs throws on errors so the server never serves an invalid model. Neither parse/seed/union/validate stage is promoted to its own aggregate/policy/event.",
+        "explanation": "A deterministic ETL transform kept in a single plane per the two-plane rule (parse/seed/union/validate stages are NOT promoted to aggregates/policies/events). (1) mergeTracesDir reads the dir and JSON.parses each *.json. (2) mergeTraceDocs SEEDS/UNIONS nodes into a Map keyed by global id: first-seen type/label wins; longest description wins; ownedBy / synchronous / inferred-false / physical attrs (parent, storeKind, fieldKind, dataType, host, engine, nullable) fill forward; fields[] union by name (a later data-pass trace is authoritative on a field); provenance set-unioned; each source's tactical block appended as a per-flow `usages` entry. (3) flows deduped by id, hotspots/terms deduped keeping first. (4) VALIDATE against every invariant, accumulating errors[] and warnings[]. (5) Build the model with derived meta. The command reads the trace files (via rm-trace) and connects the filesystem; the caller owns IO: merge-flows.js writes flows.json and maps errors to exit 1, resolve-model.mjs throws on errors so the server never serves an invalid model.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 238,
-            "symbol": "mergeTracesDir",
-            "note": "read dir, parse *.json, delegate to mergeTraceDocs"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 63,
-            "symbol": "mergeTraceDocs",
-            "note": "seed/union nodes, accumulate flows, validate, build model"
-          },
-          {
-            "path": "tools/merge-flows.js",
-            "line": 24,
-            "symbol": "cli",
-            "note": "CLI front end: argv, writeFileSync, exit codes"
-          },
-          {
-            "path": "src/server/resolve-model.mjs",
-            "line": 75,
-            "symbol": "resolveModel",
-            "note": "in-memory --traces path; throws on validation errors"
-          }
+          { "path": "src/lib/merge.mjs", "line": 240, "symbol": "mergeTracesDir", "note": "read dir, parse *.json, delegate to mergeTraceDocs" },
+          { "path": "src/lib/merge.mjs", "line": 65, "symbol": "mergeTraceDocs", "note": "seed/union nodes, accumulate flows, validate, build model" },
+          { "path": "tools/merge-flows.js", "line": 24, "symbol": "cli", "note": "CLI front end: argv, writeFileSync, exit codes" },
+          { "path": "src/server/resolve-model.mjs", "line": 76, "symbol": "resolveModel", "note": "in-memory --traces path; throws on any validation error" }
         ]
       }
     },
@@ -96,52 +43,60 @@
       "type": "aggregate",
       "label": "The Model",
       "inferred": true,
-      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then read by the es-view server and the view generator. Its invariants are the merge-time validations.",
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta (counts, shared-concept glossary, dead-flow index). Built by the merge, then read by the es-view server and the DOT/explorer generator. Its invariants ARE the merge-time validation rules.",
       "tactical": {
-        "explanation": "Assembled in mergeTraceDocs as { version:1, meta:{generatedFrom, counts, deadFlows, sharedGlossary}, nodes, flows, hotspots, terms }. Internal transient keys (_src on nodes, _sourceFile on flows) are stripped on output. State lives in a file (CLI: writeFileSync) or purely in memory (server --traces path). The validation block IS the aggregate's invariant enforcement.",
+        "explanation": "Assembled in mergeTraceDocs as { version:1, meta:{ generatedFrom, counts, deadFlows, sharedGlossary }, nodes, flows, hotspots, terms }. Internal transient keys (_src on nodes, _sourceFile on flows) are stripped on output. Its state lives in a file on the CLI path (writeFileSync) or purely in memory on the server --traces path. The whole validation block is this aggregate's invariant enforcement; the derived-meta block computes the shared glossary and dead-flow index it exposes.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 215,
-            "symbol": "mergeTraceDocs",
-            "note": "the assembled model object"
-          }
+          { "path": "src/lib/merge.mjs", "line": 217, "symbol": "mergeTraceDocs", "note": "the assembled model object" },
+          { "path": "src/lib/merge.mjs", "line": 225, "symbol": "mergeTraceDocs", "note": "strip transient _src/_sourceFile keys on output" }
         ]
-      }
+      },
+      "fields": [
+        {
+          "name": "meta.sharedGlossary",
+          "conceptual": true,
+          "dataType": "array",
+          "derivation": "Every node id that appears in more than one flow (across steps and edge from/to), projected to { id, type, label, description, flowCount, flows } and sorted by flowCount desc. This is how independent flows are shown to join into one map.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/lib/merge.mjs", "line": 206, "symbol": "mergeTraceDocs", "note": "glossary = appearIn entries with flowCount > 1" } ]
+        },
+        {
+          "name": "meta.deadFlows",
+          "conceptual": true,
+          "dataType": "array",
+          "derivation": "The dead-flow index: every flow whose status is not 'live', projected to { id, status, supersededBy, name }. Regenerable, not hand-authored.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/lib/merge.mjs", "line": 211, "symbol": "mergeTraceDocs", "note": "deadFlows = flows with status != live" } ]
+        },
+        {
+          "name": "meta.counts.byType",
+          "conceptual": true,
+          "dataType": "object",
+          "derivation": "Node count grouped by node type, plus totals for flows/nodes/hotspots/terms and a count of unresolved terms.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/lib/merge.mjs", "line": 212, "symbol": "mergeTraceDocs", "note": "typeCounts accumulated over nodes; counts assembled into meta" } ]
+        }
+      ]
     },
     {
       "id": "inv-referential-integrity",
       "type": "invariant",
       "label": "Every id reference resolves and ids are unique",
       "inferred": true,
-      "description": "The model must be a closed graph: nodes are well-formed with known types and unique ids, and every reference (flow steps, edge from/to, flow hotspots, term relatedNodes) points at a defined node. Dangling references or id collisions are ERRORS that fail the merge.",
+      "description": "The model must be a closed graph: nodes are well-formed with a known type and a unique id, and every reference (flow steps, edge from/to, flow hotspots, term relatedNodes) points at a defined node. Dangling references or id collisions are ERRORS that fail the merge. (Orphan nodes and nonstandard edge verbs are only warnings.)",
       "tactical": {
-        "explanation": "ERROR-level checks: a node needs id+type+label and a type in NODE_TYPES (74-76); re-seeing an id with a different type is a type conflict (87); a duplicate flow id is rejected keeping the first (114); each flow step must be a known node (155); each edge.from/edge.to must resolve (157-158); each flow hotspot must be defined (161). (Orphan nodes and nonstandard edge verbs are only warnings.)",
+        "explanation": "ERROR-level checks: a node needs id+type+label and a type in NODE_TYPES (77-78); re-seeing an id with a different type is a type conflict (89); a duplicate flow id is rejected keeping the first (116); each flow step must resolve (157); each edge.from/edge.to must resolve (159-160); each flow hotspot must be defined (163). WARNING-level companions in the same blocks: a duplicate hotspot/term id keeps the first (121, 127), a nonstandard edge verb (161), a missing flow kind/status (155-156), an unknown supersededBy flow (164), and orphan nodes referenced by no flow (198).",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 151,
-            "symbol": "mergeTraceDocs",
-            "note": "cross-reference block: steps/edges/hotspots resolve (151-162)"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 87,
-            "symbol": "mergeTraceDocs",
-            "note": "type conflict on re-seen node id"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 114,
-            "symbol": "mergeTraceDocs",
-            "note": "duplicate flow id rejected"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 75,
-            "symbol": "mergeTraceDocs",
-            "note": "node needs id+type+label; type must be in NODE_TYPES"
-          }
+          { "path": "src/lib/merge.mjs", "line": 153, "symbol": "mergeTraceDocs", "note": "cross-reference block: steps/edges/hotspots resolve (153-164)" },
+          { "path": "src/lib/merge.mjs", "line": 77, "symbol": "mergeTraceDocs", "note": "node needs id+type+label; type must be in NODE_TYPES" },
+          { "path": "src/lib/merge.mjs", "line": 89, "symbol": "mergeTraceDocs", "note": "type conflict on re-seen node id" },
+          { "path": "src/lib/merge.mjs", "line": 116, "symbol": "mergeTraceDocs", "note": "duplicate flow id rejected" }
         ]
       }
     },
@@ -150,16 +105,11 @@
       "type": "invariant",
       "label": "Aggregates never issue commands",
       "inferred": true,
-      "description": "The Event Storming grammar rule enforced at merge time: an aggregate may only receive commands and emit events, never issue one. An edge from an aggregate node with verb 'issues' is an ERROR.",
+      "description": "The one hard Event Storming grammar rule enforced at merge time: an aggregate may only receive commands and emit events, never issue one. An edge whose from-node is an aggregate with verb 'issues' is an ERROR. Policies-issue-commands and command-lookup shapes are left to author discipline.",
       "tactical": {
-        "explanation": "After cross-reference validation, every flow edge is scanned: if the from-node resolves to type 'aggregate' and the verb is 'issues', it is an error. This is the one hard grammar constraint the merge enforces; policies-issue-commands and command-lookup shapes are left to author discipline.",
+        "explanation": "After cross-reference validation, every flow edge is scanned: if the from-node resolves to type 'aggregate' and the verb is exactly 'issues', it is pushed as an error. This is the only ES-grammar constraint the merge actively enforces; the schema's other grammar rules (policies are strictly reactive, invariants attach to aggregates, UI-vs-service split) are documented but NOT validated here.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 166,
-            "symbol": "mergeTraceDocs",
-            "note": "aggregate + verb 'issues' => forbidden (165-171)"
-          }
+          { "path": "src/lib/merge.mjs", "line": 168, "symbol": "mergeTraceDocs", "note": "scan edges; aggregate + verb 'issues' => forbidden (168-173)" }
         ]
       }
     },
@@ -168,22 +118,12 @@
       "type": "invariant",
       "label": "Terms are resolved-with-definition or flagged-with-a-question",
       "inferred": true,
-      "description": "Every ubiquitous-language term must be well-formed and honor the flag-or-resolve contract: a resolved term carries a definition; a partial/unresolved term carries the specific openQuestion a human should answer; and any relatedNodes must resolve. Violations are ERRORS.",
+      "description": "Every ubiquitous-language term must be well-formed and honor the flag-or-resolve contract: a resolved term carries a definition; a partial/unresolved term carries the specific openQuestion a human should answer; and any relatedNodes must resolve to known nodes. Violations are ERRORS. A nonstandard category is only a warning.",
       "tactical": {
-        "explanation": "ERROR-level: a term needs id+term (124); status must be in {resolved,partial,unresolved} (177); a resolved term needs a non-empty definition (179); a non-resolved status requires a non-empty openQuestion (180); every relatedNodes id must be a known node (181). A nonstandard category is only a warning (178).",
+        "explanation": "ERROR-level: a term needs id+term (126); status must be in {resolved, partial, unresolved} (179); a resolved term needs a non-empty definition (181); a non-resolved status requires a non-empty openQuestion (182); every relatedNodes id must resolve (183). WARNING-level: a nonstandard category (180) and a duplicate term id keeping the first (127). No terms flow through this particular merge trace, but the contract still guards any term-bearing source doc.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 175,
-            "symbol": "mergeTraceDocs",
-            "note": "status/definition/openQuestion contract + relatedNodes resolve (175-182)"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 123,
-            "symbol": "mergeTraceDocs",
-            "note": "term needs id+term (123-127)"
-          }
+          { "path": "src/lib/merge.mjs", "line": 177, "symbol": "mergeTraceDocs", "note": "status/definition/openQuestion contract + relatedNodes resolve (177-183)" },
+          { "path": "src/lib/merge.mjs", "line": 126, "symbol": "mergeTraceDocs", "note": "term needs id+term; duplicate id keeps first (126-127)" }
         ]
       }
     },
@@ -192,22 +132,27 @@
       "type": "invariant",
       "label": "Physical containment and field lineage are well-formed",
       "inferred": true,
-      "description": "The data-model layer must be internally consistent: a physical node's parent must resolve and form an acyclic containment chain, and each field must have a name+derivation with any local-looking source ref resolving to a known node. Violations are ERRORS.",
+      "description": "The data-model layer must be internally consistent: a physical node's parent must resolve and form an acyclic containment chain, and each field must carry a non-empty name and derivation with any local-looking source ref resolving to a known node. Violations are ERRORS; a parent at the wrong containment level is only a warning (it is silently dropped from the tree).",
       "tactical": {
-        "explanation": "ERROR-level: a node's parent must be a known node (136) and the parent chain must be acyclic (144); each field needs a non-empty name and derivation (43); a field source ref matching ^(col|tbl|db|srv)- must resolve (52). A parent at the wrong containment level (e.g. column parented on a database) is only a warning -- it is silently dropped from the tree, not rejected (139). Nonstandard field confidence/role/transform and non-boolean conceptual are warnings (47-51).",
+        "explanation": "ERROR-level: a node's parent must be a known node (137) and the parent chain must be acyclic, caught by a walk-up with a seen-set (146); each field needs a non-empty name and derivation (45); a field source ref matching /^(ds|fld)-/ must resolve to a known node (54). WARNING-level: a parent at the wrong containment level per PARENT_LEVEL (datastore parents a datastore; a field parents a datastore or field) is dropped from the tree, not rejected (141); nonstandard field confidence/role/transform and non-boolean conceptual are warnings (49-53).",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 132,
-            "symbol": "mergeTraceDocs",
-            "note": "parent resolves + acyclic chain (132-148)"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 40,
-            "symbol": "validateFields",
-            "note": "field name+derivation required; local source ref must resolve (40-55)"
-          }
+          { "path": "src/lib/merge.mjs", "line": 134, "symbol": "mergeTraceDocs", "note": "parent resolves + acyclic chain + wrong-level warning (134-149)" },
+          { "path": "src/lib/merge.mjs", "line": 42, "symbol": "validateFields", "note": "field name+derivation required; local source ref /^(ds|fld)-/ must resolve (42-57)" },
+          { "path": "src/lib/merge.mjs", "line": 26, "symbol": "PARENT_LEVEL", "note": "allowed parent types per node type" }
+        ]
+      }
+    },
+    {
+      "id": "inv-anchor-coverage",
+      "type": "invariant",
+      "label": "Behavioral nodes carry source anchors",
+      "inferred": true,
+      "description": "A soft (WARNING-only) invariant: nodes of an anchor-required type (command, aggregate, event, policy, readModel, invariant) should carry at least one tactical.anchor, so the recovered concept always deep-links back to code. Unlike the referential and grammar rules this does NOT fail the merge; it only surfaces a warning.",
+      "tactical": {
+        "explanation": "During the node loop, if a node's type is in ANCHOR_REQUIRED and it lacks a non-empty tactical.anchors array, a warning is pushed. Modeled as a distinct invariant to make the error-vs-warning boundary explicit: this is the clearest example of a validation the merge performs but does not enforce as a gate.",
+        "anchors": [
+          { "path": "src/lib/merge.mjs", "line": 79, "symbol": "mergeTraceDocs", "note": "ANCHOR_REQUIRED type with no tactical.anchors => warning (79-80)" },
+          { "path": "src/lib/merge.mjs", "line": 15, "symbol": "ANCHOR_REQUIRED", "note": "the set of node types expected to carry anchors" }
         ]
       }
     },
@@ -216,22 +161,12 @@
       "type": "event",
       "label": "ModelMerged",
       "inferred": true,
-      "description": "The per-flow traces have been folded into one deduped model: shared nodes unioned by global id, flows/hotspots/terms accumulated, and derived meta (counts, shared-concept glossary, dead-flow index) computed.",
+      "description": "The per-flow traces have been folded into one deduped model: shared nodes unioned by global id, flows/hotspots/terms accumulated, and derived meta (counts, shared-concept glossary, dead-flow index) computed. This fact holds even when the model is later found invalid.",
       "tactical": {
-        "explanation": "Realized by the node-union loop (seed new id / merge re-seen id) plus the derived-meta block that builds sharedGlossary (ids appearing in >1 flow), deadFlows (status != live), and typeCounts. This is the domain-significant fact promoted from the seed/union pipeline stages, which stay in cmd-merge-traces tactical.",
+        "explanation": "Realized by the node-union loop (seed new id / merge re-seen id) plus the derived-meta block that builds sharedGlossary (ids appearing in >1 flow), deadFlows (status != live), and typeCounts. This is the domain-significant fact promoted out of the seed/union pipeline stages, which stay inside cmd-merge-traces tactical. mergeTraceDocs ALWAYS returns a model object here, independently of whether validation later finds errors.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 80,
-            "symbol": "mergeTraceDocs",
-            "note": "node union: seed new / merge re-seen"
-          },
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 198,
-            "symbol": "mergeTraceDocs",
-            "note": "derived meta: sharedGlossary + deadFlows + counts"
-          }
+          { "path": "src/lib/merge.mjs", "line": 82, "symbol": "mergeTraceDocs", "note": "node union: seed new / merge re-seen" },
+          { "path": "src/lib/merge.mjs", "line": 201, "symbol": "mergeTraceDocs", "note": "derived meta: sharedGlossary + deadFlows + counts" }
         ]
       }
     },
@@ -240,28 +175,72 @@
       "type": "event",
       "label": "ModelValidated",
       "inferred": true,
-      "description": "The merged model has been checked against every invariant and passed with zero errors, so it is safe to serve or persist. When errors exist the fact does not hold; the CLI reports them and exits nonzero, and the server refuses to serve.",
+      "description": "The merged model has been checked against every invariant and passed with zero errors, so it is safe to serve or persist. When errors exist this fact does NOT hold: the CLI reports them and exits nonzero, and the server throws and refuses to serve. It is a separately-observable outcome from ModelMerged (a model can be merged-but-invalid).",
       "tactical": {
-        "explanation": "The validation loops accumulate an errors[] array; an empty array is the validated fact. merge-flows.js prints 'validation: OK' only when errors.length === 0 (otherwise exit 1); resolve-model.mjs throws when merged.errors.length so the server never serves an unvalidated model.",
+        "explanation": "The validation loops accumulate an errors[] array; an empty array is the validated fact. merge-flows.js prints 'validation: OK' only when errors.length === 0 (otherwise it has already written the file, then exits 1); resolve-model.mjs throws when merged.errors.length so the in-memory server path never exposes an unvalidated model. Because 'merged' always happens but 'validated' only when clean, the two are modeled as distinct events with separate outcome windows.",
         "anchors": [
-          {
-            "path": "src/lib/merge.mjs",
-            "line": 150,
-            "symbol": "mergeTraceDocs",
-            "note": "start of the validation blocks that populate errors[]"
-          },
-          {
-            "path": "tools/merge-flows.js",
-            "line": 38,
-            "symbol": "cli",
-            "note": "'validation: OK' when no errors"
-          },
-          {
-            "path": "src/server/resolve-model.mjs",
-            "line": 76,
-            "symbol": "resolveModel",
-            "note": "throw on any validation error"
-          }
+          { "path": "src/lib/merge.mjs", "line": 132, "symbol": "mergeTraceDocs", "note": "start of the validation blocks that populate errors[]" },
+          { "path": "tools/merge-flows.js", "line": 38, "symbol": "cli", "note": "'validation: OK' only when no errors" },
+          { "path": "src/server/resolve-model.mjs", "line": 77, "symbol": "resolveModel", "note": "throw on any validation error so the server serves nothing" }
+        ]
+      }
+    },
+    {
+      "id": "ds-model-fs",
+      "type": "datastore",
+      "storeKind": "filesystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process, reached through node:fs. Holds the per-flow trace JSONs read as input and receives the merged flows.json written as output. The in-memory --traces server path reads but never writes it.",
+      "tactical": {
+        "explanation": "Accessed via node:fs in two places: mergeTracesDir does readdirSync + readFileSync of *.json inputs, and the CLI front end (merge-flows.js) does writeFileSync(outFile, model) to persist the result.",
+        "anchors": [
+          { "path": "src/lib/merge.mjs", "line": 10, "symbol": "import fs", "note": "node:fs is the filesystem boundary" }
+        ]
+      }
+    },
+    {
+      "id": "ds-traces-dir",
+      "type": "datastore",
+      "storeKind": "directory",
+      "label": "traces/ directory",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "The input directory of per-flow trace JSONs (the tracesDir argument to es-merge, or the --traces dir for es-view). Every *.json in it is read, sorted, and merged.",
+      "tactical": {
+        "explanation": "mergeTracesDir enumerates it with fs.readdirSync and keeps files ending in .json, sorted for deterministic order.",
+        "anchors": [
+          { "path": "src/lib/merge.mjs", "line": 241, "symbol": "mergeTracesDir", "note": "readdirSync(tracesDir).filter(.json).sort()" }
+        ]
+      }
+    },
+    {
+      "id": "ds-trace-json",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "<flow-id>.json (per-flow trace)",
+      "parent": "ds-traces-dir",
+      "inferred": false,
+      "description": "One per-flow trace file on disk: { nodes, flows, hotspots, terms } authored by a deep-trace agent. Source material the merge parses; rm-trace is the in-memory projection of it.",
+      "tactical": {
+        "explanation": "Each file is read with fs.readFileSync and JSON.parsed into a { doc, name } source; an unparseable file is collected as a parseError and skipped.",
+        "anchors": [
+          { "path": "src/lib/merge.mjs", "line": 248, "symbol": "mergeTracesDir", "note": "JSON.parse(readFileSync(file)) per trace file" }
+        ]
+      }
+    },
+    {
+      "id": "ds-flows-json",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "flows.json (canonical model)",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "The output canonical model written by the es-merge CLI. Consumed downstream by the es-view server and the DOT/explorer generator. On the in-memory --traces server path this file is never written; the model is held in memory only.",
+      "tactical": {
+        "explanation": "merge-flows.js serializes the merged model with JSON.stringify(model, null, 2) and fs.writeFileSync(outFile, ...). Note it is written BEFORE the error check, so a failed validation still leaves a file on disk (see hot-invalid-model-written).",
+        "anchors": [
+          { "path": "tools/merge-flows.js", "line": 31, "symbol": "cli", "note": "writeFileSync(outFile, JSON.stringify(model))" }
         ]
       }
     }
@@ -273,78 +252,30 @@
       "tier": 1,
       "kind": "write",
       "status": "live",
-      "summary": "The operator runs es-merge (or es-view --traces) over a directory of per-flow trace JSONs. The tool reads every trace, unions the shared nodes by global id and accumulates the flows, hotspots, and terms into one canonical model, then validates the whole graph against its invariants. On success it writes (or holds in memory) the validated flows.json that the server and generator consume; on any error it refuses (server) or writes-then-flags (CLI). The point is to let independent trace agents converge on one consistent, referentially closed model.",
-      "trigger": "Operator runs `node tools/merge-flows.js <tracesDir> <outFile>` (or `es-merge`), or es-view resolves a model from `--traces <dir>`.",
+      "summary": "The operator runs es-merge (or es-view --traces) over a directory of per-flow trace JSONs. The tool reads every trace file, unions the shared nodes by global id and accumulates the flows, hotspots, and terms into one canonical model, computes derived meta (shared glossary, dead-flow index, counts), then validates the whole graph against its invariants. On success it writes (CLI) or holds in memory (server) the validated flows.json the server and generator consume; on any error the CLI writes-then-flags-and-exits-1 while the server throws and serves nothing. The point is to let independent trace agents converge on one consistent, referentially closed model.",
+      "trigger": "Operator runs `node tools/merge-flows.js <tracesDir> <outFile>` (the `es-merge` bin), or es-view resolves a model from `--traces <dir>`.",
       "steps": [
         "actor-operator",
         "rm-trace",
         "cmd-merge-traces",
         "agg-model",
         "evt-model-merged",
-        "evt-model-validated",
-        "ext-source-fs"
+        "evt-model-validated"
       ],
       "edges": [
-        {
-          "from": "actor-operator",
-          "to": "cmd-merge-traces",
-          "verb": "issues"
-        },
-        {
-          "from": "rm-trace",
-          "to": "ext-source-fs",
-          "verb": "projects from"
-        },
-        {
-          "from": "cmd-merge-traces",
-          "to": "rm-trace",
-          "verb": "reads"
-        },
-        {
-          "from": "cmd-merge-traces",
-          "to": "agg-model",
-          "verb": "handled by"
-        },
-        {
-          "from": "agg-model",
-          "to": "inv-referential-integrity",
-          "verb": "enforces"
-        },
-        {
-          "from": "agg-model",
-          "to": "inv-es-grammar",
-          "verb": "enforces"
-        },
-        {
-          "from": "agg-model",
-          "to": "inv-terms-contract",
-          "verb": "enforces"
-        },
-        {
-          "from": "agg-model",
-          "to": "inv-data-lineage",
-          "verb": "enforces"
-        },
-        {
-          "from": "agg-model",
-          "to": "evt-model-merged",
-          "verb": "emits"
-        },
-        {
-          "from": "agg-model",
-          "to": "evt-model-validated",
-          "verb": "emits"
-        },
-        {
-          "from": "agg-model",
-          "to": "ext-source-fs",
-          "verb": "persists to"
-        },
-        {
-          "from": "agg-model",
-          "to": "ds-tbl-flows-json",
-          "verb": "persists to"
-        }
+        { "from": "actor-operator", "to": "cmd-merge-traces", "verb": "issues" },
+        { "from": "cmd-merge-traces", "to": "rm-trace", "verb": "reads" },
+        { "from": "rm-trace", "to": "ds-trace-json", "verb": "projects from" },
+        { "from": "cmd-merge-traces", "to": "ds-model-fs", "verb": "connects via" },
+        { "from": "cmd-merge-traces", "to": "agg-model", "verb": "handled by" },
+        { "from": "agg-model", "to": "inv-referential-integrity", "verb": "enforces" },
+        { "from": "agg-model", "to": "inv-es-grammar", "verb": "enforces" },
+        { "from": "agg-model", "to": "inv-terms-contract", "verb": "enforces" },
+        { "from": "agg-model", "to": "inv-data-lineage", "verb": "enforces" },
+        { "from": "agg-model", "to": "inv-anchor-coverage", "verb": "enforces" },
+        { "from": "agg-model", "to": "evt-model-merged", "verb": "emits" },
+        { "from": "agg-model", "to": "evt-model-validated", "verb": "emits" },
+        { "from": "agg-model", "to": "ds-flows-json", "verb": "persists to" }
       ],
       "hotspots": [
         "hot-invalid-model-written"
@@ -356,22 +287,13 @@
     {
       "id": "hot-invalid-model-written",
       "label": "es-merge writes an invalid flows.json even when validation fails",
-      "description": "The CLI writes the merged model to disk BEFORE it checks errors, then exits 1. So a validation failure still leaves an invalid flows.json on disk (a later es-view auto-discovery could pick it up), whereas the server's --traces path throws and serves nothing. Human question: should es-merge withhold the output file on validation errors (write only when clean), or is emitting the invalid artifact for debugging the intended behavior? The two callers disagree today.",
+      "description": "The CLI writes the merged model to disk BEFORE it checks errors, then exits 1. So a validation failure still leaves an invalid flows.json on disk, which a later es-view auto-discovery could pick up and serve, whereas the server's --traces path throws and serves nothing. Human question: should es-merge withhold the output file on validation errors (write only when clean), or is emitting the invalid artifact for debugging intended? The two callers disagree today.",
       "tactical": {
-        "explanation": "merge-flows.js: `if (model) fs.writeFileSync(outFile, ...)` runs at line 31, then errors are printed and `process.exit(1)` at line 37 -- the file is already written. mergeTraceDocs always returns a model object (it never nulls on validation errors; null only happens in mergeTracesDir when the dir has no files). resolve-model.mjs instead throws when merged.errors.length, so the in-memory path never exposes an invalid model.",
+        "explanation": "merge-flows.js: `if (model) fs.writeFileSync(outFile, ...)` at line 31, then errors are printed and `process.exit(1)` at line 37 -- the file is already on disk. mergeTraceDocs always returns a model object (it never nulls on validation errors; null only happens in mergeTracesDir when the dir has zero files). resolve-model.mjs instead throws when merged.errors.length, so the in-memory server path never exposes an invalid model.",
         "anchors": [
-          {
-            "path": "tools/merge-flows.js",
-            "line": 30,
-            "symbol": "cli",
-            "note": "writes model before the error check; exits 1 after"
-          },
-          {
-            "path": "src/server/resolve-model.mjs",
-            "line": 76,
-            "symbol": "resolveModel",
-            "note": "server throws and refuses to serve on any error"
-          }
+          { "path": "tools/merge-flows.js", "line": 30, "symbol": "cli", "note": "writes model before the error check; exits 1 after" },
+          { "path": "tools/merge-flows.js", "line": 37, "symbol": "cli", "note": "errors printed then process.exit(1), after the write" },
+          { "path": "src/server/resolve-model.mjs", "line": 77, "symbol": "resolveModel", "note": "server throws and refuses to serve on any error" }
         ]
       }
     }

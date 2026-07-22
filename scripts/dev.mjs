@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 // Dev runner: starts the es-view API server (no browser) and the Vite dev server
 // together, so one `npm run dev` gives you the SPA with a live /api. Ctrl+C stops both.
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const viteBin = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
+const tscBin = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
+
+// The Node side is TypeScript now; compile it before starting the API server.
+execFileSync(process.execPath, [tscBin, '-p', 'tsconfig.node.json'], { stdio: 'inherit', cwd: root });
 
 const children = [];
 let shuttingDown = false;
@@ -22,7 +26,7 @@ function run(label, args) {
   c.on('exit', (code) => { console.log(`\n[${label}] exited (${code ?? 0})`); shutdown(code ?? 0); });
 }
 
-run('api', [path.join(root, 'bin', 'es-view.mjs'), '--no-open']);
+run('api', [path.join(root, 'dist', 'node', 'adapters', 'cli', 'es-view.js'), '--no-open']);
 run('web', [viteBin]);
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));

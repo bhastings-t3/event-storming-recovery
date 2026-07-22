@@ -4,7 +4,7 @@ import {
   enforcesRelation, nodeUsages, anchorUrl, flowNodeIds,
   isDataNode, parentChain, datastoreConsumers, fieldConsumers, nodeStorageLinks,
 } from '../model.js';
-import { VERB_COLORS } from '../../lib/palette.mjs';
+import { VERB_COLORS } from '../../domain/model/palette';
 import { getItem, fetchSource } from '../api.js';
 
 const VERB_ORDER = ['writes', 'persists to', 'projects from', 'reads', 'connects via'];

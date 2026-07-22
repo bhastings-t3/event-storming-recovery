@@ -1,100 +1,81 @@
 # es-method glossary — mining notes
 
-Area: **es-method** — the Event Storming / DDD method vocabulary this tool implements and enforces.
-18 terms: 17 resolved, 1 flagged (`term-es-bounded-context`).
+26 terms written: 25 resolved, 1 flagged (partial). Area: Event Storming METHOD & MODELING
+vocabulary, seeded from `docs/METHOD.md`, `docs/flows-schema.md`, `src/lib/merge.mjs`, and
+`src/server/context.mjs`, checked against `model-wip/flows.json` (15 flows / 87 nodes / 21
+hotspots / 0 terms).
 
-## Sources leaned on
-Almost all of this vocabulary is already spelled out in prose, so very little code reading was
-needed (as the briefing predicted for a method area):
-- `docs/flows-schema.md` — the Node section's rules ARE the definitions of aggregate/command/event/
-  policy/invariant/read-model/external-system, plus `inferred`, `synchronous`, `ownedBy`.
-- `docs/METHOD.md` — two-plane rule (123), altitude / don't-force-merge (142), strategic-vs-tactical
-  framing (10), Phase 5 UL mining (148), hotspots-are-questions (208).
-- `~/.claude/skills/event-storming-modeling/SKILL.md` — sticky colors, the flow grammar, Policy-vs-
-  Invariant conflation, and the whole second-plane (CEP / measurement-vs-event / ACL) vocabulary.
-- `src/lib/merge.mjs` — only real code anchors used: the grammar check (`:169`), NODE_TYPES/EDGE_VERBS
-  (`:13-14`), and `inferred:false wins` (`:91`).
+## Near-dupes / things to watch at merge time
 
-## Categorization judgment calls
-- **`term-es-actor`** categorized `role` rather than `concept` — Actor is literally a role, and the
-  enum has a `role` value, so it reads better there. Everything else that is a sticky TYPE is `concept`
-  per the briefing; the two-plane / altitude / inferred / strategic-tactical jargon is `category: jargon`.
-- **Policy** absorbed "synchronous policy" (the repo's `synchronous:true` field) as an `aka` + a
-  sentence rather than minting a separate term — it is the same concept with a repo-specific flag.
-- **Domain Event** absorbed the "Event / past-tense fact" naming convention and the
-  event-vs-measurement discriminator; I did not mint a separate "measurement" term (no measurement
-  plane exists in this self-model — merge/generate are single-plane ETL).
-- **Strategic vs tactical** and **Altitude** are kept as TWO distinct terms on purpose. They are
-  different axes: strategic/tactical = the what-vs-how registers (the `tactical` block), altitude =
-  the generic-vs-specialized zoom of the *same* action across flows (don't-force-merge). The briefing
-  listed both; conflating them would lose the distinction METHOD.md draws.
+- **term-es-flow** vs **term-es-trace**: "Flow" is the modeled artifact (the entry in
+  `flows[]`); "Trace (per-flow)" is the Phase-3 activity/JSON-file that produces it. Kept
+  distinct on purpose (schema vs. process), but they read close together in the glossary UI —
+  worth a "see also" link if the explorer ever supports that.
+- **term-es-dead-flow** vs **term-es-superseded-flow**: same `status` enum, same
+  "traced anyway" rationale, split only by reachability (unreachable vs. still-reachable-but-
+  replaced). This model's current trace has `meta.deadFlows: []` (no instances of either), so
+  both terms are documentation-only for this particular flows.json — flag if a future reviewer
+  expects every glossary term to resolve to a live example.
+- **term-es-datastore** / **term-es-field**: two very literal words. Watch for the OTHER
+  glossary-mining slice (runtime/product vocabulary) accidentally re-minting these if it
+  touches the Data model tab — they belong here (modeling vocabulary), not there.
 
-## relatedNodes decisions (mostly empty — and that's correct)
-Per the briefing, most method concepts have no single sticky, so `relatedNodes` is empty for 15 of 18.
-The three that map cleanly:
-- `term-es-grammar-rule` -> `inv-es-grammar` (that node literally IS this rule, enforced).
-- `term-es-ubiquitous-language` -> `inv-referential-integrity` (the id-uniqueness/closed-graph
-  invariant is the thing that catches UL drift at merge time). This is the softest of the three; drop
-  it if the orchestrator judges it a stretch.
-- `term-es-inferred` intentionally has NO relatedNode — it is a field on every node, not a node.
+## Cross-area overlap — belongs to the OTHER miner, not here
 
-I deliberately did NOT set `relatedNodes` on the generic sticky-type terms (Aggregate, Command, etc.)
-even though instances exist (`agg-model`, `cmd-merge-traces`, ...). Pointing "Aggregate" at one
-arbitrary aggregate node would misrepresent the term; pointing it at all of them is noise. Left empty.
+The other miner's slice is described as "runtime terms." Things I deliberately left OUT of
+this file because they are product/runtime vocabulary rather than Event Storming method
+vocabulary, even though they appear constantly in this same flows.json:
+- **es-view**, **es-merge**, **es-generate** (the CLI bin names / npx surface)
+- **MCP** (Model Context Protocol) as a runtime integration, **MCP read tools**,
+  `event-storming://selected-nodes` resource URI
+- **Operator** as a specific role-label (kept "Actor" here as the ES concept; the specific
+  "Operator" persona/workflow probably belongs to the other slice)
+- **Context bundle**, **Selection** (session state concepts specific to this tool's UI, not ES
+  method vocabulary per se)
+- **npx**, **SPA**, **explorer.html**, **flows.dot** as artifacts/build outputs
 
-## Cross-area terms to de-dupe (hand-off to other miners / orchestrator)
-- **Sticky vs node.** I defined `term-es-sticky` (the method's wall card). The tool area almost
-  certainly wants a **`node`** term (the flows.json data structure / global id). Keep BOTH: they are
-  the method concept vs its data realization. I noted the overlap in the sticky `aka`.
-- **Ubiquitous Language / glossary.** I own the method definition. If the tool area defines the
-  **Glossary tab** (`rm-glossary`) or the `terms[]` contract, keep those as the *tool* surface and let
-  my `term-es-ubiquitous-language` stay the *concept*. `inv-terms-contract` is the tool's enforcement
-  of it — that belongs to the tool/invariant area if they mint a term for it.
-- **Two-plane / ETL.** `term-es-two-plane` is the method stance. If the tool area describes the
-  **merge** or **generate** ETL steps as jargon, they should reference this term, not redefine the
-  plane split.
-- **Hotspot.** I own the method concept. If another area wants "red sticky", defer to `term-es-hotspot`.
-- **inferred / tactical / strategic.** Method-owned here; other areas should link, not redefine.
+If the other miner also produced a `term-es-*`-prefixed... no — their prefix should differ from
+mine (`term-es-` is reserved to this file per the task briefing), so id collision shouldn't
+occur; the overlap risk is purely conceptual duplication of *content* (e.g. both files defining
+"MCP" or "Grounded"). I defined **Grounded (node/flow)** here since it was explicitly listed in
+my AREA scope, anchored to `src/server/context.mjs`, but it is arguably closer to a runtime/tool
+feature than pure ES method vocabulary — worth a dedupe check against the other file.
 
-## Schema friction (PILOT — extra candid; this tunes the other 4 miners' briefing)
+## Extras included beyond the literal AREA list
 
-1. **`relatedNodes` can only point to `nodes[]`, never to hotspots or flows — and this bites method
-   vocabulary hardest.** The most natural links for a method glossary are exactly the non-node arrays:
-   "Hotspot" wants to point at the `hotspots[]` entries, "Flow" (tool area) wants `flows[]`, "Term"
-   wants `terms[]`. The merge's terms-contract only resolves `relatedNodes` against node ids, so all of
-   these must be left empty even though a clean correspondence exists. Recommend the briefing say
-   explicitly: *relatedNodes resolves to NODE ids only; do not try to link a term to a hotspot/flow/term
-   — leave it empty and mention the correspondence in notes.* I hit this on `term-es-hotspot`.
+The AREA list given didn't explicitly name these, but they are squarely Event Storming method
+vocabulary (not runtime), came up repeatedly in `docs/METHOD.md`/`flows-schema.md`, and an
+earlier bundled-example glossary (`examples/event-storming-recovery/traces/es-method.glossary.json`,
+apparently from a prior run of this same mining phase against this same tool's self-model)
+already treated them as first-class terms, so I kept them for continuity:
+- **ES grammar rule** (aggregates never issue commands) — folded into `term-es-invariant`'s
+  relatedNodes (`inv-es-grammar`) rather than a standalone term this time, to stay closer to the
+  literal AREA list. Flagging in case a standalone "ES grammar rule" term is still wanted.
+- Two-plane model, Altitude, `inferred` flag — NOT included this round (present in the older
+  bundled-example glossary). Dropped to stay tight to the literal AREA list given in this task;
+  reintroduce if the merge step wants full parity with the bundled example.
 
-2. **No way to express "this term IS realized by this field/flag," only by a node.** `inferred`,
-   `synchronous`, `ownedBy`, `tactical` are all node *fields*, central method vocabulary, but there is
-   no field-level link target. `anchors` (path/line/symbol into source) is the only mechanism, and it
-   works fine — but the briefing should tell miners to reach for `anchors` (not `relatedNodes`) for any
-   term that is a field/flag rather than a sticky.
+## Schema friction
 
-3. **The `category` enum has no bucket for a "modeling stance / rule / pattern."** Two-plane, altitude,
-   strategic-vs-tactical, the grammar rule — these are method *ideas*, not any of concept|jargon|acronym|
-   role|system|state|metric. I filed the stances under `jargon` and the rule under `concept`, which is
-   defensible but lossy. Since nonstandard category is only a warning, a miner *could* invent
-   `category: "method"` / `"pattern"` — but that would render inconsistently in the Glossary tab. I
-   stayed inside the enum. Flag for the schema owner: consider a `method`/`principle` category, or state
-   in the briefing that method stances go under `jargon` (my choice) so the 5 areas stay consistent.
+- `relatedNodes` validates strictly against the top-level `nodes[]` array (see
+  `src/lib/merge.mjs:183`, `for (const nid of t.relatedNodes || []) if (!nodes.has(nid))`).
+  Hotspots live in a *separate* top-level `hotspots` array, so a term about Hotspots cannot
+  `relatedNodes`-link to an actual `hot-*` example even though that's the most natural link — I
+  worked around it by naming an example hotspot id in prose inside the definition instead. The
+  schema doc's own Term example (`"relatedNodes": ["agg-line-item"]`) doesn't mention this
+  nodes-only restriction explicitly; worth a one-line clarification in `flows-schema.md`
+  ("relatedNodes resolves against `nodes[]` only, not `hotspots[]`").
+- No structural way to cross-link two *terms* to each other (e.g. Flow <-> Trace, Dead flow <->
+  Superseded flow). A `related` (term-to-term) field, distinct from `relatedNodes`
+  (term-to-node), would let the explorer render "see also" without abusing prose.
+- `category` enum (`concept | jargon | acronym | role | system | state | metric`) doesn't have
+  a great fit for something like "Tier" (used `metric` loosely) or "Dead flow"/"Superseded flow"
+  (used `state`, since they're best read as a flow's status value rather than a role/system).
+  Worked fine as warnings-only per the schema, just noting the fit was loose.
 
-4. **`aka` is doing triple duty** (code spellings, synonyms, AND id-prefix hints like `agg-*`, `cmd-*`).
-   I used id-prefix globs in `aka` because a newcomer greps `agg-` and wants to know what it means, but
-   that stretches "also known as." Works, but the briefing could say whether id-prefix conventions
-   belong in `aka` or should be omitted. I included them; they are genuinely useful for orientation.
+## Files written
 
-5. **`anchors` into a Markdown doc has no natural `symbol`.** The schema strongly encourages `symbol`
-   (line numbers rot). For doc anchors I used the section heading as the symbol, which survives edits
-   better than a line number. Recommend the briefing bless "section heading as symbol" for doc anchors,
-   since a method glossary anchors mostly into `docs/*.md` and the skill, not into code.
-
-6. **Minor: one anchor points outside the repo** (`~/.claude/skills/event-storming-modeling/SKILL.md`
-   on `term-es-sticky`). The skill is the authoritative source for the color/vocabulary but is not part
-   of the checkout, so that path won't resolve from `repoRoot`. The schema doesn't validate anchor paths
-   (they're evidence, not references), so it's harmless, but flagging it: a global skill is a real source
-   a method miner will want to cite yet cannot cite repo-relatively. Left it in as honest provenance.
-
-None of the above blocked authoring — every term validates. Items 1 and 3 are the two worth folding
-into the other miners' briefing.
+- `es-method.glossary.json` — `{ "terms": [...26 terms...] }`, validated against
+  `model-wip/flows.json`'s `nodes[]` for every `relatedNodes` reference (0 unresolved), and
+  every non-resolved term (1: Bounded context) carries an `openQuestion`.
+- This notes file.

@@ -1,0 +1,198 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The developer/orchestrator who runs the recovery CLIs and launches es-view. Here they open the served SPA in a browser and read the rendered projections (flows board, gallery, overview, glossary) to explore the recovered model."
+    },
+    {
+      "id": "cmd-load-model",
+      "type": "command",
+      "label": "LoadModel",
+      "inferred": true,
+      "description": "The SPA's boot query: on first mount the browser app fetches the canonical model over GET /api/model and hydrates its in-memory store, so every read-only tab can project from it. A failed fetch renders an error boot card instead of the explorer.",
+      "tactical": {
+        "explanation": "main.jsx mounts <App/> (createRoot). App's useEffect calls fetchModel() (api.js), which does `fetch('/api/model')` and throws if the response is not ok. server.mjs answers the `/api/model` branch by returning the already-resolved in-memory model plus provenance meta ({ source, sourcePath, repoRoot, warnings }) as JSON — there is NO disk read at request time; the model was resolved once at server boot (resolve-model.mjs). On success App stores { status:'ready', model, meta } and renders <ExplorerProvider model meta>, which in store.jsx builds the stable node/hotspot indexes (buildIndexes) and the present-type list (galleryTypes) once via useMemo, seeds interactive state (mode='flows', currentFlowId=first flow), and exposes it all through React context to the tabs. On failure fetchModel rejects and App shows the 'Couldn't load the model' boot card. This is a pure read: nothing is written and no aggregate emits an event.",
+        "anchors": [
+          { "path": "src/web/App.jsx", "line": 46, "symbol": "App", "note": "useEffect calls fetchModel() on mount; sets ready/error boot state" },
+          { "path": "src/web/api.js", "line": 4, "symbol": "fetchModel", "note": "GET /api/model; throws on non-ok; returns { model, meta }" },
+          { "path": "src/server/server.mjs", "line": 114, "symbol": "createServer", "note": "the /api/model branch returns resolved.model + meta from memory" },
+          { "path": "src/web/store.jsx", "line": 15, "symbol": "ExplorerProvider", "note": "buildIndexes + galleryTypes + seed interactive state, provided via context" }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Resolved once at es-view boot and held in memory; here it is the single source the SPA reads over GET /api/model and that all four read-only tabs project from.",
+      "tactical": {
+        "explanation": "On this flow agg-model is read, not mutated. The server holds it as resolved.model (from resolve-model.mjs: an explicit --model file, a --traces merge, an auto-discovered flows.json, or the bundled example) and returns it verbatim on GET /api/model. The SPA never re-fetches within a run, so the served model is a stable in-memory snapshot for the life of the process. Its invariants are enforced at merge time (see the merge-traces flow), not on this read path.",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 115, "symbol": "createServer", "note": "returns { model: resolved.model, meta }" },
+          { "path": "src/server/resolve-model.mjs", "line": 107, "symbol": "resolveModel", "note": "resolves the model + repoRoot once at boot" }
+        ]
+      }
+    },
+    {
+      "id": "rm-flows-board",
+      "type": "readModel",
+      "label": "Flow board",
+      "inferred": true,
+      "description": "The Flows tab's behavioral board: the currently selected flow drawn as event-storming stickies laid out in left-to-right lanes with their edges, on a pan/zoom canvas. A flow that touches data nodes also gets a Flow/Data view toggle, and thin bottom drawers surface the flow's hotspots, data-touched nodes, and pattern instances.",
+      "tactical": {
+        "explanation": "Board.jsx reads currentFlow from the store and, in a useEffect, imperatively renders it into a stable #lane element via renderFlowInto (or renderDataFlowInto for the Data view) from lib/layout.js — the layout engine is tactical detail, not a modeled node. Re-renders and refits on flow/selection/view change (double-rAF then pz.fit). Main.jsx frames the board with the flow header (name, status badge, summary, trigger) and the collapsible drawers (hotspots / data touched / instances). Physical data nodes are stripped from the board lanes by layout.js and re-surfaced only in the 'Data touched' drawer, grouped by the verb of the edge that reaches them.",
+        "anchors": [
+          { "path": "src/web/components/Board.jsx", "line": 12, "symbol": "Board", "note": "renders currentFlow into #lane via renderFlowInto" },
+          { "path": "src/web/components/Board.jsx", "line": 30, "symbol": "Board", "note": "view === 'data' ? renderDataFlowInto : renderFlowInto" },
+          { "path": "src/web/components/Main.jsx", "line": 95, "symbol": "Main", "note": "flow header + Board + hotspots/data/instances drawers" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "lanes",
+          "conceptual": true,
+          "dataType": "array",
+          "derivation": "The current flow's steps and edges arranged as ordered event-storming lanes; node ids in steps are resolved to stickies through the store's node index and colored by palette type. Layout geometry is computed in lib/layout.js.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/web/components/Board.jsx", "line": 31, "symbol": "Board", "note": "renderFlowInto(currentFlow, lane, ctx)" } ]
+        }
+      ]
+    },
+    {
+      "id": "rm-gallery",
+      "type": "readModel",
+      "label": "Sticky gallery",
+      "inferred": true,
+      "description": "The Gallery tab: every node in the model rendered as a colored sticky card, filterable by type chips and free-text search and sorted by palette type then label. Each card shows the type name, label, description, how many flows the node appears in, and a 'retired' badge when every flow it appears in is non-live.",
+      "tactical": {
+        "explanation": "Gallery.jsx reads model + galleryTypes from the store. It precomputes one lowercased search haystack per node (nodeSearchText — the node's own label/description, its palette type name, AND the names of every flow it appears in, so a flow-title word finds its stickies), then filters by the active type set and query tokens (AND semantics) and sorts by type index then label. Per card it calls nodeFlows(model, id) to count flows and marks retired when all are non-live. Rendering is a plain grid; clicking a card opens its detail (a different flow), right-click opens the shared context menu.",
+        "anchors": [
+          { "path": "src/web/components/Gallery.jsx", "line": 7, "symbol": "Gallery", "note": "gallery projection: filter by type chips + search, sort" },
+          { "path": "src/web/components/Gallery.jsx", "line": 26, "symbol": "Gallery", "note": "filter(active.has type) + matchesQuery + sort by type/label" },
+          { "path": "src/web/model.js", "line": 76, "symbol": "nodeSearchText", "note": "haystack includes containing-flow names" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "flowCount",
+          "conceptual": true,
+          "dataType": "number",
+          "derivation": "Number of flows a node appears in (across steps and edge from/to), computed client-side by nodeFlows(model, node.id); shown as 'in N flows' / 'not in any flow'. A derived projection, not stored.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/web/components/Gallery.jsx", "line": 60, "symbol": "Gallery", "note": "nodeFlows(model, n.id).length" } ]
+        },
+        {
+          "name": "retired",
+          "conceptual": true,
+          "dataType": "boolean",
+          "derivation": "True when the node appears in at least one flow and every such flow has a non-live status; renders a 'retired' tag. Derived, not stored.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/web/components/Gallery.jsx", "line": 61, "symbol": "Gallery", "note": "flows.every(f => f.status && f.status !== 'live')" } ]
+        }
+      ]
+    },
+    {
+      "id": "rm-overview",
+      "type": "readModel",
+      "label": "Flows overview",
+      "inferred": true,
+      "description": "The Overview tab: every flow rendered as its own bounded-context box (title + a miniature of the flow's lane), shelf-packed left-to-right onto one pannable/zoomable canvas so the whole model reads at a glance. Non-live flows are dimmed and badged; live flows show their kind.",
+      "tactical": {
+        "explanation": "Overview.jsx iterates model.flows, building a .context-box per flow imperatively (el() helpers) and rendering each flow's lane with the same renderFlowInto engine used by the board (layout.js is tactical detail). It then measures each box's offsetWidth/Height and shelf-packs them (rowLimit = max(1700, widest)), sizes the canvas, and fits it via setupPanZoom. Clicking a box title selects that flow (jumps to the Flows tab); right-click adds the whole flow to the context bundle.",
+        "anchors": [
+          { "path": "src/web/components/Overview.jsx", "line": 9, "symbol": "Overview", "note": "overview projection over model.flows" },
+          { "path": "src/web/components/Overview.jsx", "line": 23, "symbol": "Overview", "note": "for (const f of model.flows) build a context-box + render lane" },
+          { "path": "src/web/components/Overview.jsx", "line": 33, "symbol": "Overview", "note": "renderFlowInto(f, laneEl, ctx); shelf-pack + fit" }
+        ]
+      }
+    },
+    {
+      "id": "rm-glossary",
+      "type": "readModel",
+      "label": "Ubiquitous language glossary",
+      "inferred": true,
+      "description": "The Glossary tab: the model's nodes presented as an alphabetical, readable dictionary — each entry a type badge, label, description, and the flows it appears in — with a letter rail for jumping, type-chip and text filters, and a 'shared across flows' toggle that keeps only the connective vocabulary (nodes in more than one flow).",
+      "tactical": {
+        "explanation": "Glossary.jsx filters model.nodes by the active type set and query tokens (haystack is the node's own label+description ONLY — deliberately excluding flow names, unlike the gallery — because glossary search is about the term, not its usage), optionally narrows to nodes appearing in >1 flow (sharedOnly), sorts case-insensitively by label, and interleaves A–Z letter headers. Each entry lists its flows as clickable chips (nodeFlows) that select the flow; a right rail links to present letters.",
+        "anchors": [
+          { "path": "src/web/components/Glossary.jsx", "line": 10, "symbol": "Glossary", "note": "glossary projection: alphabetical dictionary" },
+          { "path": "src/web/components/Glossary.jsx", "line": 29, "symbol": "Glossary", "note": "filter by type + query; sharedOnly narrows to nodeFlows>1; sort by label" },
+          { "path": "src/web/model.js", "line": 24, "symbol": "Glossary", "note": "haystack is label+description only (no flow names)" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "usedInFlows",
+          "conceptual": true,
+          "dataType": "array",
+          "derivation": "The flows each term appears in, computed via nodeFlows(model, node.id) and rendered as clickable chips; dead flows are dimmed. Derived projection, not stored.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": ["inferred-from-dto"],
+          "evidence": [ { "path": "src/web/components/Glossary.jsx", "line": 82, "symbol": "Glossary", "note": "nodeFlows(model, n.id) rendered as gl-fchip chips" } ]
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "load-model",
+      "name": "Operator opens the explorer and reads the rendered model",
+      "tier": 1,
+      "kind": "read",
+      "status": "live",
+      "summary": "The operator opens the es-view SPA in a browser. On first mount the app fetches the canonical model once over GET /api/model, which the server answers from the already-resolved in-memory model plus provenance meta. The app hydrates a React store (building node/hotspot indexes and the present-type list) and renders four read-only projection tabs over that one model: the Flows board (the selected flow as event-storming lanes), the Gallery (every node as a sticky card), the Overview (every flow as a bounded-context box), and the Glossary (the nodes as an alphabetical dictionary). Nothing is written; each tab is a pure client-side projection the operator reads to explore the recovered domain.",
+      "trigger": "Operator loads the es-view SPA in a browser (served by server.mjs), which mounts <App/> and fires fetchModel() on first render.",
+      "steps": [
+        "actor-operator",
+        "cmd-load-model",
+        "agg-model",
+        "rm-flows-board",
+        "rm-gallery",
+        "rm-overview",
+        "rm-glossary"
+      ],
+      "edges": [
+        { "from": "actor-operator", "to": "cmd-load-model", "verb": "issues" },
+        { "from": "cmd-load-model", "to": "agg-model", "verb": "reads" },
+        { "from": "rm-flows-board", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-gallery", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-overview", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-glossary", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-flows-board", "to": "actor-operator", "verb": "read by" },
+        { "from": "rm-gallery", "to": "actor-operator", "verb": "read by" },
+        { "from": "rm-overview", "to": "actor-operator", "verb": "read by" },
+        { "from": "rm-glossary", "to": "actor-operator", "verb": "read by" }
+      ],
+      "hotspots": [
+        "hot-glossary-shows-physical-and-invariant-nodes"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-glossary-shows-physical-and-invariant-nodes",
+      "label": "Gallery and Glossary surface physical (datastore/field) and invariant nodes as domain vocabulary",
+      "description": "galleryTypes() drives the Gallery and Glossary type chips from every PALETTE key except 'hotspot' that is present in the model — so datastore, field, and invariant nodes appear as 'stickies' in the gallery and as dictionary entries in the Ubiquitous Language glossary, alongside the behavioral concepts. Physical data-model nodes have their own Data model tab and invariants normally hang off an aggregate's detail, so listing them as ubiquitous-language terms may be noise. Human question: should the glossary (and gallery) exclude the physical layer and invariants, or is showing every sticky type intentional?",
+      "tactical": {
+        "explanation": "galleryTypes(model) = Object.keys(PALETTE).filter(t => t !== 'hotspot' && model.nodes.some(n => n.type === t)); PALETTE includes datastore, field, and invariant. Both Gallery.jsx and Glossary.jsx take `types` straight from the store (galleryTypes) for their chip set and default-active filter, and iterate model.nodes unfiltered by plane. So every datastore/field/invariant renders as a term. Only 'hotspot' is deliberately excluded.",
+        "anchors": [
+          { "path": "src/web/model.js", "line": 13, "symbol": "galleryTypes", "note": "all PALETTE types except hotspot, if present in model" },
+          { "path": "src/lib/palette.mjs", "line": 12, "symbol": "PALETTE", "note": "invariant/datastore/field are palette types" },
+          { "path": "src/web/components/Glossary.jsx", "line": 29, "symbol": "Glossary", "note": "filters model.nodes only by active type + query, not by plane" }
+        ]
+      }
+    }
+  ]
+}

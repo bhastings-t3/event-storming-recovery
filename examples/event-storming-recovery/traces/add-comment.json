@@ -1,0 +1,290 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The developer/orchestrator running es-view locally. Here they right-click a model item in the SPA (a node sticky, a flow, or a hotspot card) and attach a persistent human note to it, then read those notes back in the dialog and via a connected Claude session's grounded context."
+    },
+    {
+      "id": "cmd-add-comment",
+      "type": "command",
+      "label": "AddComment",
+      "inferred": true,
+      "description": "Attach a human comment/note to a specific model item (node, flow, or hotspot), keyed by the item's stable type:id so it survives model regeneration. The note is recorded in the server's in-memory comment store and written through to a comments.json sidecar next to the model.",
+      "tactical": {
+        "explanation": "Trigger: the operator right-clicks any addable item; ContextMenu renders a '💬 Add comment' button whose click calls openCommentDialog(x,y,ref) (ContextMenu.jsx openComments). CommentDialog.submit() trims the textarea and calls addCommentTo(type,id,text) (store.jsx), which POSTs to /api/comments via api.js addComment (fetch POST { type, id, text }). The server /api/comments handler looks up services.comments, validates the target exists and the text is non-empty (see the two invariants), then calls store.add(type,id,text) and returns store.get(type,id) as the fresh list. The store lives in comments.mjs createCommentStore; add() builds { id: randomUUID().slice(0,8), text: String(text).trim(), at: new Date().toISOString() }, appends it under the 'type:id' key in the in-memory byKey Map, and calls persist(). This is a UI-driven write flow; the SPA runs in a browser served by the same es-view process, so no external service is crossed.",
+        "anchors": [
+          { "path": "src/web/components/ContextMenu.jsx", "line": 50, "symbol": "ContextMenu", "note": "'💬 Add comment' button" },
+          { "path": "src/web/components/ContextMenu.jsx", "line": 38, "symbol": "openComments", "note": "closeMenu + openCommentDialog(x,y,ref)" },
+          { "path": "src/web/components/CommentDialog.jsx", "line": 29, "symbol": "submit", "note": "trim + addCommentTo(type,id,t)" },
+          { "path": "src/web/store.jsx", "line": 61, "symbol": "addCommentTo", "note": "addComment(...).then(setItemComments)" },
+          { "path": "src/web/api.js", "line": 32, "symbol": "addComment", "note": "fetch POST /api/comments { type, id, text }" },
+          { "path": "src/server/server.mjs", "line": 171, "symbol": "createServer", "note": "POST /api/comments -> store.add + return store.get" }
+        ]
+      }
+    },
+    {
+      "id": "agg-comment-store",
+      "type": "aggregate",
+      "label": "Comment Store",
+      "inferred": true,
+      "description": "The human-comments boundary: an in-memory Map of 'type:id' -> [{ id, text, at }] created per server run, mirrored to a comments.json sidecar next to the model. It deliberately lives OUTSIDE flows.json (which the recovery/merge pipeline regenerates and would wipe) and keys every note by the item's stable type:id so comments survive a model rebuild. It receives AddComment/RemoveComment and emits CommentAdded; its write to disk is best-effort.",
+      "tactical": {
+        "explanation": "createCommentStore(filePath) seeds byKey from an existing comments.json if present (JSON.parse of { version, comments }; a corrupt file is swallowed and the store starts empty rather than crashing). add(type,id,text) appends a record under key(type,id) = `${type}:${id}` and calls persist(); remove() filters by comment id and re-persists. persist() serializes { version: 1, comments } (only non-empty lists) and fs.writeFileSync's it to filePath; on any write error it logs once (warned flag) and keeps the comment in memory for the session. The store is wired in bin/es-view.mjs: commentsPath = path.dirname(resolved.sourcePath)/comments.json (i.e. next to flows.json), passed into buildServices as services.comments and shared by the HTTP API and the MCP handler.",
+        "anchors": [
+          { "path": "src/server/comments.mjs", "line": 11, "symbol": "createCommentStore", "note": "in-memory byKey Map + warned flag; seed from existing sidecar" },
+          { "path": "src/server/comments.mjs", "line": 37, "symbol": "add", "note": "build record, append under type:id key, persist()" },
+          { "path": "src/server/comments.mjs", "line": 9, "symbol": "key", "note": "key = `${type}:${id}` — the stable survival key" },
+          { "path": "bin/es-view.mjs", "line": 92, "symbol": "main", "note": "commentsPath = dirname(sourcePath)/comments.json; createCommentStore" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "key",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The map key under which an item's comments are stored, composed as `${type}:${id}` from the item's kind (node/flow/hotspot) and its STABLE model id. Because the id is stable across model regeneration and the store is a sidecar (not inside the regenerated flows.json), comments re-attach to the same item after a rebuild. This is a design property of the store, not a runtime-checked guard.",
+          "sources": [
+            { "ref": "fld-comment-key", "role": "derived-from", "transform": "transformation", "note": "`${type}:${id}`" }
+          ],
+          "expression": "`${type}:${id}`",
+          "confidence": "high",
+          "provenance": ["inferred"],
+          "evidence": [ { "path": "src/server/comments.mjs", "line": 9, "symbol": "key" } ]
+        },
+        {
+          "name": "text",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The human note body, trimmed of surrounding whitespace at record time.",
+          "sources": [
+            { "ref": "fld-comment-text", "role": "derived-from", "transform": "transformation", "note": "String(text).trim()" }
+          ],
+          "confidence": "high",
+          "provenance": ["inferred"],
+          "evidence": [ { "path": "src/server/comments.mjs", "line": 38, "symbol": "add" } ]
+        },
+        {
+          "name": "id",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "Per-comment identifier, the first 8 chars of a randomUUID(). Used to target a specific comment for deletion within an item's list.",
+          "sources": [
+            { "ref": "fld-comment-id", "role": "derived-from", "transform": "transformation", "note": "randomUUID().slice(0,8)" }
+          ],
+          "confidence": "high",
+          "provenance": ["inferred"],
+          "evidence": [ { "path": "src/server/comments.mjs", "line": 38, "symbol": "add" } ]
+        },
+        {
+          "name": "at",
+          "conceptual": true,
+          "dataType": "timestamp",
+          "derivation": "ISO-8601 creation timestamp (new Date().toISOString()); the dialog and grounded markdown render only the yyyy-mm-dd prefix.",
+          "sources": [
+            { "ref": "fld-comment-at", "role": "derived-from", "transform": "identity", "note": "new Date().toISOString()" }
+          ],
+          "confidence": "high",
+          "provenance": ["inferred"],
+          "evidence": [ { "path": "src/server/comments.mjs", "line": 38, "symbol": "add" } ]
+        }
+      ]
+    },
+    {
+      "id": "inv-comment-target-exists",
+      "type": "invariant",
+      "label": "A comment must target an existing model item",
+      "inferred": true,
+      "description": "ERROR-level guard: AddComment is rejected unless its { type, id } resolves to a real model item — a flow id, a hotspot id, or a node id. A missing id or an unknown item returns HTTP 404 and no comment is recorded. This keeps the sidecar's type:id keys pointing at items the model actually contains.",
+      "tactical": {
+        "explanation": "In the /api/comments handler (all mutating methods) the body's type defaults to 'node'; if !id or !itemExists(services, type, id) the request returns 404 before store.add is reached. itemExists checks services.model.flows for a flow, services.indexes.hotspotById for a hotspot, else services.indexes.nodeById for a node. Enforced in the server handler rather than inside comments.mjs, but it is the comment-store boundary's guard.",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 170, "symbol": "createServer", "note": "!id || !itemExists => 404 before store.add" },
+          { "path": "src/server/server.mjs", "line": 27, "symbol": "itemExists", "note": "flow/hotspot/node existence check" }
+        ]
+      }
+    },
+    {
+      "id": "inv-comment-text-nonempty",
+      "type": "invariant",
+      "label": "A comment's text must be non-empty",
+      "inferred": true,
+      "description": "ERROR-level guard: AddComment with blank/whitespace-only text is rejected with HTTP 400 'empty comment' and nothing is stored. The SPA also disables the submit button and returns early on empty text, and the store trims again at record time, but the server 400 is the authoritative rejection.",
+      "tactical": {
+        "explanation": "POST /api/comments computes text = (body.text || '').trim(); if !text it returns 400 { error: 'empty comment' } before store.add. Defense in depth: CommentDialog.submit returns early when text.trim() is falsy and the 'Add comment' button is disabled on !text.trim(); comments.mjs add() also does String(text).trim().",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 173, "symbol": "createServer", "note": "empty trimmed text => 400 'empty comment'" },
+          { "path": "src/web/components/CommentDialog.jsx", "line": 30, "symbol": "submit", "note": "early-return on empty; button disabled on !text.trim()" }
+        ]
+      }
+    },
+    {
+      "id": "evt-comment-added",
+      "type": "event",
+      "label": "CommentAdded",
+      "inferred": true,
+      "description": "A human note has been attached to a model item: a { id, text, at } record now hangs under the item's stable type:id key in the comment store. This fact holds as soon as the in-memory Map is updated, independently of whether the write-through to comments.json on disk succeeds (see hot-comment-nonatomic-persist).",
+      "tactical": {
+        "explanation": "Realized inside store.add: byKey.set(k, [...(byKey.get(k)||[]), comment]) records the note in memory, then persist() attempts the sidecar write. The handler returns store.get(type,id) (the fresh list) with HTTP 200; store.jsx setItemComments folds it into the SPA `comments` state so the dialog re-renders. The in-memory update always succeeds and is what the API confirms; durability is best-effort.",
+        "anchors": [
+          { "path": "src/server/comments.mjs", "line": 40, "symbol": "add", "note": "byKey.set appends the record in memory (the fact)" },
+          { "path": "src/server/comments.mjs", "line": 41, "symbol": "add", "note": "persist() best-effort write-through" },
+          { "path": "src/server/server.mjs", "line": 175, "symbol": "createServer", "note": "200 with store.get(type,id)" }
+        ]
+      }
+    },
+    {
+      "id": "rm-item-comments",
+      "type": "readModel",
+      "label": "Item comments (dialog + grounded context)",
+      "inferred": true,
+      "description": "The list of human notes for an item, read back in two places: the SPA CommentDialog (each note's text and yyyy-mm-dd date, with a delete ✕) and the grounded markdown a connected Claude session receives via MCP — every node/flow/hotspot context block appends a 'Comments (human notes)' section. This is how a browser-side note becomes visible to Claude.",
+      "tactical": {
+        "explanation": "SPA: on load store.jsx getComments() hydrates the `comments` map ({ 'type:id': [...] }); commentsFor(type,id) feeds CommentDialog's list, and each AddComment/RemoveComment response refreshes just that key via setItemComments. Server GET /api/comments returns store.all() or store.get(type,id). MCP/grounded context: context.mjs attaches services.comments.get('node'|'flow'|'hotspot', id) onto each context object and renderComments() emits the '**Comments (human notes):**' bullet list into the markdown rendered for the model.",
+        "anchors": [
+          { "path": "src/web/store.jsx", "line": 80, "symbol": "commentsFor", "note": "comments['type:id'] || []" },
+          { "path": "src/web/components/CommentDialog.jsx", "line": 49, "symbol": "CommentDialog", "note": "renders the comment list + dates" },
+          { "path": "src/server/context.mjs", "line": 90, "symbol": "renderComments", "note": "'Comments (human notes)' markdown block" },
+          { "path": "src/server/context.mjs", "line": 85, "symbol": "buildNodeContext", "note": "comments attached to node/flow/hotspot context" }
+        ]
+      }
+    },
+    {
+      "id": "ext-claude-mcp",
+      "type": "externalSystem",
+      "label": "Connected Claude (MCP client)",
+      "inferred": true,
+      "description": "A Claude session connected to the es-view MCP endpoint over the shared in-memory state. It reads the operator's human comments as part of an item's grounded markdown context, so a note added by clicking in the browser rides into what Claude sees.",
+      "tactical": {
+        "explanation": "createMcpHandler(services, state) shares the same services.comments store as the HTTP API; the context renderers (context.mjs) fold each item's comments into the grounded markdown the MCP tools return.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 85, "symbol": "buildNodeContext", "note": "services.comments.get('node', id) into context" },
+          { "path": "bin/es-view.mjs", "line": 95, "symbol": "main", "note": "createMcpHandler(services, state) shares the comment store" }
+        ]
+      }
+    },
+    {
+      "id": "ds-model-fs",
+      "type": "datastore",
+      "storeKind": "filesystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem outside the process, reached through node:fs. Holds the resolved model source and, alongside it, the comments.json sidecar this flow reads and writes. May be read-only for the bundled example inside a global npx install, in which case writes are swallowed and comments stay in memory.",
+      "tactical": {
+        "explanation": "comments.mjs uses node:fs directly: existsSync + readFileSync to seed the store, writeFileSync to persist. The es-view CLI derives the sidecar path from the resolved model source dir.",
+        "anchors": [
+          { "path": "src/server/comments.mjs", "line": 6, "symbol": "import fs", "note": "node:fs is the filesystem boundary" }
+        ]
+      }
+    },
+    {
+      "id": "ds-comments-json",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "comments.json (sidecar)",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "The persistent sidecar written next to the model (dirname(resolved.sourcePath)/comments.json). Envelope: { version: 1, comments: { \"type:id\": [ { id, text, at } ] } }. Deliberately separate from flows.json so the recovery/merge pipeline that regenerates the model does not wipe human notes. On load a corrupt file is ignored and the store starts empty.",
+      "tactical": {
+        "explanation": "persist() writes JSON.stringify({ version: 1, comments }, null, 2) via fs.writeFileSync(filePath). Only non-empty comment lists are serialized. createCommentStore reads it back with JSON.parse(readFileSync(filePath,'utf8')) and hydrates byKey from doc.comments.",
+        "anchors": [
+          { "path": "src/server/comments.mjs", "line": 27, "symbol": "persist", "note": "writeFileSync of { version:1, comments }" },
+          { "path": "src/server/comments.mjs", "line": 15, "symbol": "createCommentStore", "note": "seed byKey from existing sidecar; corrupt => empty" }
+        ]
+      }
+    },
+    {
+      "id": "fld-comment-key",
+      "type": "field",
+      "fieldKind": "key",
+      "label": "\"type:id\" (map key)",
+      "parent": "ds-comments-json",
+      "dataType": "string",
+      "inferred": false,
+      "description": "Object key under comments{} grouping one item's notes, formed as `${type}:${id}`. Stable across model regeneration, which is why sidecar notes re-bind to the same item after a rebuild."
+    },
+    {
+      "id": "fld-comment-id",
+      "type": "field",
+      "fieldKind": "property",
+      "label": "id",
+      "parent": "ds-comments-json",
+      "dataType": "string",
+      "inferred": false,
+      "description": "Per-comment id, randomUUID().slice(0,8); the delete key within an item's list."
+    },
+    {
+      "id": "fld-comment-text",
+      "type": "field",
+      "fieldKind": "property",
+      "label": "text",
+      "parent": "ds-comments-json",
+      "dataType": "string",
+      "inferred": false,
+      "description": "The trimmed human note body."
+    },
+    {
+      "id": "fld-comment-at",
+      "type": "field",
+      "fieldKind": "property",
+      "label": "at",
+      "parent": "ds-comments-json",
+      "dataType": "timestamp",
+      "inferred": false,
+      "description": "ISO-8601 creation timestamp; rendered as yyyy-mm-dd in the UI and grounded markdown."
+    }
+  ],
+  "flows": [
+    {
+      "id": "add-comment",
+      "name": "Operator adds a persistent comment to a model item",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "From the explorer SPA the operator right-clicks any node, flow, or hotspot and adds a human note. The SPA POSTs it to /api/comments, which rejects it unless the target item exists and the text is non-empty, then records it in the server's in-memory comment store keyed by the item's stable type:id and writes through to a comments.json sidecar next to the model. The sidecar lives outside flows.json on purpose, so notes survive the recovery/merge pipeline regenerating the model. The note is read straight back in the dialog and also folded into the grounded markdown a connected Claude session sees.",
+      "trigger": "Operator clicks '💬 Add comment' in the right-click ContextMenu of a node/flow/hotspot, types a note, and presses Enter (ContextMenu.jsx:50 -> CommentDialog submit).",
+      "steps": [
+        "actor-operator",
+        "cmd-add-comment",
+        "agg-comment-store",
+        "evt-comment-added",
+        "rm-item-comments"
+      ],
+      "edges": [
+        { "from": "actor-operator", "to": "cmd-add-comment", "verb": "issues" },
+        { "from": "cmd-add-comment", "to": "agg-comment-store", "verb": "handled by" },
+        { "from": "agg-comment-store", "to": "inv-comment-target-exists", "verb": "enforces" },
+        { "from": "agg-comment-store", "to": "inv-comment-text-nonempty", "verb": "enforces" },
+        { "from": "agg-comment-store", "to": "evt-comment-added", "verb": "emits" },
+        { "from": "agg-comment-store", "to": "ds-comments-json", "verb": "persists to" },
+        { "from": "agg-comment-store", "to": "ds-model-fs", "verb": "connects via" },
+        { "from": "evt-comment-added", "to": "rm-item-comments", "verb": "triggers" },
+        { "from": "rm-item-comments", "to": "ds-comments-json", "verb": "projects from" },
+        { "from": "rm-item-comments", "to": "actor-operator", "verb": "read by" },
+        { "from": "rm-item-comments", "to": "ext-claude-mcp", "verb": "read by" }
+      ],
+      "hotspots": [
+        "hot-comment-nonatomic-persist"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-comment-nonatomic-persist",
+      "label": "Comment persistence is non-atomic and its failure is silent",
+      "description": "store.add updates the in-memory Map and the API returns 200 BEFORE (and regardless of whether) the disk write succeeds. persist() does a single fs.writeFileSync straight over comments.json with no temp-file-plus-rename, so a crash mid-write can leave a truncated/corrupt sidecar — and the loader silently swallows a corrupt file and starts empty, i.e. total loss of prior notes. Separately, if the location is read-only (e.g. the bundled example under a global npx install) the write throws, is caught, logged ONCE via a warned flag, and otherwise ignored; the operator's dialog still shows the note as saved, but it exists only in memory for that session and vanishes on restart. Questions for a human: (1) should the sidecar write be made atomic (write to a temp file then rename)? (2) should a persistence failure surface to the operator / return a non-200 instead of appearing successful? (3) is starting empty on a corrupt/unreadable sidecar acceptable, or should it be backed up rather than overwritten?",
+      "tactical": {
+        "explanation": "comments.mjs: add() does byKey.set(...) then persist(); persist() calls fs.writeFileSync(filePath, JSON.stringify(...)) with no atomic rename, and on throw does `if (!warned) { console.error(...); warned = true; }` — swallowed thereafter. The server returns 200 with store.get(type,id) irrespective of the write outcome. On startup createCommentStore's JSON.parse is wrapped in try/catch that discards a corrupt file and starts with an empty Map.",
+        "anchors": [
+          { "path": "src/server/comments.mjs", "line": 27, "symbol": "persist", "note": "single writeFileSync, no temp+rename (non-atomic)" },
+          { "path": "src/server/comments.mjs", "line": 28, "symbol": "persist", "note": "write error caught, warned-once, then swallowed" },
+          { "path": "src/server/comments.mjs", "line": 19, "symbol": "createCommentStore", "note": "corrupt sidecar swallowed -> starts empty (data loss)" },
+          { "path": "src/server/server.mjs", "line": 175, "symbol": "createServer", "note": "200 returned regardless of persist outcome" }
+        ]
+      }
+    }
+  ]
+}

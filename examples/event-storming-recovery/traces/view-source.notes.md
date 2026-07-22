@@ -1,68 +1,41 @@
 # view-source — trace notes
 
-Flow `view-source` (kind `read`, tier 2, status **live**). Clicking a source anchor in the explorer
-fetches the REAL code behind it, sandboxed to the repo root — the grounding mechanism every sticky relies on.
+## Reachability verdict: LIVE
+Both ends reach end to end:
+- **Trigger (actor):** operator clicks the "view source" button rendered under every anchor in the Detail panel → `Anchor.toggle()` (`src/web/components/Detail.jsx:142`) → `fetchSource` (`src/web/api.js:40`) → `GET /api/source`.
+- **Endpoint (server):** booted by `bin/es-view.mjs` → `startServer` → `createServer`, which serves `/api/source` (`src/server/server.mjs:190-196`) → `readSource` (`src/server/source.mjs`).
+- **VS Code deep link:** the `<a class="anchor" href={anchorUrl(...)}>` link is rendered for every anchor (`Detail.jsx:149`, url built in `src/web/model.js:43`), live in the same panel.
+Not dead. It is exercised on every anchor a human inspects.
 
-## Reachability (all confirmed)
-- **SPA click**: `Detail.jsx` `Anchor/toggle` (line 100-104) `view source` button → `fetchSource(a.path, a.line)`.
-- **Client**: `src/web/api.js:35` `fetchSource` builds `GET /api/source?path&line&ctx` (line 37 fetch).
-- **Route**: `server.mjs:165` `GET /api/source` registered inside `createServer`; 400s on missing path,
-  else returns `readSource(resolved.repoRoot, relPath, line, ctx)` verbatim (line 170).
-- **Reader**: `src/server/source.mjs:13` `readSource`; returns `{ path, exists, line, startLine, endLine, code }`,
-  window is line ±8 (ctx default 8).
-- **Sibling editor path**: `Detail.jsx:107` `<a href={anchorUrl(repoRoot, a)}>` → `model.js:43` `anchorUrl`
-  builds `vscode://file/<repoRoot>/<path>:<line>` → OS/editor (`ext-editor`) opens the file. This path never
-  touches the server or the sandbox guard.
-- `repoRoot` frozen at boot by `resolve-model.mjs:99-102`: `--repo-root` > `model.meta.repoRoot` >
-  model file's own tree > cwd.
+## The path-traversal guard — verified (scout flagged /api/source)
+The guard (`source.mjs:15-18`) is a **lexical prefix guard** and is effective against the classic attacks:
+- `root = path.resolve(repoRoot)`, `abs = path.resolve(root, relPath)`. `path.resolve` **normalizes `../`**, so `../../etc/passwd` resolves above root and is rejected.
+- An **absolute `relPath`** (`/etc/passwd`, `C:\secrets`) makes `path.resolve(root, relPath)` ignore root; the result won't be prefixed by `root + sep` → rejected.
+- **URL-encoded traversal** (`%2e%2e%2f`) is decoded by `URLSearchParams.get('path')` *before* `path.resolve` normalizes it → still rejected.
+- The trailing `path.sep` in `abs.startsWith(root + path.sep)` blocks **sibling-prefix escapes** (`/repo` vs `/repo-secrets`). Good.
 
-## Contradictions with the briefing (minor, worth flagging)
-- Briefing said the client symbol is **`api.js:37 getSource`**. There is no `getSource`; the exported
-  function is **`fetchSource`** (defined at `api.js:35`, the fetch is on line 37). Anchored the real name.
-- Everything else in the briefing (Detail.jsx:103 → fetchSource, Detail.jsx:107 anchorUrl, model.js:43,
-  server.mjs:165, source.mjs:18 guard) matched the code exactly.
+**Residual gaps (→ hot-source-read-scope):**
+1. **No anchor allowlist.** The guard sandboxes to the repo *root*, not to the set of anchor paths in the model. Any file under the root is readable (`.env`, `.git/config`, committed secrets).
+2. **No symlink resolution.** It is purely lexical — `fs.realpath` is never called — so a symlink *inside* the tree pointing outside would be followed by `fs.readFileSync`.
+3. **Host exposure.** `startServer` defaults `host` to `127.0.0.1` (localhost, unauthenticated), but `bin/es-view.mjs --host` (line 39) overrides it with no auth gate; `--host 0.0.0.0` would publish this file-read on the LAN.
 
-## Invariant / sandbox modeling decision
-Followed the briefing's steer: **did NOT create an aggregate just to hang an invariant on.** There is no
-aggregate in this read flow, and an `invariant` node requires one (attached via an `enforces` edge from an
-aggregate). Instead the path-escape guard (`source.mjs:18`) is documented in `cmd-view-source.tactical` and
-elevated to the **hotspot** below, which is where its real significance lives. Forcing a one-off aggregate
-here would have read dishonestly.
+## Contradiction vs. the briefing/scout hint ("→ 403")
+The briefing said the guard "can REJECT the request → 403." **It does not return 403.** `/api/source` always responds `sendJson(res, 200, readSource(...))` (`server.mjs:195`); a rejected traversal is a **200 body** `{ exists:false, error:'path escapes repo root' }`, and the SPA renders it as a "source not found at repo root" note (`Detail.jsx:157`). The only literal `403` in the server is the **separate** static-file guard in `serveStatic` (`server.mjs:70`), which protects `distDir`, not the anchor read. I modeled the invariant's rejection as "returns exists:false/error", not a 403, and called this out in the invariant description.
 
-## The sandbox guard — how strong is it, really
-`readSource` computes `abs = path.resolve(root, relPath)` then rejects unless `abs === root` or
-`abs.startsWith(root + path.sep)` (line 18).
-- **Caught**: plain `../` traversal (path.resolve normalizes it) and absolute paths that land outside root
-  (POSIX `/etc/passwd`, Windows `C:\Windows\...`).
-- **Gap 1 — symlinks**: the check uses `path.resolve`, **not** `fs.realpath`. A symlink that lives *inside*
-  repoRoot but points *outside* it passes the prefix check and its target is read. This is a genuine escape
-  the guard does not close.
-- **Gap 2 — repoRoot scope**: repoRoot defaults to `cwd`, i.e. often the user's entire working tree, so
-  "sandboxed to repo root" can still mean "every file the user has here" (source, `.env`, committed secrets).
-Both gaps only matter once the endpoint is reachable by someone other than the local user — see the hotspot.
+## Modeling decisions worth the orchestrator's eye
+- **`agg-source-reader` is a stateless sandbox, MED confidence.** There is no persistent aggregate state here — `readSource` is a guarded read helper. I promoted it to an aggregate only because the briefing (and the schema) require an invariant to hang off an aggregate, and this is the boundary that owns the path-traversal check. An orchestrator may reasonably fold it into infra; flagged like the briefing's own `agg-server-session` MED note.
+- **Read flow, no events.** Pure synchronous read; nothing changes state, so I promoted no events (consistent with the two-plane rule — the window/clamp/slice are pipeline detail kept inside the command/aggregate tactical).
+- **Filesystem as datastores, reused pattern from merge-traces.** I created `ds-repo-fs` (filesystem = the sandbox root) ▸ `ds-repo-source-file` (file at anchor path) rather than reusing `ds-model-fs`. `ds-model-fs` in the merge trace is specifically the *model I/O* region (traces dir + flows.json); the **source tree** being read here is a different region of the same physical disk, and the sandbox root is conceptually the repo working tree, so a distinct `ds-repo-fs` reads truer. If the orchestrator prefers one filesystem node, `ds-repo-fs` could be merged under/aliased to `ds-model-fs` — same engine.
+- **VS Code deep link modeled as an actor→external `calls` branch.** The `vscode://` link and the inline excerpt live in the *same* `Anchor` block but are independent affordances; the operator clicking the link hands off to `ext-vscode` out-of-band (OS URL-scheme handler), so I branched `actor-operator → ext-vscode (calls)` rather than routing it through the excerpt read model. `ext-vscode` is `inferred:false` — the `vscode://file/` scheme is literally in the code (`model.js:44`).
+- **`rm-source-excerpt` fields.** Added conceptual fields `code` (derived-from `ds-repo-source-file`, transform `filter` = keep the line window) and `startLine/endLine` (computed clamp, empty sources). Provenance `inferred-from-dto` — same least-wrong fit the pilot used for computed-in-code values (there is still no `computed` provenance value; see merge-traces friction #5).
 
-## Hotspot
-- **`hot-source-api-network-exposed`** — `GET /api/source` is unauthenticated (no `/api` route has any auth)
-  and returns arbitrary repo-relative file contents. Default bind is `127.0.0.1`, but `--host` accepts
-  `0.0.0.0` (`bin/es-view.mjs:38` → `server.listen(pnum, host)` `server.mjs:202`). Bound non-loopback, this
-  is a network-reachable arbitrary-file-read over the whole repo tree, with the path-escape prefix guard as
-  the sole protection (and the symlink gap above widens it). Human question captured in the hotspot: should
-  es-view refuse a non-loopback bind without explicit opt-in / a token, and should `readSource` realpath-check
-  to defeat symlink escapes — or is a non-loopback bind accepted user risk for a localhost dev tool?
+## Shared-id reuse
+- Reused `actor-operator` and `ext-vscode` verbatim from the glossary.
+- New well-named ids: `cmd-view-source`, `agg-source-reader`, `inv-repo-root-sandbox`, `rm-source-excerpt`, `ds-repo-fs`, `ds-repo-source-file`, `hot-source-read-scope`.
 
-## Nodes (5; 4 reused shared ids, 1 new)
-- Reused verbatim ids: `actor-viewer`, `ext-source-fs`, `ext-editor`, `rm-source-excerpt`.
-  - `ext-source-fs` is the pilot's shared filesystem node; I gave it a source-reading `tactical` (source.mjs:20),
-    which the merge appends as a per-flow `usages` entry. Description broadened to name target-repo source files;
-    merge keeps the longest description across sources, so this is safe.
-- New: `cmd-view-source` (the read command). No new events (a read flow produces no domain fact worth promoting)
-  and no aggregate (per the decision above).
-
-## Edges
-`actor-viewer --issues--> cmd-view-source`; `cmd-view-source --reads--> ext-source-fs`;
-`rm-source-excerpt --projects from--> ext-source-fs`; `cmd-view-source --returns--> rm-source-excerpt`;
-sibling editor path: `actor-viewer --calls--> ext-editor`, `ext-editor --reads--> ext-source-fs`.
-All verbs are in `EDGE_VERBS` (merge.mjs:14), so no nonstandard-verb warnings.
+---
 
 ## Schema friction
-None.
+1. **The invariant's rejection has no HTTP-status affordance, and the briefing assumed one.** The briefing/scout framed the guard as "→ 403," but this guard rejects via an in-band `{exists:false,error}` 200 body, not a status code. The `invariant` node can't express "how" it rejects (status vs body vs throw). Minor — I put it in prose — but if the fleet keeps assuming rejections map to HTTP codes, some will mis-anchor. A one-line note that "reject" may be an in-band error payload, not necessarily an HTTP error, would help.
+2. **No verb for an out-of-band external deep-link handoff.** `actor → ext-vscode` is really "the panel offers a URL the OS resolves"; `calls` is the closest allowed verb but overstates that the app invokes VS Code (it only renders an `<a href>`). `triggers`/`raises` fit worse. `calls` is an acceptable stand-in; noting it like merge-traces friction #6.
+3. **`fields[]` name with a slash.** I used `"startLine / endLine"` as one conceptual field covering the paired window bounds. The schema only requires non-empty `name`+`derivation`, so this validates, but if any consumer treats `name` as an identifier a slash could surprise it. Cosmetic.

@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "description": "Recover a strategic Event Storming model from an existing codebase and render it as a navigable, source-linked flow explorer.",
   "license": "MIT",
-  "type": "commonjs",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bhastings-t3/event-storming-recovery.git"
@@ -19,37 +19,41 @@
     "node": ">=20"
   },
   "bin": {
-    "event-storming-recovery": "bin/es-view.mjs",
-    "es-view": "bin/es-view.mjs",
-    "es-merge": "tools/merge-flows.js",
-    "es-generate": "tools/generate-views.js"
+    "event-storming-recovery": "dist/node/adapters/cli/es-view.js",
+    "es-view": "dist/node/adapters/cli/es-view.js",
+    "es-merge": "dist/node/adapters/cli/es-merge.js",
+    "es-generate": "dist/node/adapters/cli/es-generate.js"
   },
   "files": [
-    "bin",
-    "src",
-    "tools",
+    "dist",
     "scripts",
     "prompts",
     "docs",
     "skills",
     "examples",
     ".claude-plugin",
-    "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "vite build",
-    "preview": "npm run build && node bin/es-view.mjs",
+    "build:node": "tsc -p tsconfig.node.json",
+    "build:web": "vite build",
+    "build": "npm run build:node && npm run build:web",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json",
+    "preview": "npm run build && node dist/node/adapters/cli/es-view.js",
     "demo": "node scripts/build-example.mjs",
+    "pretest": "npm run build:node",
     "test": "node --test",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "prepare": "npm run build"
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
     "@vitejs/plugin-react": "^4.3.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "typescript": "^5.9.3",
     "vite": "^6.0.7"
   },
   "keywords": [
@@ -61,6 +65,7 @@
     "code-comprehension"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
   }
 }

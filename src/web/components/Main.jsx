@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useExplorer } from '../store.jsx';
 import { flowNodeIds, isDataNode } from '../model.js';
-import { VERB_COLORS } from '../../lib/palette.mjs';
+import { VERB_COLORS } from '../../domain/model/palette';
 import Board from './Board.jsx';
 
 const VERB_ORDER = ['writes', 'persists to', 'projects from', 'reads', 'connects via'];

@@ -1,0 +1,160 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The local developer who runs the recovery CLIs. Here they launch the interactive explorer with `npx event-storming-recovery view` (the `es-view` bin), optionally passing --model / --traces / --port / --no-open, to boot one local server that serves the SPA + JSON API + MCP over a shared in-memory session."
+    },
+    {
+      "id": "cmd-launch-explorer",
+      "type": "command",
+      "label": "LaunchExplorer",
+      "inferred": true,
+      "description": "Boot an es-view session: parse args, resolve the model to serve (composing resolve-model), wire the shared in-memory session state and the persisted comment store, mount the SPA + JSON API + MCP handler, bind a local port, and best-effort open the browser. A single synchronous orchestration in bin/es-view.mjs main(); any failure before listen (bad --model, invalid --traces, no free port) aborts the whole boot with a nonzero exit.",
+      "tactical": {
+        "explanation": "main() in bin/es-view.mjs runs the boot top to bottom: (1) parseArgs turns argv into { open, port:5178, host:127.0.0.1, modelPath?, tracesDir?, repoRoot? } — an optional leading `view` subcommand is shifted off, a bare path is treated as --model, an unknown -flag exits 2. (2) resolveModel({...opts, cwd, packageRoot}) COMPOSES the resolve-model flow (reads agg-model): precedence --model > --traces (merge on the fly) > auto-discovered flows.json under cwd > bundled example self-model; it THROWS on a missing/invalid model file or --traces validation errors, caught here and turned into `process.exit(1)`. (3) createState() makes the empty in-memory session state (agg-selection / agg-context-bundle). (4) commentsPath = dirname(resolved.sourcePath)/comments.json; createCommentStore hydrates agg-comment-store from that sidecar if present. (5) buildServices bundles the model + built indexes (buildIndexes: nodeById, hotspotById) + repoRoot + comment store. (6) createMcpHandler wires the MCP face over the SAME services + state. (7) startServer listens (see agg-server-session). (8) it prints the connect banner (url, provenance, counts, the `claude mcp add` command) and, unless --no-open, calls openBrowser(url) fire-and-forget. main().catch maps any unhandled boot error to exit 1.",
+        "anchors": [
+          { "path": "bin/es-view.mjs", "line": 76, "symbol": "main", "note": "the whole boot orchestration" },
+          { "path": "bin/es-view.mjs", "line": 27, "symbol": "parseArgs", "note": "argv -> opts; defaults port 5178 / host 127.0.0.1 / open true" },
+          { "path": "bin/es-view.mjs", "line": 83, "symbol": "main", "note": "resolveModel(...) composed; try/catch -> exit 1 on throw" },
+          { "path": "bin/es-view.mjs", "line": 90, "symbol": "main", "note": "createState / createCommentStore / buildServices / createMcpHandler wiring" },
+          { "path": "bin/es-view.mjs", "line": 118, "symbol": "main", "note": "main().catch -> console.error + exit 1" }
+        ]
+      }
+    },
+    {
+      "id": "agg-server-session",
+      "type": "aggregate",
+      "label": "Explorer Server Session",
+      "inferred": true,
+      "description": "The running es-view session: one node:http server bound to one local port, plus the shared in-memory state (selection + context bundle) and the loaded services (model, indexes, comment store) that the SPA, the JSON API, and the MCP endpoint all close over. Its defining invariant is that these three faces share ONE process and ONE state, so a browser click is what a connected Claude session reads. MED confidence: much of its lifecycle is infrastructure (port binding, static serving) rather than domain rule, so boot risks are flagged as hotspots rather than minted as business invariants.",
+      "tactical": {
+        "explanation": "createServer wires the request router: /api/health, /api/model, /api/selection, /api/context, /api/comments, /api/item, /api/source, /api/mcp/*, the delegated /mcp handler, and static SPA serving from dist/web with index.html fallback. startServer then binds: tryListen(port, 20) calls server.listen(pnum, host); on 'listening' it sets runtime.baseUrl = http://host:pnum (so /api/mcp/* can print the exact connect command) and resolves { server, url, port }; on an EADDRINUSE 'error' with attempts left it retries pnum+1, else it rejects. The same http.Server object is reused across attempts. Binding to 127.0.0.1 by default keeps the session loopback-only. Once listening, the session is live and its shared state is externally readable via the API and MCP.",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 219, "symbol": "startServer", "note": "port bind + fall-forward, sets runtime.baseUrl, resolves { server, url, port }" },
+          { "path": "src/server/server.mjs", "line": 98, "symbol": "createServer", "note": "one http server routing API + /mcp + static SPA over shared state/services" },
+          { "path": "src/server/server.mjs", "line": 85, "symbol": "buildServices", "note": "model + buildIndexes + repoRoot + comment store bundled for API and MCP" },
+          { "path": "bin/es-view.mjs", "line": 96, "symbol": "main", "note": "startServer awaited; url used for the banner and browser open" }
+        ]
+      }
+    },
+    {
+      "id": "evt-server-started",
+      "type": "event",
+      "label": "ServerStarted",
+      "inferred": true,
+      "description": "The es-view server has bound a local port and is listening: the SPA, the JSON API, and the MCP endpoint are now reachable and share one in-memory session state. This is the moment the session becomes live — the operator's browser can load the explorer and a Claude terminal can `claude mcp add` and read the current selection. It holds only after model resolution, state wiring, and a successful port bind all succeed.",
+      "tactical": {
+        "explanation": "Realized when server.listen's callback fires inside tryListen: runtime.baseUrl is set and the startServer promise resolves with the bound url. bin/es-view.mjs then prints the banner (url, model provenance, node/flow/hotspot counts, any resolver warnings, and the `claude mcp add --transport http event-storming <url>/mcp` command). Distinct from the earlier (composed) model-resolution fact: resolution can fail and exit BEFORE any server exists, so ServerStarted has its own, later success window.",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 227, "symbol": "startServer", "note": "server.listen callback: baseUrl set, promise resolves" },
+          { "path": "bin/es-view.mjs", "line": 103, "symbol": "main", "note": "prints url + provenance + counts + the MCP connect command after start" }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): deduped nodes plus flows, hotspots, terms, and derived meta. Loaded by the launch flow via resolveModel (precedence --model > --traces merge > auto-discovered > bundled example) and held in memory for the session to serve. Owned/defined by the merge and resolve-model flows; referenced here as the read the session serves.",
+      "tactical": {
+        "explanation": "resolveModel in src/server/resolve-model.mjs returns { model, source, sourcePath, repoRoot, warnings }. On the --traces path it calls mergeTracesDir and THROWS if merged.errors.length, so the session never serves an invalid model; the --model path readModelFile-validates that nodes/flows arrays exist. buildServices then indexes model.nodes/model.hotspots for the API and MCP.",
+        "anchors": [
+          { "path": "src/server/resolve-model.mjs", "line": 66, "symbol": "resolveModel", "note": "precedence resolution; returns model + provenance + repoRoot" },
+          { "path": "src/server/resolve-model.mjs", "line": 77, "symbol": "resolveModel", "note": "throws on --traces validation errors so the server serves nothing invalid" }
+        ]
+      }
+    },
+    {
+      "id": "agg-comment-store",
+      "type": "aggregate",
+      "label": "Comment Store",
+      "inferred": true,
+      "description": "Human comments on model items (node / flow / hotspot), persisted to a comments.json sidecar next to the model so they survive model regeneration. Owned/defined by the comment-store flow; the launch flow only HYDRATES it at boot by reading the sidecar into memory, and best-effort persistence is warned-once if the location is not writable.",
+      "tactical": {
+        "explanation": "bin/es-view.mjs builds commentsPath = path.dirname(resolved.sourcePath)/comments.json and calls createCommentStore(commentsPath), which, if the file exists, JSON.parses it and seeds byKey; a corrupt sidecar is swallowed (start empty rather than crash). The store is passed into buildServices so /api/comments and the MCP context render human notes.",
+        "anchors": [
+          { "path": "bin/es-view.mjs", "line": 92, "symbol": "main", "note": "commentsPath = dirname(sourcePath)/comments.json; createCommentStore(commentsPath)" },
+          { "path": "src/server/comments.mjs", "line": 15, "symbol": "createCommentStore", "note": "hydrate byKey from the sidecar if present; tolerate corrupt file" }
+        ]
+      }
+    },
+    {
+      "id": "ext-browser",
+      "type": "externalSystem",
+      "label": "Default web browser",
+      "inferred": false,
+      "description": "The operator's default web browser, launched fire-and-forget at the end of boot so the explorer opens automatically. Outside the process and best-effort: opening never blocks or fails the session, and --no-open skips it entirely (the url is always printed too).",
+      "tactical": {
+        "explanation": "openBrowser(url) in src/server/open.mjs spawns a detached, stdio-ignored, unref'd child per platform: `cmd /c start \"\" <url>` on win32, `open <url>` on darwin, else `xdg-open <url>`. The whole call is wrapped in try/catch and never throws. Invoked from main() only when opts.open is true.",
+        "anchors": [
+          { "path": "src/server/open.mjs", "line": 4, "symbol": "openBrowser", "note": "platform-specific detached spawn, swallow-all try/catch" },
+          { "path": "bin/es-view.mjs", "line": 115, "symbol": "main", "note": "if (opts.open) openBrowser(url) — fire and forget" }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "launch-explorer",
+      "name": "Operator launches the interactive explorer",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "The operator runs `npx event-storming-recovery view` (the es-view bin). Boot parses args, resolves which model to serve (composing resolve-model: explicit --model, an on-the-fly --traces merge, an auto-discovered flows.json, or the bundled self-model), hydrates the persisted comment store from the comments.json sidecar, wires the empty in-memory session state, and starts ONE local http server that serves the SPA, the JSON API, and the MCP endpoint over that one shared state. The server binds 127.0.0.1:5178, falling forward up to 20 ports if taken; on success it prints the url and the `claude mcp add` command and best-effort opens the browser. The point is a single live session where a human's click in the browser is exactly what a connected Claude terminal reads.",
+      "trigger": "Operator runs `npx event-storming-recovery view [options]` / `es-view` (bin/es-view.mjs main()).",
+      "steps": [
+        "actor-operator",
+        "cmd-launch-explorer",
+        "agg-model",
+        "agg-comment-store",
+        "agg-server-session",
+        "evt-server-started"
+      ],
+      "edges": [
+        { "from": "actor-operator", "to": "cmd-launch-explorer", "verb": "issues" },
+        { "from": "cmd-launch-explorer", "to": "agg-model", "verb": "reads" },
+        { "from": "cmd-launch-explorer", "to": "agg-comment-store", "verb": "reads" },
+        { "from": "cmd-launch-explorer", "to": "agg-server-session", "verb": "handled by" },
+        { "from": "agg-server-session", "to": "evt-server-started", "verb": "emits" },
+        { "from": "agg-server-session", "to": "ext-browser", "verb": "calls" }
+      ],
+      "hotspots": [
+        "hot-port-fallforward-exhaustion",
+        "hot-example-comments-unwritable"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-port-fallforward-exhaustion",
+      "label": "Port fall-forward is bounded and fails hard; the http.Server is reused across attempts",
+      "description": "startServer tries the preferred port then up to 20 successors on EADDRINUSE; if all 20 are taken, OR the very first bind hits any non-EADDRINUSE error, it rejects and main().catch prints a raw error and exits 1 with no operator-facing remediation. Secondary subtlety: the SAME http.Server object is re-listened across attempts, so each failed attempt leaves its server.listen 'listening' callback queued — on the eventual successful bind every queued callback fires, resolving the promise (idempotent) and re-setting runtime.baseUrl more than once (harmless today). Human question: is a 20-port ceiling right for a tool meant to run many sessions, and should exhaustion give a friendly 'all ports 5178-5197 busy, pass --port' message instead of a stack trace? Should each attempt use a fresh server (or removeAllListeners) rather than re-listening one object?",
+      "tactical": {
+        "explanation": "tryListen registers server.once('error', ...) and calls server.listen(pnum, host, cb); on EADDRINUSE with attemptsLeft>0 it recurses pnum+1, else reject(err). No cap message is surfaced; the rejection propagates to bin/es-view.mjs main().catch -> console.error(err) -> process.exit(1).",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 221, "symbol": "startServer", "note": "tryListen recursion; reject on exhaustion or non-EADDRINUSE error" },
+          { "path": "src/server/server.mjs", "line": 233, "symbol": "startServer", "note": "tryListen(port, 20) — the 20-attempt ceiling" },
+          { "path": "bin/es-view.mjs", "line": 118, "symbol": "main", "note": "main().catch -> raw console.error + exit 1" }
+        ]
+      }
+    },
+    {
+      "id": "hot-example-comments-unwritable",
+      "label": "Comment sidecar is placed next to the model even when that location is read-only",
+      "description": "The comments.json sidecar path is dirname(resolved.sourcePath). When no local model is found and es-view falls back to the BUNDLED example self-model, that dirname is inside the installed package (often a global/read-only npx location), so persist() fails and createCommentStore warns once and keeps comments in memory only — they are silently lost when the session ends. On the --traces path the sidecar lands INSIDE the traces directory (alongside the per-flow trace files); on --model/discovered it lands next to flows.json (intended). Human question: when the model directory is read-only or is the bundled example, should the sidecar fall back to a writable user-scoped location (e.g. a cache dir) so human comments are not silently discarded, and is writing comments.json into a --traces input directory desirable?",
+      "tactical": {
+        "explanation": "bin/es-view.mjs computes commentsPath = path.join(path.dirname(resolved.sourcePath), 'comments.json'); resolveModel sets sourcePath to the bundled example path (packageRoot/examples/.../model/flows.json) when nothing is found, or to the traces dir on --traces. comments.mjs persist() try/catches the writeFileSync and, on failure, does a one-time `! comments not persisted` warning, otherwise keeping data in the in-memory byKey map only.",
+        "anchors": [
+          { "path": "bin/es-view.mjs", "line": 92, "symbol": "main", "note": "commentsPath rooted at dirname(resolved.sourcePath)" },
+          { "path": "src/server/comments.mjs", "line": 22, "symbol": "persist", "note": "best-effort writeFileSync; warn-once, keep in memory on failure" },
+          { "path": "src/server/resolve-model.mjs", "line": 93, "symbol": "resolveModel", "note": "example fallback sets sourcePath inside the installed package" }
+        ]
+      }
+    }
+  ]
+}

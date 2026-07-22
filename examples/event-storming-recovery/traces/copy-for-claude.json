@@ -1,0 +1,185 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The developer using the es-view explorer in a browser. Here they copy a grounded, source-anchored Markdown rendering of a node, flow, hotspot, or the whole context bundle to the OS clipboard, then paste it into a Claude session as pre-grounded context."
+    },
+    {
+      "id": "cmd-copy-for-claude",
+      "type": "command",
+      "label": "CopyGroundedMarkdown",
+      "inferred": true,
+      "description": "Copy the grounded Markdown for one item (node / flow / hotspot) or the whole context bundle to the clipboard so it can be pasted into a Claude chat. A read/export action: it mutates no model state, it fetches a freshly-rendered Markdown projection and writes it to the external clipboard.",
+      "tactical": {
+        "explanation": "Split across a client trigger and a server projection. CLIENT (React, runs in the browser): three copy sites each fetch a `markdown` string and call navigator.clipboard.writeText(r.markdown || ''): (1) Detail.jsx DetailActions.copy -> getItem('node', node.id) for the node open in the detail pane; (2) ContextMenu.jsx copy -> getItem(type, id) for the right-clicked node/flow/hotspot; (3) ContextBundle.jsx copyAll -> getContext() for the whole bundle. api.js turns these into GET /api/item?type&id and GET /api/context. SERVER: the markdown is built ENTIRELY server-side in context.mjs -- /api/item calls renderItemMarkdown (dispatches to renderNodeContextMarkdown / renderFlowMarkdown / renderHotspotMarkdown) and /api/context calls renderBundleMarkdown over state.getBundle(). The client never assembles markdown; it only relays the server string to the clipboard. Note the empty-string fallback `r.markdown || ''` -- a 404 or errored fetch that still resolves writes an EMPTY clipboard while the button reports success (see hot-silent-empty-copy).",
+        "anchors": [
+          { "path": "src/web/components/Detail.jsx", "line": 167, "symbol": "DetailActions.copy", "note": "getItem('node', id) then clipboard.writeText(r.markdown || '')" },
+          { "path": "src/web/components/ContextMenu.jsx", "line": 35, "symbol": "ContextMenu.copy", "note": "getItem(type, id) for the right-clicked item; no 'copied' feedback" },
+          { "path": "src/web/components/ContextBundle.jsx", "line": 24, "symbol": "ContextBundle.copyAll", "note": "getContext() -> clipboard.writeText for the whole bundle" },
+          { "path": "src/web/api.js", "line": 28, "symbol": "getItem", "note": "GET /api/item?type&id -> { markdown }" }
+        ]
+      }
+    },
+    {
+      "id": "rm-grounded-markdown",
+      "type": "readModel",
+      "label": "Grounded Markdown export",
+      "inferred": true,
+      "description": "The ready-to-paste, source-anchored Markdown rendering of a node, flow, hotspot, or bundle: label, description, tags, fields, invariants/related, flows, and for every anchor the ACTUAL source code re-read from disk, plus any human comments. This is the same projection the MCP side hands to a connected Claude session (event-storming://selected-nodes resource, get_node/get_flow tools) -- copy-for-claude is the clipboard route to it.",
+      "tactical": {
+        "explanation": "Built server-side in src/server/context.mjs. buildNodeContext assembles the node view (flows, enforces relation, fields, physical breadcrumb/consumers, comments) and, with includeSource=true (the default), calls readSource(repoRoot, path, line) for EVERY anchor so the code is re-read fresh from the repo filesystem on each copy. renderNodeContextMarkdown / renderFlowMarkdown (adds a colored Mermaid graph + every node grounded) / renderHotspotMarkdown emit the markdown; renderItemMarkdown dispatches by type and renderBundleMarkdown joins bundle items with '---'. It projects from agg-model (the node/flow/hotspot graph + fields), from agg-context-bundle (which items, for the bundle copy), and from ds-model-fs via readSource for the inlined source; comments come from agg-comment-store. Copying a whole flow inlines source for every node in it, so the export can be large.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 164, "symbol": "renderItemMarkdown", "note": "dispatch node/flow/hotspot -> the right renderer" },
+          { "path": "src/server/context.mjs", "line": 98, "symbol": "renderNodeContextMarkdown", "note": "node markdown incl. inlined anchor source" },
+          { "path": "src/server/context.mjs", "line": 171, "symbol": "renderBundleMarkdown", "note": "join bundle items with '---'; also the MCP selected-nodes resource" },
+          { "path": "src/server/context.mjs", "line": 58, "symbol": "buildNodeContext", "note": "readSource(repoRoot, path, line) per anchor when includeSource" },
+          { "path": "src/server/source.mjs", "line": 13, "symbol": "readSource", "note": "re-reads real source from repo fs, sandboxed to repoRoot" }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): nodes, flows, hotspots, terms and derived meta, resolved once at server boot. The grounded-markdown export is a pure read projection over it; the copy path never mutates it.",
+      "tactical": {
+        "explanation": "Served as services.model / services.indexes (nodeById, hotspotById). buildNodeContext / buildFlowContext / buildHotspotContext all read from these indexes to assemble the export. See merge-traces trace for how the model is built and validated.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 19, "symbol": "buildNodeContext", "note": "reads services.model + indexes.nodeById" }
+        ]
+      }
+    },
+    {
+      "id": "agg-context-bundle",
+      "type": "aggregate",
+      "label": "Context bundle",
+      "inferred": true,
+      "description": "The in-memory, insertion-ordered set of typed refs { type: node|flow|hotspot, id } the human has gathered for Claude. Lives in the one shared server session state alongside the selection. 'Copy all for Claude' projects this whole set to markdown; the same state backs the MCP event-storming://selected-nodes resource.",
+      "tactical": {
+        "explanation": "state.mjs holds a Map keyed by 'type:id'; getBundle() returns [{type,id}]. GET /api/context renders renderBundleMarkdown(services, state.getBundle()). Single-item copies do NOT touch the bundle -- they pass an explicit {type,id} to /api/item.",
+        "anchors": [
+          { "path": "src/server/state.mjs", "line": 20, "symbol": "createState.getBundle", "note": "typed-ref set the bundle copy projects from" },
+          { "path": "src/server/server.mjs", "line": 140, "symbol": "server./api/context", "note": "GET renders renderBundleMarkdown over getBundle()" }
+        ]
+      }
+    },
+    {
+      "id": "agg-comment-store",
+      "type": "aggregate",
+      "label": "Comment store",
+      "inferred": true,
+      "description": "Human notes attached to model items (node/flow/hotspot), persisted to the comments.json sidecar. The grounded markdown appends a 'Comments (human notes)' block for the copied item, so pasted context carries the operator's annotations.",
+      "tactical": {
+        "explanation": "buildNodeContext / buildFlowContext / buildHotspotContext read services.comments.get(type, id); renderComments emits the markdown block. If no comment store is wired the block is simply omitted.",
+        "anchors": [
+          { "path": "src/server/context.mjs", "line": 90, "symbol": "renderComments", "note": "renders the human-notes markdown block appended to each item" },
+          { "path": "src/server/context.mjs", "line": 85, "symbol": "buildNodeContext", "note": "services.comments.get('node', id) folded into the context" }
+        ]
+      }
+    },
+    {
+      "id": "inv-copy-target-exists",
+      "type": "invariant",
+      "label": "Copy target must resolve to a known model item",
+      "inferred": true,
+      "description": "ERROR-level guard: the copied item id must resolve to a real node/flow/hotspot in the model, else GET /api/item returns 404 and no markdown is produced. This is referential integrity at the read boundary -- a stale or wrong id cannot fabricate an export. (Note the client swallows the 404 into an empty clipboard; see hot-silent-empty-copy.)",
+      "tactical": {
+        "explanation": "itemExists(services, type, id) checks model.flows for a flow, indexes.hotspotById for a hotspot, else indexes.nodeById. GET /api/item 404s when it fails; renderItemMarkdown itself also returns '' for an unresolved id. The bundle route can only hold ids that passed itemExists on POST /api/context, so the bundle copy cannot carry a dangling ref.",
+        "anchors": [
+          { "path": "src/server/server.mjs", "line": 27, "symbol": "itemExists", "note": "resolve id against flows / hotspots / nodes" },
+          { "path": "src/server/server.mjs", "line": 186, "symbol": "server./api/item", "note": "404 when the copy target does not resolve" }
+        ]
+      }
+    },
+    {
+      "id": "ds-model-fs",
+      "type": "datastore",
+      "storeKind": "filesystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The repo filesystem, reached through node:fs. On the copy path it is the source of the inlined anchor code: readSource re-reads the real file (sandboxed to repoRoot) for every anchor so the exported markdown is grounded in current source, not a cached snippet.",
+      "tactical": {
+        "explanation": "source.mjs readSource does fs.existsSync + fs.readFileSync(abs) after resolving relPath under repoRoot and rejecting ../ escapes; it returns an 8-line context window around the anchor line.",
+        "anchors": [
+          { "path": "src/server/source.mjs", "line": 20, "symbol": "readSource", "note": "fs.readFileSync of the anchored source file" }
+        ]
+      }
+    },
+    {
+      "id": "ext-clipboard",
+      "type": "externalSystem",
+      "label": "OS clipboard",
+      "inferred": false,
+      "description": "The browser/OS clipboard, written via the async Clipboard API (navigator.clipboard.writeText). The external sink of this flow: the grounded markdown lands here so the operator can paste it wherever they want a Claude session.",
+      "tactical": {
+        "explanation": "Written client-side by all three copy sites. Requires a secure context and can be blocked (permissions / non-HTTPS); every site wraps the write in try/catch, so a blocked clipboard fails silently.",
+        "anchors": [
+          { "path": "src/web/components/Detail.jsx", "line": 167, "symbol": "DetailActions.copy", "note": "navigator.clipboard.writeText(...)" }
+        ]
+      }
+    },
+    {
+      "id": "ext-claude-mcp",
+      "type": "externalSystem",
+      "label": "Claude session",
+      "inferred": false,
+      "description": "A Claude chat the operator pastes the grounded markdown into. This clipboard route is the manual alternative to the live MCP bridge (the connected Claude reading the same projection via the event-storming://selected-nodes resource and get_node/get_flow tools). See the context/MCP flows for that automated path.",
+      "tactical": {
+        "explanation": "Off-process; the operator pastes the copied markdown into any Claude chat. Referenced here only as the destination of the export -- not re-derived."
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "copy-for-claude",
+      "name": "Operator copies grounded markdown for a Claude session",
+      "tier": 1,
+      "kind": "read",
+      "status": "live",
+      "summary": "From the explorer, the operator copies a grounded, source-anchored Markdown rendering of a node, flow, hotspot, or the whole context bundle to the clipboard, then pastes it into a Claude chat. The markdown is assembled entirely server-side (context.mjs render* functions, the SAME projection the MCP resource/tools serve) and re-reads the real source behind every anchor from the repo filesystem, so what Claude receives is grounded in actual code rather than bare labels. The client React code only fetches the rendered string and hands it to the clipboard. This is the manual, copy-paste alternative to the live MCP context bridge.",
+      "trigger": "Operator clicks '⧉ Copy for Claude' (node detail), right-clicks an item -> 'Copy this <item> for Claude' (context menu), or clicks 'Copy all for Claude' (context bundle drawer).",
+      "steps": [
+        "actor-operator",
+        "cmd-copy-for-claude",
+        "rm-grounded-markdown",
+        "ext-clipboard",
+        "ext-claude-mcp"
+      ],
+      "edges": [
+        { "from": "actor-operator", "to": "cmd-copy-for-claude", "verb": "issues" },
+        { "from": "cmd-copy-for-claude", "to": "rm-grounded-markdown", "verb": "reads" },
+        { "from": "rm-grounded-markdown", "to": "agg-model", "verb": "projects from" },
+        { "from": "rm-grounded-markdown", "to": "agg-context-bundle", "verb": "projects from" },
+        { "from": "rm-grounded-markdown", "to": "agg-comment-store", "verb": "reads" },
+        { "from": "rm-grounded-markdown", "to": "ds-model-fs", "verb": "projects from" },
+        { "from": "agg-model", "to": "inv-copy-target-exists", "verb": "enforces" },
+        { "from": "cmd-copy-for-claude", "to": "ext-clipboard", "verb": "writes" },
+        { "from": "ext-clipboard", "to": "ext-claude-mcp", "verb": "read by" }
+      ],
+      "hotspots": [
+        "hot-silent-empty-copy"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-silent-empty-copy",
+      "label": "A failed context fetch still reports success and copies an empty clipboard",
+      "description": "All three copy sites do navigator.clipboard.writeText(r.markdown || ''). If the fetch RESOLVES but carries no markdown -- a 404 for an unknown/stale id (returns { error }), an error body, or an empty bundle -- the client writes an EMPTY string to the clipboard, and Detail/ContextBundle still flip to 'Copied ✓'. The try/catch only catches a rejected clipboard write, not a resolved-but-empty fetch. Human question: should copy verify r.markdown is non-empty (and surface the 404/empty-bundle case) before claiming success, so the operator does not paste blank context into Claude believing it worked?",
+      "tactical": {
+        "explanation": "getItem/getContext resolve the fetch to JSON regardless of HTTP status; on 404 the body is { error } and r.markdown is undefined, so `r.markdown || ''` writes ''. Detail.jsx and ContextBundle.jsx then setCopied(true). ContextMenu.jsx additionally shows no feedback at all. The server 404s via itemExists (inv-copy-target-exists), but that signal is lost at the client.",
+        "anchors": [
+          { "path": "src/web/components/Detail.jsx", "line": 167, "symbol": "DetailActions.copy", "note": "writeText(r.markdown || '') then setCopied(true)" },
+          { "path": "src/web/components/ContextBundle.jsx", "line": 24, "symbol": "ContextBundle.copyAll", "note": "same empty-fallback; button shows 'Copied ✓'" },
+          { "path": "src/web/api.js", "line": 28, "symbol": "getItem", "note": "resolves fetch to JSON without checking res.ok" },
+          { "path": "src/server/server.mjs", "line": 186, "symbol": "server./api/item", "note": "404 for unknown id -- signal dropped client-side" }
+        ]
+      }
+    }
+  ]
+}

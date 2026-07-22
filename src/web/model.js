@@ -1,13 +1,13 @@
 // SPA-facing model selectors. The pure, framework-agnostic ones live in src/lib/selectors.mjs
 // (shared with the server); re-exported here. The palette-dependent ones stay local.
 import { PALETTE } from './palette.js';
-import { flowNodeIds, nodeFlows } from '../lib/selectors.mjs';
+import { flowNodeIds, nodeFlows } from '../application/read-models/indexes';
 
 export {
   buildIndexes, flowNodeIds, nodeFlows, enforcesRelation, nodeUsages,
   DATA_TYPES, DATA_TYPE_SET, isDataNode, STORAGE_VERBS,
   parentChain, dataModelTree, isRecordSet, fieldTree, datastoreConsumers, fieldConsumers, nodeStorageLinks,
-} from '../lib/selectors.mjs';
+} from '../application/read-models/indexes';
 
 // types present in the model, in palette order (drives gallery/glossary filter chips + sort)
 export function galleryTypes(model) {

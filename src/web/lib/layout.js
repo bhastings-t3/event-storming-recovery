@@ -6,7 +6,7 @@
 // Globals the original relied on (nodeById, PALETTE, selectedId, openDetail) are passed in
 // through `ctx = { nodeById, palette, selectedId, onOpenDetail }`.
 import { el } from './dom.js';
-import { DATA_TYPE_SET } from '../../lib/selectors.mjs';
+import { DATA_TYPE_SET } from '../../application/read-models/indexes';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 const DUP_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#63d471', '#ff9f43', '#4d96ff', '#ff6ec7', '#c0eb75', '#f78fb3', '#5ed0e0', '#e0a458'];

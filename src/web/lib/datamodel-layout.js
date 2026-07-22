@@ -13,8 +13,8 @@
 // Imperative (DOM + measurement + SVG), mounted via a ref like the flow Board; reuses setupPanZoom.
 // ctx = { palette, onOpenDetail, collapsed:Set<id>, onToggle:(id)=>void }.
 import { el } from './dom.js';
-import { isRecordSet, datastoreConsumers } from '../../lib/selectors.mjs';
-import { VERB_COLORS } from '../../lib/palette.mjs';
+import { isRecordSet, datastoreConsumers } from '../../application/read-models/indexes';
+import { VERB_COLORS } from '../../domain/model/palette';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 const CARDW = 250;        // fixed card / header width

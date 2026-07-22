@@ -8,7 +8,7 @@
 // smaller graph than the flow board, so no node duplication / read-model satellites / invariant
 // handling here — just rank, place, measure, route.
 import { el } from './dom.js';
-import { flowNodeIds, isDataNode } from '../../lib/selectors.mjs';
+import { flowNodeIds, isDataNode } from '../../application/read-models/indexes';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 const COLW = 300, ROWH = 152, PAD = 40;

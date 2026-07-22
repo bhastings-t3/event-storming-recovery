@@ -26,7 +26,7 @@ function run(label, args) {
   c.on('exit', (code) => { console.log(`\n[${label}] exited (${code ?? 0})`); shutdown(code ?? 0); });
 }
 
-run('api', [path.join(root, 'dist', 'node', 'adapters', 'cli', 'es-view.js'), '--no-open']);
+run('api', [path.join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js'), 'view', '--no-open']);
 run('web', [viteBin]);
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));

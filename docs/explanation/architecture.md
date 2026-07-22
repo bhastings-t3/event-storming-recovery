@@ -2,19 +2,20 @@
 
 *Explanation. Part of the [documentation set](../README.md).*
 
-This is about the running tool, the `es-view` app and the pipeline that feeds it, not the
-recovery method itself (that's [`METHOD.md`](METHOD.md)). It's for understanding why the pieces
-are shaped the way they are, not for driving them; for that, see the
+This is about the running tool, the Node side of `event-storming-recovery` and the pipeline that
+feeds it, not the recovery method itself (that's [`METHOD.md`](METHOD.md)). It's for understanding
+why the pieces are shaped the way they are, not for driving them; for that, see the
 [CLI](../reference/cli.md) and [MCP](../reference/mcp.md) reference and the
 [how-to guides](../how-to/).
 
 ## The model is canonical, the views are generated
 
 `flows.json` is the single source of truth. `explorer.html` and `flows.dot` are both rendered from
-it by `tools/generate-views.js`, and nothing hand-edits them: if a view is wrong, the fix is a
-trace or the generator, then a re-render, never a hand patch to the HTML or the DOT. This is what
-keeps the model diffable (it's JSON, reviewable in a pull request) while the views stay disposable
-and always in sync with it.
+it by the `generate` command (`src/adapters/cli/es-generate.ts`, which calls
+`src/application/commands/generate-views.ts`), and nothing hand-edits them: if a view is wrong, the
+fix is a trace or the generator, then a re-render, never a hand patch to the HTML or the DOT. This
+is what keeps the model diffable (it's JSON, reviewable in a pull request) while the views stay
+disposable and always in sync with it.
 
 Shared node ids are what let many independently-traced flows join into one map instead of staying
 30 islands: one `agg-order`, referenced by every flow that touches ordering, so clicking that
@@ -22,23 +23,69 @@ aggregate from any flow lands on the same node. That only works because the reco
 agrees a shared-id glossary up front (see METHOD.md's Phase 1); the schema itself just enforces
 that ids resolve.
 
-## One process, three faces
+## Ports and adapters, in three layers
 
-`es-view` starts a single Node HTTP server (`src/server/server.mjs`) that answers three kinds of
-request from one shared in-memory state (`src/server/state.mjs`):
+The Node side is TypeScript, laid out as ports-and-adapters (a.k.a. hexagonal architecture):
+
+- **`src/domain/`** — pure aggregates that own their own invariants, with no I/O and no framework
+  dependency. The `Model` aggregate (`model.ts`, `invariants.ts`, `merge.ts`, `types.ts`,
+  `palette.ts`) is the typed schema plus the merge/validate rules; `comment-store/` is the
+  in-memory comment aggregate; `session/` holds `Selection` and `ContextBundle` (the live
+  human-attention state); `source/` shapes a windowed source-code view. Nothing here reads a file
+  or opens a socket.
+- **`src/application/`** — the application layer that orchestrates the domain: one handler per use
+  case under `commands/` (`select-node`, `add-comment`, `merge-traces`, `generate-views`, …) and
+  `queries/` (`get-node`, `get-flow`, `list-model`, …), plus `read-models/` (grounded projections
+  like the node/flow context bundle rendered for both the UI and Claude) and `services.ts` (the
+  shared bundle: resolved model, indexes, repo root, comment store, source reader). Handlers depend
+  only on the **ports** declared in `ports.ts` (`ModelRepository`, `CommentRepository`,
+  `SourceGateway`, `ClaudeCliGateway`, `BrowserGateway`, `Clock`) — interfaces, never concrete
+  adapters.
+- **`src/adapters/`** — everything that touches the outside world, implementing those ports:
+  `fs/` (`model-repository.ts`, `comment-repository.ts`, `source-gateway.ts`,
+  `generator-writer.ts` — reading/writing files), `process/` (`claude-cli.ts` shells out to
+  `claude mcp add`; `browser.ts` opens the user's browser), `http/server.ts` (the JSON API),
+  `mcp/mcp-server.ts` (the MCP endpoint), and `cli/` (the commander entry `cli.ts` plus the
+  `runView`/`runMerge`/`runGenerate` action modules, one per subcommand).
+
+The dependency arrow always points inward: adapters depend on application, application depends on
+domain, and nothing in `domain/` or `application/` imports from `adapters/`. Each CLI entry
+(`es-view.ts`, `es-merge.ts`, `es-generate.ts`) is a **composition root**: it's the one place that
+constructs the concrete adapters (the real filesystem repository, the real source gateway, the
+real Claude CLI gateway) and injects them into the application layer. That's also why the domain
+and application code is straightforward to reason about and test in isolation: swap in a fake
+`ModelRepository` and every command/query behaves identically, no server or filesystem required.
+
+`src/web/` (the React SPA) sits outside this layering; it's a separate build (Vite) that talks to
+the HTTP adapter over `/api/*`, the same way any external client would.
+
+## One process, three faces, one application layer
+
+`event-storming-recovery view` starts a single Node HTTP server
+(`src/adapters/http/server.ts`) that answers three kinds of request, and — this is the point of the
+layering above — **both non-SPA faces call the exact same application-layer commands and queries**:
 
 - **The SPA** (`dist/web`, built by Vite): the Flows board, Gallery, Glossary, Overview, and
   source-linked detail panel a human clicks around in.
-- **A JSON API** (`/api/*`): the model, the current selection, the curated context bundle, source
-  file contents for the "view source" panel, and comments (which persist to a sidecar file next to
-  the model, so they survive a model regeneration).
-- **An MCP endpoint** (`POST /mcp`, `src/server/mcp.mjs`): the same in-memory selection and bundle,
-  exposed as MCP tools and a resource (see the [MCP reference](../reference/mcp.md)).
+- **A JSON API** (`/api/*`): each route is a thin adapter that parses the HTTP request, calls an
+  application command or query (`selectNode`, `listContextBundle`, `getItem`, `viewSource`, …), and
+  serializes the result. The model, the current selection, the curated context bundle, source file
+  contents for the "view source" panel, and comments (which persist to a `comments.json` sidecar
+  next to the model, so they survive a model regeneration).
+- **An MCP endpoint** (`POST /mcp`, `src/adapters/mcp/mcp-server.ts`): each tool handler
+  (`get_current_selection`, `get_node`, `get_flow`, `list_model`, `list_data_model`) and the
+  `event-storming://selected-nodes` resource call the identical application queries and
+  read-models as the HTTP routes above — `buildNodeContext`, `getNode`, `getFlow`, `listModel`,
+  `listDataModel`, `renderBundleMarkdown` all live in `src/application/`, not duplicated per
+  adapter.
 
-Because all three faces read the same `state` object in the same process, clicking a node in the
-browser and then asking a connected Claude session to "explain the selected node" produce
-consistent answers: there is no sync step, no polling, no separate database. The tool call and the
-browser click are two views onto one piece of server memory.
+Both faces are constructed once, in `runView` (`src/adapters/cli/es-view.ts`), from one
+`ServiceBundle` (`buildServices`) and one pair of session objects (`Selection`, `ContextBundle`),
+which is why they share state: clicking a node in the browser and then asking a connected Claude
+session to "explain the selected node" produce consistent answers. There is no sync step, no
+polling, no separate database, and no risk of the HTTP and MCP faces drifting apart on what a given
+node or flow actually means, because they're both calling into the same handful of application
+functions rather than each re-deriving the answer.
 
 The MCP design deliberately splits "current selection" and "curated bundle" into different MCP
 primitives. Selection is a **tool** (`get_current_selection`): always fresh, no subscription to

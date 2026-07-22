@@ -26,10 +26,10 @@ guide.
 
 ## Reference: look something up
 
-- [CLI](reference/cli.md): the `event-storming-recovery` / `es-view`, `es-merge`, `es-generate`
-  commands and the npm scripts, with every option.
+- [CLI](reference/cli.md): the unified `event-storming-recovery` CLI's `view`/`merge`/`generate`
+  subcommands and the npm scripts, with every option.
 - [MCP](reference/mcp.md): the `event-storming` MCP server's tools and resource, verified against
-  `src/server/mcp.mjs`.
+  `src/adapters/mcp/mcp-server.ts`.
 - [flows.json schema](reference/flows-schema.md): the node/edge/flow/term contract every trace and
   every generated model conforms to.
 

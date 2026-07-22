@@ -38,9 +38,9 @@ from `prompts/00-orchestrator.md` instead and fill in its placeholders (`{REPO_R
    a trigger it merely couldn't find should be a hotspot, not a `dead` verdict.
 4. **Merge.** Run the merge once the trace waves land:
    ```sh
-   node tools/merge-flows.js <tracesDir> <out>/model/flows.json
+   npx event-storming-recovery merge <tracesDir> <out>/model/flows.json
    ```
-   (see the [CLI reference](../reference/cli.md) for `es-merge`). If it reports errors, fix the
+   (see the [CLI reference](../reference/cli.md) for `merge`). If it reports errors, fix the
    offending trace and re-run; don't hand-edit the output. If two traces modeled the same concept
    under different ids, that's ubiquitous-language drift: pick one id and fix both traces, unless
    they're genuinely different altitudes of the same action (see METHOD.md's note on altitude

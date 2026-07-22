@@ -75,7 +75,7 @@ model"): the exact flow you just ran in step 3, recovered from its own code.
   events it emits, left to right.
 - Click the **`MergeTraces`** sticky. The detail panel opens with its tactical explanation (how
   the merge is actually implemented) and its source anchors. Click an anchor; it's a `vscode://`
-  deep link straight to the real line in `src/lib/merge.mjs`.
+  deep link straight to the real line in `src/domain/model/` (the merge and validation logic).
 - Click the **`agg-model`** aggregate sticky and notice the invariants hanging off it, for example
   referential integrity: every id the model references must resolve.
 - Find the red hotspot card on this flow: *"es-merge writes an invalid flows.json even when

@@ -2,8 +2,8 @@
 
 *Reference. Part of the [documentation set](../README.md).*
 
-The MCP face of the running `es-view` server (`src/server/mcp.mjs`), verified against the source.
-It runs in the same process as the web UI and shares its in-memory state, so a selection made in
+The MCP face of the running `es-view` server (`src/adapters/mcp/mcp-server.ts`), verified against
+the source. It runs in the same process as the web UI and shares its in-memory state, so a selection made in
 the browser is what a connected Claude session reads. For the procedure to connect a terminal to
 it, see [how to connect a Claude terminal](../how-to/connect-a-claude-terminal.md).
 

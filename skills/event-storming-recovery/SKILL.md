@@ -23,12 +23,12 @@ sub-agents and keep the durable artifacts. This keeps your context clean — fil
 inside sub-agents, and you keep only their structured returns.
 
 This skill ships inside the `event-storming-recovery` repo (a Claude Code plugin), whose
-`prompts/`, `tools/`, `docs/`, and `examples/` dirs are its resources. When installed as a plugin,
-reference those bundled files as **`${CLAUDE_PLUGIN_ROOT}/<path>`** (e.g.
-`${CLAUDE_PLUGIN_ROOT}/prompts/00-orchestrator.md`, `${CLAUDE_PLUGIN_ROOT}/tools/merge-flows.js`);
-that variable resolves to the plugin's install directory. The paths below are written
-repo-root-relative for readability — prefix them with `${CLAUDE_PLUGIN_ROOT}/` when reading the
-files at runtime.
+`prompts/`, `docs/`, and `examples/` dirs are its resources, and whose published npm package
+provides the `event-storming-recovery` CLI (`merge`/`generate`/`view`). When installed as a
+plugin, reference the bundled files as **`${CLAUDE_PLUGIN_ROOT}/<path>`** (e.g.
+`${CLAUDE_PLUGIN_ROOT}/prompts/00-orchestrator.md`); that variable resolves to the plugin's
+install directory. The paths below are written repo-root-relative for readability — prefix them
+with `${CLAUDE_PLUGIN_ROOT}/` when reading the files at runtime.
 
 ## The process (six phases)
 
@@ -46,16 +46,16 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
    concurrent). Each trace agent verifies **reachability** (catches dead/superseded flows), traces
    end to end, and **writes its own `<flow-id>.json` + `.notes.md`** — never route large JSON back
    through your context.
-4. **Merge & check** — `node tools/merge-flows.js <tracesDir> <out>/model/flows.json` merges shared
-   nodes and validates. Do a consistency pass for ubiquitous-language drift; don't force-merge
-   legitimate altitude variations.
+4. **Merge & check** — `npx event-storming-recovery merge <tracesDir> <out>/model/flows.json`
+   merges shared nodes and validates. Do a consistency pass for ubiquitous-language drift; don't
+   force-merge legitimate altitude variations.
 5. **Ubiquitous Language mining** — write the mining briefing (`prompts/04-glossary-mining.md`) and
    dispatch a wave (~5-7), each owning a model slice. They **seed** domain terms from the node
    descriptions, read code only to resolve/anchor the unclear jargon (REVBUILD, Budget Stage, GPW,
    SKU…), **flag** what stays uncertain with an `openQuestion` (the hotspot contract), and **write
    their own `<area>.glossary.json` + `.notes.md`** into the traces dir. Re-run the merge to fold
    the `terms` in and validate them.
-6. **Generate & verify** — `node tools/generate-views.js <out>/model/flows.json <out>/model
+6. **Generate & verify** — `npx event-storming-recovery generate <out>/model/flows.json <out>/model
    --repo-root <abs> --title "<Project> Event Storming"` emits `flows.dot` + `explorer.html`.
    Open the explorer and verify it renders (incl. the **Glossary** tab of curated terms, flagged
    ones marked). Write the README. Leave committing to the user.
@@ -90,7 +90,8 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
   briefing, the glossary-mining briefing, and `recursive-exploration.md` (the shared recursion
   protocol every sub-agent inherits).
 - `docs/reference/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
-- `tools/merge-flows.js`, `tools/generate-views.js` — merge+validate, and render DOT+explorer.
+- the `event-storming-recovery` CLI's `merge` and `generate` subcommands — merge+validate, and
+  render DOT+explorer (see the [CLI reference](../../docs/reference/cli.md)).
 - `examples/event-storming-recovery/` — the bundled example (this tool's own recovered self-model);
   rebuild it in seconds to see the output shape: `npm run demo`. A small synthetic fixture also lives
   at `tests/fixtures/toy-shop/` if you want the minimal shape.

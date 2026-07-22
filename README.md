@@ -132,15 +132,17 @@ this way.
 - **Extend or regenerate an existing model** as the code moves on: see
   [how to extend an existing model](docs/how-to/iterate-and-extend-a-model.md) and
   [how to regenerate the explorer and DOT graph](docs/how-to/regenerate-views.md).
-- **Look up a command or option**: see the [CLI reference](docs/reference/cli.md) for
-  `event-storming-recovery`/`es-view`, `es-merge`, `es-generate`, and the npm scripts.
+- **Look up a command or option**: see the [CLI reference](docs/reference/cli.md) for the unified
+  `event-storming-recovery` CLI's `view`/`merge`/`generate` subcommands and the npm scripts.
 
 ## Repo layout
 
 | path | what |
 |---|---|
-| `bin/`, `src/` | the `es-view` app: the local server (`src/server/`, incl. the MCP endpoint), the React SPA explorer (`src/web/`), and shared libs (`src/lib/`). Launched by `npx event-storming-recovery view` |
-| `tools/` | the tooling: `merge-flows.js` (merge + validate) and `generate-views.js` (render DOT + static explorer) |
+| `src/domain/` | pure aggregates that own their invariants and the typed schema: the `Model` aggregate (`invariants.ts`, `merge.ts`, `types.ts`, `palette.ts`), `comment-store/`, `session/` (selection, context bundle), `source/` |
+| `src/application/` | the application layer both faces call: `commands/` (one handler per command), `queries/`, `read-models/` (grounded projections), `ports.ts` (the interfaces adapters implement), `services.ts` |
+| `src/adapters/` | the ports-and-adapters edges: `http/server.ts`, `mcp/mcp-server.ts`, `fs/` (repositories/gateways), `process/` (the Claude CLI + browser gateways), `cli/` (the unified `event-storming-recovery` commander bin, `cli.ts`, plus the `view`/`merge`/`generate` action modules) |
+| `src/web/` | the React SPA explorer (Vite). Launched by `npx event-storming-recovery view` |
 | `prompts/` | the method, encoded: orchestrator playbook + scout / triage / trace-briefing / glossary-mining / data-mapping templates + the shared recursive-exploration protocol |
 | `docs/` | the [documentation set](docs/README.md): tutorial, how-to guides, reference (`flows-schema.md`, CLI, MCP), and explanation (`METHOD.md`, architecture) |
 | `scripts/` | helper scripts (`build-example.mjs` rebuilds the demo, `dev.mjs` runs the app in dev) |

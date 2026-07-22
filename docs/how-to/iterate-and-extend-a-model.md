@@ -33,9 +33,10 @@ useful recovered intent in the model.
 If a domain concept genuinely doesn't fit the current schema (the pilot-trace step in a fresh
 recovery run is where this usually surfaces), edit
 [`docs/reference/flows-schema.md`](../reference/flows-schema.md) and the validation in
-`src/lib/merge.mjs` together, then re-run the merge against existing traces to confirm nothing
-regresses. Don't work around a schema gap by overloading an existing field; extend the schema
-instead so the next trace agent has an explicit contract to follow.
+`src/domain/model/merge.ts` and `src/domain/model/invariants.ts` together, then re-run the merge
+against existing traces to confirm nothing regresses. Don't work around a schema gap by
+overloading an existing field; extend the schema instead so the next trace agent has an explicit
+contract to follow.
 
 ## Improve the method itself
 

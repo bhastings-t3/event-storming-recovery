@@ -4,6 +4,20 @@
   "description": "Recover a strategic Event Storming model from an existing codebase and render it as a navigable, source-linked flow explorer.",
   "license": "MIT",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bhastings-t3/event-storming-recovery.git"
+  },
+  "homepage": "https://github.com/bhastings-t3/event-storming-recovery#readme",
+  "bugs": {
+    "url": "https://github.com/bhastings-t3/event-storming-recovery/issues"
+  },
+  "author": {
+    "name": "Blake Hastings"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "event-storming-recovery": "bin/es-view.mjs",
     "es-view": "bin/es-view.mjs",

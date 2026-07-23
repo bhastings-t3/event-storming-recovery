@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.0...event-storming-recovery-v0.7.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* **release:** add folded npm publish steps to release-please job ([66b3533](https://github.com/bhastings-t3/event-storming-recovery/commit/66b3533e6996c582ff46f4fbf592d9f998fddef6))
+* **release:** publish to npm from the release-please run ([36b0895](https://github.com/bhastings-t3/event-storming-recovery/commit/36b08959b65b1edeb095f5d9d09876743598b09d))
+
 ## [0.7.0](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.6.0...event-storming-recovery-v0.7.0) (2026-07-23)
 
 

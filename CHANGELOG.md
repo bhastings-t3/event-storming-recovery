@@ -1,0 +1,57 @@
+# Changelog
+
+## [0.7.0](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.6.0...event-storming-recovery-v0.7.0) (2026-07-23)
+
+
+### Features
+
+* add Ubiquitous Language mining phase (Phase 5) with hotspot-style flags ([42dce11](https://github.com/bhastings-t3/event-storming-recovery/commit/42dce11b2bee42df97bca478bbb427ee9c3cc654))
+* **app:** add whole flows/hotspots to context + Mermaid graph per flow (Phase 2) ([ed07d55](https://github.com/bhastings-t3/event-storming-recovery/commit/ed07d55996a7ff12f6520a83d6d0b8b68db3eccb))
+* **app:** npx-run server + React SPA shell (Phase 1) ([f428f40](https://github.com/bhastings-t3/event-storming-recovery/commit/f428f40e95fe8ffb67d4c260e575341a51a12282))
+* **app:** one-click "Add to Claude" button (runs claude mcp add) ([1c1b693](https://github.com/bhastings-t3/event-storming-recovery/commit/1c1b693f0527a03ec673c86c01a488eb7ce3c726))
+* **app:** persistent comments on items, carried into context ([83a7800](https://github.com/bhastings-t3/event-storming-recovery/commit/83a780014c8c5b34f508b83635069c8a1a84aa66))
+* **app:** port the full explorer to the React SPA at parity (Phase 1) ([9f2d547](https://github.com/bhastings-t3/event-storming-recovery/commit/9f2d547467c8f0d8ffc507a9899237852fbef2c8))
+* **app:** wire selection, context bundle, inline source into the SPA (Phase 2) ([2f7bff8](https://github.com/bhastings-t3/event-storming-recovery/commit/2f7bff8d0b73de62958610ddeb3c4a37f4e80088))
+* **cli:** unify es-view/es-merge/es-generate into one commander CLI ([ef3b06e](https://github.com/bhastings-t3/event-storming-recovery/commit/ef3b06eb9fc726b9712b71c8d1339710e2d51ce6))
+* data-model layer — field lineage + physical storage graph ([6780b7c](https://github.com/bhastings-t3/event-storming-recovery/commit/6780b7c7b2f709e8921e62e7deb2c89bafc5f2d2))
+* **explorer:** add a Glossary tab - the ubiquitous language as a dictionary ([786a8c3](https://github.com/bhastings-t3/event-storming-recovery/commit/786a8c37a395137784b5973204959d7d950c9f3c))
+* **explorer:** add Flow/Data toggle with a data interaction graph ([9b33bfc](https://github.com/bhastings-t3/event-storming-recovery/commit/9b33bfc9efdb2f923126f6ffaa83c299c853501e))
+* **explorer:** add gallery and whole-model overview views ([596b5be](https://github.com/bhastings-t3/event-storming-recovery/commit/596b5be68e666b71153c6386df7740b233d2f7a4))
+* **explorer:** collapse findings into thin drawers so the board owns the height ([397633b](https://github.com/bhastings-t3/event-storming-recovery/commit/397633b050dd6baf7d37d576d88f83f13aca779f))
+* **explorer:** cross-link aggregates and invariants in the detail panel ([d2fd1a2](https://github.com/bhastings-t3/event-storming-recovery/commit/d2fd1a2a1491ace2a5ab08dab9f767651cf21a97))
+* **explorer:** dark shadcn-style theme with event-storming sticky palette ([e85ee11](https://github.com/bhastings-t3/event-storming-recovery/commit/e85ee116e9092c26dac17d3944b858678afc0db9))
+* **explorer:** duplicate nodes for left-to-right flow, curves, corner dots, hover-focus ([d75f4bd](https://github.com/bhastings-t3/event-storming-recovery/commit/d75f4bda9bde0490630e19d85674c50a69c65f90))
+* **explorer:** edge-driven graph layout — spine, stacked branches, satellite read models ([5f2380f](https://github.com/bhastings-t3/event-storming-recovery/commit/5f2380f8db6d0c598fb6e42b519fc9d4a661f26a))
+* **explorer:** fold flow actions into a top-right menu button ([14ec294](https://github.com/bhastings-t3/event-storming-recovery/commit/14ec294e5a1c5313e11acac303402fc9d3f2ba88))
+* **explorer:** pan/zoom the board — wheel zoom, drag to pan, fit-to-view ([5fe5127](https://github.com/bhastings-t3/event-storming-recovery/commit/5fe51270035e26c69309139e756f6727895c3a68))
+* **explorer:** preview flow composition with count-dots ([5501e8b](https://github.com/bhastings-t3/event-storming-recovery/commit/5501e8b3c511bf8f42952555d9009f3e8f964079))
+* **explorer:** read models sit above-left of consumers, arrows enter the left edge ([bd71e9e](https://github.com/bhastings-t3/event-storming-recovery/commit/bd71e9ebfa65cf67e80d6fedcf2e373cfa33a668))
+* **explorer:** readability pass — tonal text, visible arrows, leaner sidebar ([1561a30](https://github.com/bhastings-t3/event-storming-recovery/commit/1561a3020fb3ee8f11f08eef8a908403c044cba0))
+* **explorer:** render read-only nodes as satellites, not spine columns ([a815b19](https://github.com/bhastings-t3/event-storming-recovery/commit/a815b19196123b2bcaa55efd02c5b8dc53cc4b52))
+* **explorer:** render the data model as a hierarchy graph ([5b1524b](https://github.com/bhastings-t3/event-storming-recovery/commit/5b1524b44f3f53b4949c6958b733821df1e4adb7))
+* **explorer:** render the data model in both renderers + MCP ([10aa656](https://github.com/bhastings-t3/event-storming-recovery/commit/10aa6566dd8e9194e10a02f75ddf621d502db5c0))
+* **explorer:** reorder flow view and surface data-model nodes touched ([1865265](https://github.com/bhastings-t3/event-storming-recovery/commit/186526592765396d75266baedb5894e70ca4333d))
+* **explorer:** right-angle causal routing, wider spacing, dotted attachments ([0e10bd0](https://github.com/bhastings-t3/event-storming-recovery/commit/0e10bd04ebc478ea0abeb14c2304f37cedb72bd5))
+* initial event-storming-recovery toolkit ([3851c16](https://github.com/bhastings-t3/event-storming-recovery/commit/3851c163a4f07a5934049e13c1fa8292127f0532))
+* **model:** data-model layer — fields[] lineage + physical nodes ([1131695](https://github.com/bhastings-t3/event-storming-recovery/commit/1131695ba617dd4b6f71bc2752f531eabd528061))
+* **plugin:** event-storming-explorer skill + plugin-declared MCP server ([5fd6261](https://github.com/bhastings-t3/event-storming-recovery/commit/5fd6261bb10a337e239c42982edc163f21281620))
+* **prompts:** add shared recursive-exploration protocol for sub-agents ([c158ef4](https://github.com/bhastings-t3/event-storming-recovery/commit/c158ef413835f99f272b70f35a79e8a335a4e9b9))
+* **server:** MCP endpoint so any Claude terminal pulls the live selection (Phase 2) ([cb5afa0](https://github.com/bhastings-t3/event-storming-recovery/commit/cb5afa0b8615175cc23ea438496db3b39cce3850))
+* **server:** selection + context-bundle state and source-grounded context (Phase 2) ([76b4d0d](https://github.com/bhastings-t3/event-storming-recovery/commit/76b4d0d029d0d8c86fde734903dc3c264d1c1839))
+* **sidebar:** make flow-group headings collapsible ([dc394fb](https://github.com/bhastings-t3/event-storming-recovery/commit/dc394fb67987b5f09dce1defd76dcd9eab74b375))
+
+
+### Bug Fixes
+
+* **ci:** install dependencies before build and test ([7d383a6](https://github.com/bhastings-t3/event-storming-recovery/commit/7d383a62c33e5df8a8af8d02cff22be816669bf1))
+* **cli:** point the dev runner at the unified cli.js view ([6766b32](https://github.com/bhastings-t3/event-storming-recovery/commit/6766b32506bfa173834c92c22235bc1ee94c7b44))
+* **explorer:** anchor edge verb labels to the source end of each wire ([5bce129](https://github.com/bhastings-t3/event-storming-recovery/commit/5bce129883458689ebd1082ce6cfb145142772c3))
+* **explorer:** band-pack duplicate satellites so they never overlap ([7b9e6bd](https://github.com/bhastings-t3/event-storming-recovery/commit/7b9e6bd5ccb149606753cf26973acf5ad5e55ddd))
+* **explorer:** break long unbroken labels so they stay inside the sticky ([7ebdc8f](https://github.com/bhastings-t3/event-storming-recovery/commit/7ebdc8f56bb74765d911c3acb4545fea37cc3521))
+* **explorer:** dedupe repeated data nodes within a verb group ([b98836b](https://github.com/bhastings-t3/event-storming-recovery/commit/b98836bc848dc62362abb253adb8d649c9ef8448))
+* **explorer:** handle cyclic flows and reference-only nodes in the layout ([04359bc](https://github.com/bhastings-t3/event-storming-recovery/commit/04359bc5ae557bb548ec4039a938be6bf344e5bc))
+* **explorer:** keep edgeless data nodes in the flow data graph ([1bd4ec4](https://github.com/bhastings-t3/event-storming-recovery/commit/1bd4ec49ae35b8eba802253e58cae6754b79f72f))
+* **explorer:** order data-graph columns by predecessor barycenter ([17863e9](https://github.com/bhastings-t3/event-storming-recovery/commit/17863e9521a0a68747758f570fc4e0d86da94f10))
+* **explorer:** per-wire ports so fan-out labels are unambiguous ([ed5f7b6](https://github.com/bhastings-t3/event-storming-recovery/commit/ed5f7b68ab52cf91acb6b38b808e3fbdd4fda65b))
+* **explorer:** tokenized AND search across flow/node relations ([8878cb3](https://github.com/bhastings-t3/event-storming-recovery/commit/8878cb3825455a37f7fdee53b73cc5da4c058850))
+* **server:** avoid DEP0190 when running claude mcp add ([393e877](https://github.com/bhastings-t3/event-storming-recovery/commit/393e87760d56ea5373fac893f4f1e7eafefe4cb3))

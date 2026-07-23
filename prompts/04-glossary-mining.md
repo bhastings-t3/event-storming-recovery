@@ -26,12 +26,12 @@ Placeholders:
 
 1. **Seed from the model.** Harvest candidate terms from the labels/descriptions of the nodes in
    your area: the domain **nouns** (aggregates, key read models, external systems, roles) and any
-   **jargon / acronyms / status values** the descriptions mention (e.g. `REVBUILD`, Budget Stage,
-   Turnkey, GPW, PIM, SKU, Design PO, Price List vs Custom Line).
+   **jargon / acronyms / status values** the descriptions mention (e.g. `PICKPACK`, Fulfillment Stage,
+   Bundle, AOV, PIM, SKU, Dropship PO, Catalog Price vs Custom Quote).
 2. **Resolve with code, only where needed.** For each term whose meaning is not already clear from
    the model, read the code (grep the identifier, open the enum/const/column, read the handler) to
    write a precise 1-3 sentence **definition** and attach 1-2 **anchors** (`path`, `line`, `symbol`).
-   Record code spellings/synonyms in `aka` (e.g. `"Budget_Stage = REVBUILD"`).
+   Record code spellings/synonyms in `aka` (e.g. `"Fulfillment_Stage = PICKPACK"`).
 3. **Flag what you cannot pin down — do not drop it.** If, after looking, the meaning or scope is
    still uncertain, set `status: "partial"` (you have some of it) or `"unresolved"` (you have very
    little), keep whatever you *did* learn in `definition`, and write the specific
@@ -57,8 +57,8 @@ Your final chat message is SHORT: status, a 3-5 sentence summary, the count of t
 flagged), any cross-area terms worth de-duping, and confirmation both files are written.
 
 ## Rules agents most often get wrong
-- **Terms are curated vocabulary, not stickies.** If it reads like a sentence ("A booth holds at
-  most one turnkey package"), that is an invariant, not a term. The term is `Turnkey`.
+- **Terms are curated vocabulary, not stickies.** If it reads like a sentence ("An order holds at
+  most one bundle"), that is an invariant, not a term. The term is `Bundle`.
 - **A flagged term must carry its question.** `status: unresolved` with no `openQuestion` is invalid
   and the merge will reject it.
 - **`relatedNodes` ids must exist** in the merged model, or the merge rejects the term. Omit rather

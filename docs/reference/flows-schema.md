@@ -198,10 +198,10 @@ by the **glossary-mining phase** (Phase 5), not the trace agents. They are the c
 vocabulary a newcomer needs defined — nouns and jargon — NOT one entry per sticky.
 ```json
 {
-  "id": "term-revbuild",              // globally unique, prefix "term-"
-  "term": "REVBUILD",                 // the word/phrase as the domain uses it
+  "id": "term-pickpack",              // globally unique, prefix "term-"
+  "term": "PICKPACK",                 // the word/phrase as the domain uses it
   "category": "state",                // concept | jargon | acronym | role | system | state | metric
-  "aka": ["Budget_Stage = REVBUILD", "revenue build"],   // optional: code spellings / synonyms
+  "aka": ["Fulfillment_Stage = PICKPACK", "pick and pack"],   // optional: code spellings / synonyms
   "definition": "1-3 sentences: what the term means in the domain.",
   "relatedNodes": ["agg-line-item"],  // optional: model node id(s) this term maps to (must exist)
   "anchors": [ { "path": "...", "line": 12, "symbol": "..." } ],   // optional source evidence
@@ -210,8 +210,8 @@ vocabulary a newcomer needs defined — nouns and jargon — NOT one entry per s
 }
 ```
 Rules:
-- **A term is vocabulary, not a sentence.** "A booth holds at most one turnkey package" is an
-  invariant; the term is `Turnkey`. Do not mint a term per command/event — those live in the model.
+- **A term is vocabulary, not a sentence.** "An order holds at most one bundle" is an
+  invariant; the term is `Bundle`. Do not mint a term per command/event — those live in the model.
 - **Flag, don't drop.** When mining can't fully pin a term down, keep what you learned in
   `definition`, set `status` to `partial`/`unresolved`, and write the specific `openQuestion` — the
   same "question a human should answer" contract as a hotspot. The explorer renders flagged terms

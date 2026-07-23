@@ -51,7 +51,7 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
    force-merge legitimate altitude variations.
 5. **Ubiquitous Language mining** — write the mining briefing (`prompts/04-glossary-mining.md`) and
    dispatch a wave (~5-7), each owning a model slice. They **seed** domain terms from the node
-   descriptions, read code only to resolve/anchor the unclear jargon (REVBUILD, Budget Stage, GPW,
+   descriptions, read code only to resolve/anchor the unclear jargon (PICKPACK, Fulfillment Stage, AOV,
    SKU…), **flag** what stays uncertain with an `openQuestion` (the hotspot contract), and **write
    their own `<area>.glossary.json` + `.notes.md`** into the traces dir. Re-run the merge to fold
    the `terms` in and validate them.

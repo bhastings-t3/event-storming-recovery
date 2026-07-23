@@ -14,5 +14,8 @@ const run = (args) => execFileSync('node', args, { stdio: 'inherit', cwd: root }
 run([join(root, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.node.json']);
 const cli = join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js');
 run([cli, 'merge', join(ex, 'traces'), model]);
-run([cli, 'generate', model, join(ex, 'model'), '--repo-root', root, '--title', 'Event Storming Recovery — self-model']);
+// Pass a portable repo-root ('.') so the generated deep links stay relative and
+// never bake this machine's absolute path (and OS username) into the committed,
+// published example. Viewers regenerate against their own checkout for live links.
+run([cli, 'generate', model, join(ex, 'model'), '--repo-root', '.', '--title', 'Event Storming Recovery — self-model']);
 console.log('\nbuilt ' + join(ex, 'model', 'explorer.html'));

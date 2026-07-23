@@ -110,7 +110,7 @@ walkable.
 ## Phase 5 — Ubiquitous Language mining
 
 With the merged model in hand, mine the **curated domain vocabulary** — the nouns and jargon a
-newcomer needs defined (`REVBUILD`, Budget Stage, Turnkey, GPW, PIM, SKU, …), which the behavioral
+newcomer needs defined (`PICKPACK`, Fulfillment Stage, Bundle, AOV, PIM, SKU, …), which the behavioral
 stickies never capture on their own. Write the mining briefing (`04-glossary-mining.md`, filled with
 `{REPO_ROOT}`, `{EXCLUDE}`, the merged `flows.json` path, the *Term* schema, and `{TRACES_DIR}`) and
 dispatch a **wave of ~5-7 agents**, each owning a slice (a bounded area / aggregate cluster). Run

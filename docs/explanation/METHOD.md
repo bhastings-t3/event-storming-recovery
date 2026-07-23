@@ -161,8 +161,8 @@ to walk each flow as a self-contained story. Keep them distinct; the shared *agg
 ## Phase 5 — Ubiquitous Language mining
 
 The behavioral model captures what the system *does*, but not the **vocabulary** it does it in. A
-newcomer opening this codebase drowns in jargon — `REVBUILD`/`ORDERBUILD`, Budget Stage, Turnkey,
-GPW, PIM, SKU, Design PO — none of which is a sticky; it lives *inside* the descriptions and the
+newcomer opening this codebase drowns in jargon — `PICKPACK`/`BACKORDER`, Fulfillment Stage, Bundle,
+AOV, PIM, SKU, Dropship PO — none of which is a sticky; it lives *inside* the descriptions and the
 code. The consistency pass in Phase 4 already brushes against this (it hunts ubiquitous-language
 drift). Phase 5 promotes that into a first-class artifact: a curated **glossary** of the domain
 terms and their definitions, distinct from the 400-odd behavioral stickies.

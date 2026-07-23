@@ -1,0 +1,53 @@
+{
+  "terms": [
+    {
+      "id": "term-order",
+      "term": "Order",
+      "category": "concept",
+      "aka": [
+        "Cart checkout",
+        "Purchase"
+      ],
+      "definition": "A customer's confirmed purchase: the aggregate that owns line items, totals, and the order lifecycle once checkout succeeds. It is created by PlaceOrder and is the root the rest of fulfilment hangs off.",
+      "relatedNodes": [
+        "agg-order"
+      ],
+      "anchors": [
+        {
+          "path": "src/Orders/Order.cs",
+          "line": 12,
+          "symbol": "Order"
+        }
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-sku",
+      "term": "SKU",
+      "category": "acronym",
+      "aka": [
+        "Stock Keeping Unit"
+      ],
+      "definition": "The per-variant product identifier stock is tracked against. Reservation and availability checks key off the SKU, not the product.",
+      "status": "resolved"
+    },
+    {
+      "id": "term-reserve",
+      "term": "Stock reservation",
+      "category": "concept",
+      "definition": "A soft hold placed on inventory for a SKU while an order is being placed, released if payment fails.",
+      "relatedNodes": [
+        "agg-inventory"
+      ],
+      "status": "resolved"
+    },
+    {
+      "id": "term-backorder",
+      "term": "Backorder",
+      "category": "jargon",
+      "definition": "Referenced in code comments as an alternate path when stock is unavailable, but no reachable handler was found.",
+      "status": "unresolved",
+      "openQuestion": "Is backorder a real supported flow or dead intent? No code path reserves against future stock; a human who knows the business should confirm whether backorder is expected to work."
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "nodes": [
+    {
+      "id": "actor-customer",
+      "type": "actor",
+      "label": "Customer",
+      "inferred": true,
+      "description": "A shopper checking out."
+    },
+    {
+      "id": "cmd-express-checkout",
+      "type": "command",
+      "label": "ExpressCheckout",
+      "inferred": false,
+      "description": "One-tap checkout that skipped the cart review and stock check, charging a saved card immediately.",
+      "tactical": {
+        "explanation": "ExpressButton called OrderService.expressCheckout(savedCardId). Reachability: the button was removed from CartPage in commit a1b2c3d ('drop express checkout — oversold too often'); expressCheckout has no remaining caller.",
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 90,
+            "symbol": "expressCheckout",
+            "note": "orphaned — no caller since a1b2c3d"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-order",
+      "type": "aggregate",
+      "label": "Order",
+      "inferred": true,
+      "description": "A customer order. In the retired express path it was created with no stock guard.",
+      "tactical": {
+        "explanation": "expressCheckout inserted the order without the stock invariant the standard placeOrder enforces — the reason it was retired.",
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 96,
+            "symbol": "expressCheckout"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "orderId",
+          "conceptual": false,
+          "dataType": "int",
+          "derivation": "Database-assigned identity of the orders row, returned to the caller.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "orm-mapping"
+          ]
+        },
+        {
+          "name": "status",
+          "dataType": "string",
+          "derivation": "Lifecycle state of the order; set to 'Placed' on successful checkout.",
+          "sources": [
+            {
+              "ref": "fld-col-orders-status",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "sql-literal"
+          ]
+        },
+        {
+          "name": "total",
+          "dataType": "money",
+          "derivation": "Order total charged to the customer, stored in cents.",
+          "sources": [
+            {
+              "ref": "fld-col-orders-total",
+              "role": "derived-from",
+              "transform": "identity"
+            }
+          ],
+          "confidence": "medium",
+          "provenance": [
+            "sql-literal"
+          ]
+        },
+        {
+          "name": "placedAt",
+          "conceptual": true,
+          "dataType": "timestamp",
+          "derivation": "When the order was committed; not stored on the row, taken as the transaction time.",
+          "sources": [],
+          "confidence": "low",
+          "provenance": [
+            "assumed"
+          ],
+          "notes": "No dedicated column; inferred from commit ordering."
+        }
+      ]
+    },
+    {
+      "id": "evt-order-placed",
+      "type": "event",
+      "label": "OrderPlaced",
+      "inferred": true,
+      "description": "An order existed in status Placed — but possibly for out-of-stock items in this retired path.",
+      "tactical": {
+        "explanation": "Same event as the live flow; here reached without the stock guard.",
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 99,
+            "symbol": "expressCheckout"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "express-checkout",
+      "name": "Customer checks out in one tap (retired)",
+      "tier": 1,
+      "kind": "write",
+      "status": "dead",
+      "supersededBy": "place-order",
+      "summary": "A one-tap express checkout that charged a saved card and created the order without a stock check. It oversold too often and its button was removed in commit a1b2c3d; the standard place-order flow (with a stock invariant) is the replacement. The service method still compiles but has no caller.",
+      "trigger": "Express-checkout button on the cart page (removed in commit a1b2c3d — currently unreachable)",
+      "steps": [
+        "actor-customer",
+        "cmd-express-checkout",
+        "agg-order",
+        "evt-order-placed"
+      ],
+      "edges": [
+        {
+          "from": "actor-customer",
+          "to": "cmd-express-checkout",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-express-checkout",
+          "to": "agg-order",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-order",
+          "to": "evt-order-placed",
+          "verb": "emits"
+        }
+      ],
+      "hotspots": [
+        "hot-express-dead-code"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-express-dead-code",
+      "label": "Retired express-checkout code still ships",
+      "description": "expressCheckout is unreachable since commit a1b2c3d but still compiled and tested. Human question: delete it, or is express checkout planned to return with a stock guard?",
+      "tactical": {
+        "explanation": "No caller of OrderService.expressCheckout anywhere in the tree; git show a1b2c3d removed the button.",
+        "anchors": [
+          {
+            "path": "src/services/OrderService.ts",
+            "line": 90,
+            "symbol": "expressCheckout"
+          }
+        ]
+      }
+    }
+  ]
+}

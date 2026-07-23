@@ -1,0 +1,373 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The local developer driving the es-view explorer SPA in the browser. Here they click a sticky (a domain node) anywhere in the UI, which opens that node's Detail panel and, as a side effect, mirrors the selection to the server so a connected Claude session can read what they are looking at."
+    },
+    {
+      "id": "cmd-select-node",
+      "type": "command",
+      "label": "SelectNode",
+      "inferred": true,
+      "description": "Mark a domain node as the one the operator is currently looking at and mirror that choice to the shared in-memory server state so a connected Claude session can read it. Fired whenever the operator opens any node's detail from anywhere in the SPA.",
+      "tactical": {
+        "explanation": "The SPA store's openDetail(id) does two things in one call: it sets local React state (setSelectedNodeId(id); setDetail({ kind:'node', id })) so the Detail panel opens client-side, AND it calls pushSelection(id) (api.js) -- a fire-and-forget POST /api/selection { nodeId } whose JSON response is discarded (.then((r)=>r.json()).catch(()=>null)). The server route (server.ts) delegates to the selectNode command (application/commands/select-node.ts), which validates the id against the model, then calls selection.set(nodeId). This is ONE command with MANY triggers: every surface funnels through openDetail -- the flow board (Board.jsx onOpenDetail), the Overview map, Gallery cards, Glossary entries, the Data-model tab rows, the Detail panel's own breadcrumb/related/field-column/storage nav rows, and context-bundle node rows. The click-to-server mirror is identical for all of them. NOTE the asymmetry: the sibling openHotspot(id) sets local detail state ONLY and never posts (see hot-hotspot-selection-not-mirrored).",
+        "anchors": [
+          {
+            "path": "src/web/store.jsx",
+            "line": 43,
+            "symbol": "openDetail",
+            "note": "sets React selection + opens Detail, then mirrors"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 46,
+            "symbol": "openDetail",
+            "note": "pushSelection(id) mirrors the click to the server"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 17,
+            "symbol": "pushSelection",
+            "note": "POST /api/selection { nodeId }, response ignored"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 124,
+            "symbol": "createServer",
+            "note": "POST /api/selection branch calls selectNode(services, selection, nodeId)"
+          },
+          {
+            "path": "src/application/commands/select-node.ts",
+            "line": 11,
+            "symbol": "selectNode",
+            "note": "command handler: validates then selection.set(nodeId)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-selection",
+      "type": "aggregate",
+      "label": "Selection",
+      "inferred": true,
+      "description": "The live 'what node am I looking at right now' for one es-view run: a single selected node id with a click timestamp. Its state is PURELY IN-MEMORY (no file, no database) and is shared same-process by the web API and the MCP server -- which is the whole point: a browser click is instantly visible to a connected Claude session. Modeled as its own aggregate distinct from the context bundle: domain/session/selection.ts's Selection class and domain/session/context-bundle.ts's ContextBundle class keep the selection (one node) and the bundle (a Map of typed refs) as two independent classes with separate accessors, and only the selection is validated node-only.",
+      "tactical": {
+        "explanation": "The Selection class (domain/session/selection.ts) holds a private `selection: SelectionRef | null` field. set(nodeId) stamps `selection = { nodeId, at: now() }` (or null when nodeId is falsy); get() returns it live; clear() resets to null. There is NO persistence -- the value lives only in this process heap for the life of the run. One Selection instance is constructed in the CLI composition root (adapters/cli/es-view.ts) and passed to both createServer (the API routes) and createMcpHandler at server bootstrap, so the write side (POST /api/selection) and the read side (MCP get_current_selection) share one aggregate instance. Selection and ContextBundle are separate classes over separate state, so the enforced boundary is 'selection = one validated node'.",
+        "anchors": [
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 9,
+            "symbol": "Selection",
+            "note": "in-memory selection, non-persistent by design"
+          },
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 19,
+            "symbol": "set",
+            "note": "selection = { nodeId, at } (or null)"
+          },
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 14,
+            "symbol": "get",
+            "note": "returns the live selection, read by API + MCP"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "nodeId",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The id of the node the operator last selected. Set verbatim from the POST body after it is validated to exist in the merged model; this is what get_current_selection resolves and grounds.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred"
+          ],
+          "evidence": [
+            {
+              "path": "src/domain/session/selection.ts",
+              "line": 20,
+              "symbol": "set",
+              "note": "selection.nodeId assigned from the request"
+            }
+          ]
+        },
+        {
+          "name": "at",
+          "conceptual": true,
+          "dataType": "timestamp",
+          "derivation": "Date.now() captured at the moment setSelection runs. Recorded on every selection but NEVER surfaced to any consumer (get_current_selection and GET /api/selection both ignore it), so it cannot be used to detect a stale selection -- relevant to hot-selection-never-cleared.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred"
+          ],
+          "evidence": [
+            {
+              "path": "src/domain/session/selection.ts",
+              "line": 20,
+              "symbol": "set",
+              "note": "at: now() stamped but never read back out"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inv-selection-in-model",
+      "type": "invariant",
+      "label": "The selected node must exist in the model",
+      "inferred": true,
+      "description": "ERROR-level guard: the selection may only ever point at a node that exists in the merged model. If the POST supplies a nodeId the model does not contain, the request is rejected with HTTP 404 and the selection is left unchanged. An empty/null nodeId is allowed and clears the selection to null (the validation is guarded by `if (nodeId && ...)`).",
+      "tactical": {
+        "explanation": "In the selectNode command handler (application/commands/select-node.ts): `if (nodeId && !services.indexes.nodeById.has(nodeId)) return { ok: false, error: 'unknown node ...' };`, which the server route maps to HTTP 404. services.indexes.nodeById is built from agg-model (the merged model) by buildServices/buildIndexes at startup. Only after this check passes does selection.set run, so a bogus or stale id can never enter the shared state. The SPA never trips this (openDetail only ever posts real node ids straight from the model), but any MCP/HTTP caller is held to it.",
+        "anchors": [
+          {
+            "path": "src/application/commands/select-node.ts",
+            "line": 12,
+            "symbol": "selectNode",
+            "note": "unknown nodeId => not-found result, selection unchanged"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 127,
+            "symbol": "createServer",
+            "note": "adapter maps the not-found result to HTTP 404"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-node-selected",
+      "type": "event",
+      "label": "NodeSelected",
+      "inferred": true,
+      "description": "The operator has selected a model-valid node; the shared in-memory selection now points at it, stamped with the click time. This is the push half of the selection bridge: recorded the instant the operator clicks, with no subscription opened. A connected Claude session observes it later by pulling get_current_selection.",
+      "tactical": {
+        "explanation": "Realized when the selectNode command calls selection.set(nodeId), replacing the in-memory selection with { nodeId, at: now() } (domain/session/selection.ts). Nothing is pushed to Claude here -- the fact simply becomes readable in shared memory. The route does compute and return a freshly grounded selection context (via getCurrentSelection), but pushSelection discards it, so from the SPA's side the write is effectively fire-and-forget.",
+        "anchors": [
+          {
+            "path": "src/application/commands/select-node.ts",
+            "line": 13,
+            "symbol": "selectNode",
+            "note": "selection.set(nodeId) after validation"
+          },
+          {
+            "path": "src/domain/session/selection.ts",
+            "line": 19,
+            "symbol": "set",
+            "note": "the in-memory fact: { nodeId, at }"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-detail-panel",
+      "type": "readModel",
+      "label": "Node Detail panel",
+      "inferred": true,
+      "description": "What the operator sees the instant they click: the right-hand Detail panel for the selected node -- its type, description, chips, enforced/enforcing relations, tactical anchors (with lazy view-source), fields, storage, and the flows it appears in. Rendered ENTIRELY client-side from the already-loaded model (nodeById in the browser); it does NOT consume the POST /api/selection response, which is discarded.",
+      "tactical": {
+        "explanation": "Detail.jsx's NodeDetail looks up the node with `nodeById.get(detail.id)` (the client copy of agg-model) and renders from it; the server's selResponse is never read. The SPA has no client wrapper for GET /api/selection either (api.js exposes only pushSelection POST), so this projection is purely a local read of the loaded model, driven by the `detail` React state that openDetail set. This is the 'opens the Detail panel' half of the click, running in parallel with (and independent of) the server mirror.",
+        "anchors": [
+          {
+            "path": "src/web/components/Detail.jsx",
+            "line": 303,
+            "symbol": "Detail",
+            "note": "picks nodeById.get(detail.id) for kind 'node'"
+          },
+          {
+            "path": "src/web/components/Detail.jsx",
+            "line": 179,
+            "symbol": "NodeDetail",
+            "note": "renders the selected node from the client-side model"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 45,
+            "symbol": "openDetail",
+            "note": "setDetail({ kind:'node', id }) drives the panel"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): the deduped node set plus flows, hotspots, terms, and derived meta. Built by the merge, then loaded by the SPA and shared by the server. In THIS flow it is read-only: the source of truth the selection is validated against (server-side) and the Detail panel is rendered from (client-side).",
+      "tactical": {
+        "explanation": "Read-only use here. Server-side, buildServices(resolved) builds indexes.nodeById from resolved.model once at startup; the POST /api/selection guard checks nodeById.has(nodeId) to validate the selection. Client-side, the SPA loaded the same model via GET /api/model into nodeById, from which Detail.jsx renders the panel. No write to the model happens in this flow.",
+        "anchors": [
+          {
+            "path": "src/application/services.ts",
+            "line": 34,
+            "symbol": "buildServices",
+            "note": "indexes.nodeById built from resolved.model via buildIndexes"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 16,
+            "symbol": "ExplorerProvider",
+            "note": "client buildIndexes(model) -> nodeById the panel reads"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-claude-mcp",
+      "type": "externalSystem",
+      "label": "Connected Claude / MCP client",
+      "inferred": false,
+      "description": "A connected Claude session acting as an MCP client over the /mcp boundary in the same process. It is the downstream consumer this whole flow exists to serve: after the operator clicks, Claude pulls the selection via the get_current_selection MCP tool to answer about 'the node the user is looking at'. Pull-based -- it reads only when it needs to. The grounded read path (rm-current-selection + buildNodeContext) is traced separately as the claude-mcp-read flow; here it is referenced only as the reader that justifies mirroring the click.",
+      "tactical": {
+        "explanation": "get_current_selection (mcp-server.ts) calls selection.get() live on the shared aggregate; if set it grounds the node via buildNodeContext and returns markdown, otherwise it tells Claude to ask the user to click a node. Because the MCP tool and the HTTP API close over the SAME Selection instance, the node the operator selected here is exactly what Claude reads. Full grounding is out of scope for this write flow.",
+        "anchors": [
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 36,
+            "symbol": "buildMcpServer",
+            "note": "get_current_selection tool reads selection.get() live on the shared aggregate"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "select-node",
+      "name": "Operator selects a node; the SPA opens its Detail and mirrors the selection to the server",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "The selection bridge, write half. The operator clicks any sticky in the SPA and the store's openDetail does two things at once: it opens that node's Detail panel client-side (rendered from the already-loaded model) AND it fires a fire-and-forget POST /api/selection to mirror the choice to the server. The server validates the id against the merged model, then stores it in a purely in-memory Selection aggregate shared same-process with the MCP server. That shared state is why a connected Claude session, calling get_current_selection, sees exactly the node the operator is looking at. Push-on-click by the human; the pull-on-call read by Claude is the separate claude-mcp-read flow.",
+      "trigger": "The operator opens a node's detail anywhere in the SPA via openDetail (store.jsx:43), which posts to /api/selection (store.jsx:46). It fires from the flow board (Board.jsx onOpenDetail), Overview, Gallery, Glossary, the Data-model tab, Detail-panel nav rows, and context-bundle node rows.",
+      "steps": [
+        "actor-operator",
+        "cmd-select-node",
+        "agg-selection",
+        "evt-node-selected",
+        "rm-detail-panel",
+        "ext-claude-mcp"
+      ],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-select-node",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-select-node",
+          "to": "agg-selection",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-select-node",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "agg-selection",
+          "to": "inv-selection-in-model",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-selection",
+          "to": "evt-node-selected",
+          "verb": "emits"
+        },
+        {
+          "from": "rm-detail-panel",
+          "to": "agg-model",
+          "verb": "projects from"
+        },
+        {
+          "from": "actor-operator",
+          "to": "rm-detail-panel",
+          "verb": "reads"
+        },
+        {
+          "from": "agg-selection",
+          "to": "ext-claude-mcp",
+          "verb": "read by"
+        }
+      ],
+      "hotspots": [
+        "hot-hotspot-selection-not-mirrored",
+        "hot-selection-never-cleared"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-hotspot-selection-not-mirrored",
+      "label": "Selecting a hotspot never mirrors to the server, so Claude cannot see the operator is looking at a hotspot",
+      "description": "openDetail (node click) mirrors to the server via pushSelection; its sibling openHotspot (red-sticky click) sets local detail state ONLY and never posts. So when the operator opens a hotspot's detail -- the tool's whole payoff, the open questions -- a connected Claude session's get_current_selection still reports the LAST node (or 'nothing selected'), never the hotspot. The selection channel is deliberately node-only (Selection is typed to a single nodeId; the selectNode command validates against nodeById and would return not-found for a hotspot id, which the route maps to a 404), so this may be intended. Human question: is it acceptable that Claude is blind to the operator viewing a hotspot, or should hotspot selections be mirrored too (a typed selection, or a separate get_current_hotspot tool) so Claude can help answer the very open question the operator is staring at?",
+      "tactical": {
+        "explanation": "store.jsx openDetail (line 43) calls pushSelection(id) at line 46; openHotspot (line 48) = `setDetail({ kind:'hotspot', id })` with NO pushSelection and it does not even set selectedNodeId. openHotspot is live-wired to real clicks: Main.jsx:137 (hotspot cards on the board) and ContextBundle.jsx:19 (bundle hotspot rows). The server selection is node-only: the selectNode command guards `nodeById.has(nodeId)` (application/commands/select-node.ts:12) so a hotspot id is rejected as not-found, and get_current_selection (mcp-server.ts:36) only ever resolves a node. Net effect: the hotspot the operator is viewing is invisible to Claude via the selection channel.",
+        "anchors": [
+          {
+            "path": "src/web/store.jsx",
+            "line": 48,
+            "symbol": "openHotspot",
+            "note": "local detail state only; no pushSelection, no selectedNodeId"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 46,
+            "symbol": "openDetail",
+            "note": "the node path DOES mirror -- the asymmetry"
+          },
+          {
+            "path": "src/web/components/Main.jsx",
+            "line": 137,
+            "symbol": "Main",
+            "note": "hotspot card onClick={() => openHotspot(s.id)}"
+          },
+          {
+            "path": "src/application/commands/select-node.ts",
+            "line": 12,
+            "symbol": "selectNode",
+            "note": "selection validated node-only via nodeById; a hotspot id would return not-found"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hot-selection-never-cleared",
+      "label": "Closing the detail panel never clears the selection server-side, so Claude sees a stale node",
+      "description": "closeDetail clears only React state (setSelectedNodeId(null); setDetail(null)); it does NOT tell the server. The server (and therefore get_current_selection) keeps the LAST selected node indefinitely, so a connected Claude session reports the operator is 'looking at' a node they already dismissed. A clean path exists but is unused: DELETE /api/selection -> the clearSelection command (-> selection.clear()) is wired server-side, but the SPA client has no wrapper for it (api.js exposes only pushSelection's POST). The selection's `at` timestamp is captured but never surfaced, so there is not even an age hint. Human question: should closeDetail clear the server selection on close, or is holding the last-viewed node intended for Claude's continuity (and if so, should get_current_selection expose staleness/age)?",
+      "tactical": {
+        "explanation": "store.jsx closeDetail (line 49) = `setSelectedNodeId(null); setDetail(null)` only, no api call. There is no DELETE (or GET) /api/selection caller anywhere in src/web -- api.js's only /api/selection reference is pushSelection's POST. Server-side, the clearSelection command (application/commands/clear-selection.ts) -> selection.clear() (domain/session/selection.ts) is wired to DELETE /api/selection (server.ts:130) but nothing invokes it. get_current_selection (mcp-server.ts:36) reads selection.get() live, returning the last node set until the process ends or a new node is opened. The `at` stamp (selection.ts:20) is never read back out, so staleness is undetectable.",
+        "anchors": [
+          {
+            "path": "src/web/store.jsx",
+            "line": 49,
+            "symbol": "closeDetail",
+            "note": "clears React state only; no server call"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 130,
+            "symbol": "createServer",
+            "note": "DELETE /api/selection -> clearSelection exists but the SPA never calls it"
+          },
+          {
+            "path": "src/application/commands/clear-selection.ts",
+            "line": 4,
+            "symbol": "clearSelection",
+            "note": "server clear path, unreferenced by the UI"
+          }
+        ]
+      }
+    }
+  ]
+}

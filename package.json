@@ -1,0 +1,70 @@
+{
+  "name": "event-storming-recovery",
+  "version": "0.6.0",
+  "description": "Recover a strategic Event Storming model from an existing codebase and render it as a navigable, source-linked flow explorer.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bhastings-t3/event-storming-recovery.git"
+  },
+  "homepage": "https://github.com/bhastings-t3/event-storming-recovery#readme",
+  "bugs": {
+    "url": "https://github.com/bhastings-t3/event-storming-recovery/issues"
+  },
+  "author": {
+    "name": "Blake Hastings"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "event-storming-recovery": "dist/node/adapters/cli/cli.js",
+    "es-view": "dist/node/adapters/cli/cli.js"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "prompts",
+    "docs",
+    "skills",
+    "examples",
+    ".claude-plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build:node": "tsc -p tsconfig.node.json",
+    "build:web": "vite build",
+    "build": "npm run build:node && npm run build:web",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json",
+    "preview": "npm run build && node dist/node/adapters/cli/cli.js",
+    "demo": "node scripts/build-example.mjs",
+    "pretest": "npm run build:node",
+    "test": "node --test",
+    "prepack": "npm run build",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7"
+  },
+  "keywords": [
+    "event-storming",
+    "ddd",
+    "domain-driven-design",
+    "reverse-engineering",
+    "architecture",
+    "code-comprehension"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^15.0.0",
+    "zod": "^4.4.3"
+  }
+}

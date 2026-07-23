@@ -1,0 +1,299 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The local developer who runs the recovery CLIs. Here they launch the interactive explorer with `npx event-storming-recovery view` (the `es-view` bin), optionally passing --model / --traces / --port / --no-open, to boot one local server that serves the SPA + JSON API + MCP over a shared in-memory session."
+    },
+    {
+      "id": "cmd-launch-explorer",
+      "type": "command",
+      "label": "LaunchExplorer",
+      "inferred": true,
+      "description": "Boot an es-view session: parse args, resolve the model to serve (composing resolve-model), wire the shared in-memory session state and the persisted comment store, mount the SPA + JSON API + MCP handler, bind a local port, and best-effort open the browser. A single synchronous orchestration in runView() (src/adapters/cli/es-view.ts), invoked from the `view` subcommand's action in src/adapters/cli/cli.ts; any failure before listen (bad --model, invalid --traces, no free port) aborts the whole boot with a nonzero exit.",
+      "tactical": {
+        "explanation": "cli.ts's commander `view` action turns argv into a ViewOptions object ({ open, port:5178, host:127.0.0.1, modelPath?, tracesDir?, repoRoot? } — a bare positional arg is treated as --model; commander itself reports an error and exits on an unknown flag), then awaits runView(opts) in src/adapters/cli/es-view.ts, which runs the boot top to bottom: (1) resolveModel({...opts, cwd, packageRoot}, modelRepository) COMPOSES the resolve-model flow (reads agg-model): precedence --model > --traces (merge on the fly) > auto-discovered flows.json under cwd > bundled example self-model; it THROWS on a missing/invalid model file or --traces validation errors, caught here (runView's own try/catch) and turned into `process.exit(1)`. (2) new Selection() / new ContextBundle() make the empty in-memory session state (agg-selection / agg-context-bundle). (3) commentsPath = dirname(resolved.sourcePath)/comments.json; createCommentStore hydrates agg-comment-store from that sidecar if present. (4) buildServices (src/application/services.ts) bundles the model + built indexes (buildIndexes: nodeById, hotspotById) + repoRoot + comment store. (5) createMcpHandler wires the MCP face over the SAME services + state. (6) startServer listens (see agg-server-session). (7) it prints the connect banner (url, provenance, counts, the `claude mcp add` command) and, unless --no-open, calls openBrowser(url) fire-and-forget. Any error surfacing later (e.g. a port-bind rejection from startServer, which runView does not catch) propagates up to cli.ts's top-level `program.parseAsync(...).catch` -> exit 1.",
+        "anchors": [
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 48,
+            "symbol": "runView",
+            "note": "the whole boot orchestration"
+          },
+          {
+            "path": "src/adapters/cli/cli.ts",
+            "line": 42,
+            "symbol": "program",
+            "note": "commander `view` action: argv -> ViewOptions; defaults port 5178 / host 127.0.0.1 / open true"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 52,
+            "symbol": "runView",
+            "note": "resolveModel(...) composed; try/catch -> exit 1 on throw"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 59,
+            "symbol": "runView",
+            "note": "Selection / ContextBundle / createCommentStore / buildServices / createMcpHandler wiring"
+          },
+          {
+            "path": "src/adapters/cli/cli.ts",
+            "line": 73,
+            "symbol": "program",
+            "note": "top-level program.parseAsync(...).catch -> console.error + exit 1 (catches whatever runView doesn't, e.g. a port-bind rejection)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-server-session",
+      "type": "aggregate",
+      "label": "Explorer Server Session",
+      "inferred": true,
+      "description": "The running es-view session: one node:http server bound to one local port, plus the shared in-memory state (selection + context bundle) and the loaded services (model, indexes, comment store) that the SPA, the JSON API, and the MCP endpoint all close over. Its defining invariant is that these three faces share ONE process and ONE state, so a browser click is what a connected Claude session reads. MED confidence: much of its lifecycle is infrastructure (port binding, static serving) rather than domain rule, so boot risks are flagged as hotspots rather than minted as business invariants.",
+      "tactical": {
+        "explanation": "createServer wires the request router: /api/health, /api/model, /api/selection, /api/context, /api/comments, /api/item, /api/source, /api/mcp/*, the delegated /mcp handler, and static SPA serving from dist/web with index.html fallback. startServer then binds: tryListen(port, 20) calls server.listen(pnum, host); on 'listening' it sets runtime.baseUrl = http://host:pnum (so /api/mcp/* can print the exact connect command) and resolves { server, url, port }; on an EADDRINUSE 'error' with attempts left it retries pnum+1, else it rejects. The same http.Server object is reused across attempts. Binding to 127.0.0.1 by default keeps the session loopback-only. Once listening, the session is live and its shared state is externally readable via the API and MCP.",
+        "anchors": [
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 222,
+            "symbol": "startServer",
+            "note": "port bind + fall-forward, sets runtime.baseUrl, resolves { server, url, port }"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 99,
+            "symbol": "createServer",
+            "note": "one http server routing API + /mcp + static SPA over shared state/services"
+          },
+          {
+            "path": "src/application/services.ts",
+            "line": 31,
+            "symbol": "buildServices",
+            "note": "model + buildIndexes + repoRoot + comment store bundled for API and MCP"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 66,
+            "symbol": "runView",
+            "note": "startServer awaited; url used for the banner and browser open"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-server-started",
+      "type": "event",
+      "label": "ServerStarted",
+      "inferred": true,
+      "description": "The es-view server has bound a local port and is listening: the SPA, the JSON API, and the MCP endpoint are now reachable and share one in-memory session state. This is the moment the session becomes live — the operator's browser can load the explorer and a Claude terminal can `claude mcp add` and read the current selection. It holds only after model resolution, state wiring, and a successful port bind all succeed.",
+      "tactical": {
+        "explanation": "Realized when server.listen's callback fires inside tryListen: runtime.baseUrl is set and the startServer promise resolves with the bound url. runView() in src/adapters/cli/es-view.ts then prints the banner (url, model provenance, node/flow/hotspot counts, any resolver warnings, and the `claude mcp add --transport http event-storming <url>/mcp` command). Distinct from the earlier (composed) model-resolution fact: resolution can fail and exit BEFORE any server exists, so ServerStarted has its own, later success window.",
+        "anchors": [
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 231,
+            "symbol": "startServer",
+            "note": "server.listen callback: baseUrl set, promise resolves"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 73,
+            "symbol": "runView",
+            "note": "prints url + provenance + counts + the MCP connect command after start"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-model",
+      "type": "aggregate",
+      "label": "The Model",
+      "inferred": true,
+      "description": "The canonical Event Storming model (flows.json): deduped nodes plus flows, hotspots, terms, and derived meta. Loaded by the launch flow via resolveModel (precedence --model > --traces merge > auto-discovered > bundled example) and held in memory for the session to serve. Owned/defined by the merge and resolve-model flows; referenced here as the read the session serves.",
+      "tactical": {
+        "explanation": "resolveModel in src/application/commands/resolve-model.ts returns { model, source, sourcePath, repoRoot, warnings }. On the --traces path it calls mergeTraces (src/application/commands/merge-traces.ts) and THROWS if merged.errors.length, so the session never serves an invalid model; the --model/discovered/example paths call the injected ModelRepository's readModelFile (src/adapters/fs/model-repository.ts), which validates that nodes/flows arrays exist. buildServices then indexes model.nodes/model.hotspots for the API and MCP.",
+        "anchors": [
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 26,
+            "symbol": "resolveModel",
+            "note": "precedence resolution; returns model + provenance + repoRoot"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 37,
+            "symbol": "resolveModel",
+            "note": "throws on --traces validation errors so the server serves nothing invalid"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-comment-store",
+      "type": "aggregate",
+      "label": "Comment Store",
+      "inferred": true,
+      "description": "Human comments on model items (node / flow / hotspot), persisted to a comments.json sidecar next to the model so they survive model regeneration. Owned/defined by the comment-store flow; the launch flow only HYDRATES it at boot by reading the sidecar into memory, and best-effort persistence is warned-once if the location is not writable.",
+      "tactical": {
+        "explanation": "runView() (src/adapters/cli/es-view.ts) builds commentsPath = path.dirname(resolved.sourcePath)/comments.json and calls createCommentStore(commentsPath) (src/adapters/fs/comment-repository.ts), which, if the file exists, JSON.parses it and loads it into the domain CommentStore (src/domain/comment-store/comment-store.ts); a corrupt sidecar is swallowed (start empty rather than crash). The store is passed into buildServices so /api/comments and the MCP context render human notes.",
+        "anchors": [
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 62,
+            "symbol": "runView",
+            "note": "commentsPath = dirname(sourcePath)/comments.json; createCommentStore(commentsPath)"
+          },
+          {
+            "path": "src/adapters/fs/comment-repository.ts",
+            "line": 9,
+            "symbol": "createCommentStore",
+            "note": "hydrate the domain CommentStore from the sidecar if present; tolerate corrupt file"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-browser",
+      "type": "externalSystem",
+      "label": "Default web browser",
+      "inferred": false,
+      "description": "The operator's default web browser, launched fire-and-forget at the end of boot so the explorer opens automatically. Outside the process and best-effort: opening never blocks or fails the session, and --no-open skips it entirely (the url is always printed too).",
+      "tactical": {
+        "explanation": "openBrowser(url) in src/adapters/process/browser.ts spawns a detached, stdio-ignored, unref'd child per platform: `cmd /c start \"\" <url>` on win32, `open <url>` on darwin, else `xdg-open <url>`. The whole call is wrapped in try/catch and never throws. Invoked from runView() only when opts.open is true.",
+        "anchors": [
+          {
+            "path": "src/adapters/process/browser.ts",
+            "line": 5,
+            "symbol": "openBrowser",
+            "note": "platform-specific detached spawn, swallow-all try/catch"
+          },
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 85,
+            "symbol": "runView",
+            "note": "if (opts.open) openBrowser(url) — fire and forget"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "launch-explorer",
+      "name": "Operator launches the interactive explorer",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "The operator runs `npx event-storming-recovery view` (the es-view bin). Boot parses args, resolves which model to serve (composing resolve-model: explicit --model, an on-the-fly --traces merge, an auto-discovered flows.json, or the bundled self-model), hydrates the persisted comment store from the comments.json sidecar, wires the empty in-memory session state, and starts ONE local http server that serves the SPA, the JSON API, and the MCP endpoint over that one shared state. The server binds 127.0.0.1:5178, falling forward up to 20 ports if taken; on success it prints the url and the `claude mcp add` command and best-effort opens the browser. The point is a single live session where a human's click in the browser is exactly what a connected Claude terminal reads.",
+      "trigger": "Operator runs `npx event-storming-recovery view [options]` / `es-view` (src/adapters/cli/cli.ts's `view` action, which awaits runView() in src/adapters/cli/es-view.ts).",
+      "steps": [
+        "actor-operator",
+        "cmd-launch-explorer",
+        "agg-model",
+        "agg-comment-store",
+        "agg-server-session",
+        "evt-server-started"
+      ],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-launch-explorer",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-launch-explorer",
+          "to": "agg-model",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-launch-explorer",
+          "to": "agg-comment-store",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-launch-explorer",
+          "to": "agg-server-session",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-server-session",
+          "to": "evt-server-started",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-server-session",
+          "to": "ext-browser",
+          "verb": "calls"
+        }
+      ],
+      "hotspots": [
+        "hot-port-fallforward-exhaustion",
+        "hot-example-comments-unwritable"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-port-fallforward-exhaustion",
+      "label": "Port fall-forward is bounded and fails hard; the http.Server is reused across attempts",
+      "description": "startServer tries the preferred port then up to 20 successors on EADDRINUSE; if all 20 are taken, OR the very first bind hits any non-EADDRINUSE error, it rejects and the top-level `program.parseAsync(...).catch` prints a raw error and exits 1 with no operator-facing remediation. Secondary subtlety: the SAME http.Server object is re-listened across attempts, so each failed attempt leaves its server.listen 'listening' callback queued — on the eventual successful bind every queued callback fires, resolving the promise (idempotent) and re-setting runtime.baseUrl more than once (harmless today). Human question: is a 20-port ceiling right for a tool meant to run many sessions, and should exhaustion give a friendly 'all ports 5178-5197 busy, pass --port' message instead of a stack trace? Should each attempt use a fresh server (or removeAllListeners) rather than re-listening one object?",
+      "tactical": {
+        "explanation": "tryListen registers server.once('error', ...) and calls server.listen(pnum, host, cb); on EADDRINUSE with attemptsLeft>0 it recurses pnum+1, else reject(err). No cap message is surfaced; the rejection propagates up through runView's awaited startServer call (uncaught there) to cli.ts's top-level `program.parseAsync(...).catch` -> console.error(err) -> process.exit(1).",
+        "anchors": [
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 226,
+            "symbol": "startServer",
+            "note": "tryListen recursion; reject on exhaustion or non-EADDRINUSE error"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 237,
+            "symbol": "startServer",
+            "note": "tryListen(port, 20) — the 20-attempt ceiling"
+          },
+          {
+            "path": "src/adapters/cli/cli.ts",
+            "line": 73,
+            "symbol": "program",
+            "note": "top-level parseAsync(...).catch -> raw console.error + exit 1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hot-example-comments-unwritable",
+      "label": "Comment sidecar is placed next to the model even when that location is read-only",
+      "description": "The comments.json sidecar path is dirname(resolved.sourcePath). When no local model is found and es-view falls back to the BUNDLED example self-model, that dirname is inside the installed package (often a global/read-only npx location), so persist() fails and createCommentStore warns once and keeps comments in memory only — they are silently lost when the session ends. On the --traces path the sidecar lands INSIDE the traces directory (alongside the per-flow trace files); on --model/discovered it lands next to flows.json (intended). Human question: when the model directory is read-only or is the bundled example, should the sidecar fall back to a writable user-scoped location (e.g. a cache dir) so human comments are not silently discarded, and is writing comments.json into a --traces input directory desirable?",
+      "tactical": {
+        "explanation": "runView() (src/adapters/cli/es-view.ts) computes commentsPath = path.join(path.dirname(resolved.sourcePath), 'comments.json'); resolveModel sets sourcePath to the bundled example path (packageRoot/examples/.../model/flows.json) when nothing is found, or to the traces dir on --traces. comment-repository.ts's persist() try/catches the writeFileSync and, on failure, does a one-time `! comments not persisted` warning, otherwise keeping data in the in-memory byKey map only (inside the domain CommentStore).",
+        "anchors": [
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 62,
+            "symbol": "runView",
+            "note": "commentsPath rooted at dirname(resolved.sourcePath)"
+          },
+          {
+            "path": "src/adapters/fs/comment-repository.ts",
+            "line": 12,
+            "symbol": "persist",
+            "note": "best-effort writeFileSync; warn-once, keep in memory on failure"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 53,
+            "symbol": "resolveModel",
+            "note": "example fallback sets sourcePath inside the installed package"
+          }
+        ]
+      }
+    }
+  ]
+}

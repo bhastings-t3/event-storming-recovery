@@ -1,0 +1,329 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The developer/orchestrator running es-view in the browser. Here they open a sticky's Detail panel, click 'view source' under an anchor to pull the real code inline, and/or click the anchor link to deep-link the file into VS Code."
+    },
+    {
+      "id": "cmd-view-source",
+      "type": "command",
+      "label": "ViewSource",
+      "inferred": true,
+      "description": "Pull the real source code behind a model anchor and show it inline in the Detail panel. The operator clicks the 'view source' toggle on an anchor; the SPA asks the server for a line-windowed excerpt of the file at the anchor's repo-relative path.",
+      "tactical": {
+        "explanation": "The Anchor component's toggle() (Detail.jsx) lazily calls fetchSource(a.path, a.line) (api.js), which issues GET /api/source?path&line&ctx. The server handler (server.ts, createServer) reads the query params, 400s if `path` is missing, coerces line/ctx with Number()||undefined, and delegates to viewSource(sourceGateway, resolved.repoRoot, relPath, line, ctx) (the application query), which calls through to the fs source-gateway's readSource. The command carries no write; it is a synchronous read whose result the panel renders. A closed toggle re-clicks to hide (src state null=closed).",
+        "anchors": [
+          {
+            "path": "src/web/components/Detail.jsx",
+            "line": 142,
+            "symbol": "Anchor.toggle",
+            "note": "lazy toggle: fetchSource(a.path, a.line) on first open"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 40,
+            "symbol": "fetchSource",
+            "note": "GET /api/source?path&line&ctx"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 189,
+            "symbol": "createServer",
+            "note": "GET /api/source handler: parse params, 400 if no path, call viewSource"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-source-reader",
+      "type": "aggregate",
+      "label": "Source Reader (repo-root sandbox)",
+      "inferred": true,
+      "description": "The consistency boundary around reading real code behind an anchor: every source read must stay inside the resolved repo root. Stateless (its 'state' is the repo working tree on disk, reached through node:fs); recovered as an aggregate because it owns the path-traversal invariant and returns the source excerpt. MED confidence — it is a guarded read helper, arguably infra rather than a domain aggregate.",
+      "tactical": {
+        "explanation": "readSource(repoRoot, relPath, line, ctx) (fs source-gateway adapter) resolves relPath against path.resolve(repoRoot) via the pure guardPath() helper, enforces the sandbox guard, and on success reads the file with fs.readFileSync, splits on /\\r?\\n/, clamps the requested line into range via the pure lineWindow() helper, and returns a { path, exists, line, startLine, endLine, code } window (ctx lines above/below, default 8). The guard + window math now live in domain/source/source-window.ts (pure, no fs); the fs read itself lives in the adapter. repoRoot comes from resolveModel: explicit --repo-root > packageRoot (bundled-example self-model) > model.meta.repoRoot > cwd.",
+        "anchors": [
+          {
+            "path": "src/adapters/fs/source-gateway.ts",
+            "line": 8,
+            "symbol": "readSource",
+            "note": "sandboxed read owner: resolve, guard, read, window"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 194,
+            "symbol": "createServer",
+            "note": "handler returns viewSource(sourceGateway, resolved.repoRoot, ...) as the /api/source body"
+          },
+          {
+            "path": "src/application/commands/resolve-model.ts",
+            "line": 61,
+            "symbol": "resolveModel",
+            "note": "how resolvedRepoRoot (the sandbox root) is chosen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "inv-repo-root-sandbox",
+      "type": "invariant",
+      "label": "Source reads stay inside the repo root",
+      "inferred": true,
+      "description": "A source read may only resolve to a file at or under the repo root; a path that escapes it is REJECTED. ERROR-level (rejects the read): the request returns { exists:false, error:'path escapes repo root' } and no file is read. Effective against classic ../ traversal and absolute-path injection (see notes), but it is a lexical guard only — it does not resolve symlinks and does not restrict reads to files that are actually model anchors (see hot-source-read-scope).",
+      "tactical": {
+        "explanation": "root = path.resolve(repoRoot); abs = path.resolve(root, relPath) (which normalizes any ../ sequences and lets an absolute relPath override root). The guard rejects unless abs === root OR abs starts with root + path.sep — the trailing separator blocks sibling-prefix escapes (e.g. /repo-secrets vs /repo). URL-encoded traversal (%2e%2e%2f) is decoded by URLSearchParams before path.resolve normalizes it, so encoded ../ is also caught. After the guard, a missing/non-file path returns { exists:false, error:'not found' }. The guard itself is now the pure guardPath() function in domain/source/source-window.ts; the fs source-gateway adapter calls it before reading.",
+        "anchors": [
+          {
+            "path": "src/domain/source/source-window.ts",
+            "line": 26,
+            "symbol": "guardPath",
+            "note": "guard: abs !== root && !abs.startsWith(root + path.sep) => 'path escapes repo root'"
+          },
+          {
+            "path": "src/domain/source/source-window.ts",
+            "line": 23,
+            "symbol": "guardPath",
+            "note": "root = path.resolve(repoRoot); abs = path.resolve(root, relPath)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-source-excerpt",
+      "type": "readModel",
+      "label": "Source excerpt",
+      "inferred": true,
+      "description": "The line-windowed slice of real code the Detail panel shows inline under an anchor: a { path, exists, line, startLine, endLine, code } window (or an error note when the file is missing or the path escaped). This is the grounding a human reads next to the recovered sticky, and the same anchor block also offers the VS Code deep link.",
+      "tactical": {
+        "explanation": "Built by readSource: it slices lines[startLine-1 .. endLine] around the clamped anchor line (ctx=8 default, computed by the pure lineWindow() helper) and joins them into `code`. server.ts returns the object verbatim as the /api/source JSON body. The Anchor component renders it: while loading a 'loading…' note, then either <pre class='src-code'><code>{src.code}</code></pre> on exists, or a 'source not found at repo root (<error>)' note otherwise.",
+        "anchors": [
+          {
+            "path": "src/adapters/fs/source-gateway.ts",
+            "line": 14,
+            "symbol": "readSource",
+            "note": "return { path, exists, line, startLine, endLine, code } window"
+          },
+          {
+            "path": "src/web/components/Detail.jsx",
+            "line": 155,
+            "symbol": "Anchor",
+            "note": "render: <pre class=src-code> excerpt, or 'source not found' note"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "code",
+          "conceptual": true,
+          "dataType": "string",
+          "derivation": "The file's text sliced to a window of ctx lines above/below the anchor line (default 8), i.e. lines[startLine-1 .. endLine] joined with newlines. Empty/omitted when the file is missing or the path escaped the repo root.",
+          "sources": [
+            {
+              "ref": "ds-repo-source-file",
+              "role": "derived-from",
+              "transform": "filter",
+              "note": "read whole file, keep only the [startLine, endLine] line window"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "evidence": [
+            {
+              "path": "src/adapters/fs/source-gateway.ts",
+              "line": 14,
+              "symbol": "readSource",
+              "note": "lines.slice(startLine-1, endLine).join('\\n')"
+            }
+          ]
+        },
+        {
+          "name": "startLine / endLine",
+          "conceptual": true,
+          "dataType": "int",
+          "derivation": "The clamped excerpt window: ln = clamp(line||1, 1, fileLength); startLine = max(1, ln-ctx); endLine = min(fileLength, ln+ctx). Guarantees an in-range window even for a rotted/overshooting anchor line.",
+          "sources": [],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "evidence": [
+            {
+              "path": "src/domain/source/source-window.ts",
+              "line": 32,
+              "symbol": "lineWindow",
+              "note": "Math.max/Math.min clamping of line into range"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ds-repo-fs",
+      "type": "datastore",
+      "storeKind": "filesystem",
+      "label": "Repo working tree (sandbox root)",
+      "inferred": false,
+      "description": "The checked-out repository rooted at resolvedRepoRoot, reached through node:fs. It is the sandbox boundary for /api/source: readSource may read any file at or under this root. Read-only on this flow (fs.readFileSync); no writes.",
+      "tactical": {
+        "explanation": "resolvedRepoRoot is chosen by resolveModel (explicit --repo-root > packageRoot for the bundled self-model > model.meta.repoRoot > cwd) and passed as readSource's repoRoot. path.resolve(repoRoot) is the guard's `root`, computed in the pure guardPath() helper.",
+        "anchors": [
+          {
+            "path": "src/domain/source/source-window.ts",
+            "line": 23,
+            "symbol": "guardPath",
+            "note": "root = path.resolve(repoRoot) — the filesystem sandbox root"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ds-repo-source-file",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "Source file at anchor path",
+      "parent": "ds-repo-fs",
+      "inferred": false,
+      "description": "An arbitrary file addressed by a model anchor's repo-relative path (e.g. src/domain/model/merge.ts), read at or under the repo root. The excerpt projects a line window of this file. Note the read is NOT limited to files that are actually model anchors — any file under the root is reachable (see hot-source-read-scope).",
+      "tactical": {
+        "explanation": "abs = path.resolve(root, relPath); after the sandbox guard (guardPath) passes and fs.statSync(abs).isFile() is true, fs.readFileSync(abs,'utf8') loads the whole file, split into lines for windowing.",
+        "anchors": [
+          {
+            "path": "src/adapters/fs/source-gateway.ts",
+            "line": 12,
+            "symbol": "readSource",
+            "note": "fs.readFileSync(g.abs,'utf8').split(/\\r?\\n/)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-vscode",
+      "type": "externalSystem",
+      "label": "VS Code",
+      "inferred": false,
+      "description": "The local VS Code editor, reached through the OS handler for the vscode:// URL scheme. Clicking an anchor's link deep-links the exact file and line open in the editor — an out-of-band escape hatch from the inline excerpt to the full file in an IDE.",
+      "tactical": {
+        "explanation": "anchorUrl(repoRoot, a) builds `vscode://file/<repoRoot>/<a.path>:<line>`; the Anchor component renders it as the <a class='anchor' href={anchorUrl(...)}> link text of every anchor. The browser/OS resolves the vscode:// scheme and hands off to the editor; the app has no further involvement.",
+        "anchors": [
+          {
+            "path": "src/web/model.js",
+            "line": 43,
+            "symbol": "anchorUrl",
+            "note": "build 'vscode://file/' + repoRoot + '/' + a.path + ':' + line"
+          },
+          {
+            "path": "src/web/components/Detail.jsx",
+            "line": 149,
+            "symbol": "Anchor",
+            "note": "<a class='anchor' href={anchorUrl(repoRoot, a)}> deep-link"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "view-source",
+      "name": "Operator pulls the real code behind an anchor",
+      "tier": 1,
+      "kind": "read",
+      "status": "live",
+      "summary": "From a sticky's Detail panel, each tactical anchor offers two ways into the real code: a 'view source' toggle that pulls a line-windowed excerpt inline, and a vscode://file link that opens the exact file+line in VS Code. The inline path calls GET /api/source, which reads the file through a repo-root-sandboxed helper (readSource) whose path-traversal guard rejects any path that escapes the repo root, then returns a clamped window of lines around the anchor. The point is to ground a recovered, inferred sticky in verifiable source without leaving the explorer, and to hand off to a real editor when the operator wants the whole file.",
+      "trigger": "Operator clicks 'view source' under an anchor in the Detail panel (or clicks the anchor's vscode:// link).",
+      "steps": [
+        "actor-operator",
+        "cmd-view-source",
+        "agg-source-reader",
+        "rm-source-excerpt",
+        "ext-vscode"
+      ],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-view-source",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-view-source",
+          "to": "agg-source-reader",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-source-reader",
+          "to": "inv-repo-root-sandbox",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-source-reader",
+          "to": "ds-repo-fs",
+          "verb": "connects via"
+        },
+        {
+          "from": "agg-source-reader",
+          "to": "rm-source-excerpt",
+          "verb": "returns"
+        },
+        {
+          "from": "rm-source-excerpt",
+          "to": "ds-repo-source-file",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-source-excerpt",
+          "to": "actor-operator",
+          "verb": "read by"
+        },
+        {
+          "from": "actor-operator",
+          "to": "ext-vscode",
+          "verb": "calls"
+        }
+      ],
+      "hotspots": [
+        "hot-source-read-scope"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-source-read-scope",
+      "label": "/api/source can read any file under the repo root, not just model anchors",
+      "description": "The path-traversal guard correctly blocks ../ and absolute-path escapes, but it only sandboxes reads to the repo ROOT — it does not restrict them to files that are actually anchors in the model, and it is a lexical guard that does NOT resolve symlinks. So the endpoint will serve the contents of ANY file under the repo root (e.g. .env, .git/config, committed keys) to whoever can reach the server, and a symlink inside the tree pointing outside would be followed. The default bind is 127.0.0.1 (localhost only, no auth), but --host accepts any address (e.g. 0.0.0.0), which would expose this unauthenticated file-read on the network. Human question: is arbitrary repo-root file read the intended trust boundary, and should the guard additionally (a) restrict to known anchor paths, (b) realpath-resolve symlinks, and/or (c) refuse to bind a non-loopback --host without auth?",
+      "tactical": {
+        "explanation": "guardPath guards abs against root+path.sep (domain/source/source-window.ts) — lexically sound, but there is no allowlist of anchor paths and no fs.realpath check, and the read (fs.readFileSync in the fs source-gateway) will return any in-root file. The handler is unauthenticated (server.ts's /api/source branch). startServer defaults host to 127.0.0.1 (server.ts) but the CLI's --host option (cli.ts, on the `view` subcommand) overrides it with no auth gate, so 0.0.0.0 would publish the read to the LAN.",
+        "anchors": [
+          {
+            "path": "src/domain/source/source-window.ts",
+            "line": 26,
+            "symbol": "guardPath",
+            "note": "lexical sandbox guard: no anchor allowlist, no symlink realpath"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 194,
+            "symbol": "createServer",
+            "note": "unauthenticated /api/source returns viewSource(...) verbatim"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 223,
+            "symbol": "startServer",
+            "note": "default host 127.0.0.1"
+          },
+          {
+            "path": "src/adapters/cli/cli.ts",
+            "line": 40,
+            "symbol": "view",
+            "note": "--host option on the `view` subcommand overrides the loopback default with no auth"
+          }
+        ]
+      }
+    }
+  ]
+}

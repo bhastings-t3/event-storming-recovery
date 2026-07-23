@@ -1,0 +1,522 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The local developer exploring the recovered model in the es-view SPA. Here they right-click stickies, overview boxes, sidebar items, and hotspot cards to gather them into a context bundle, then review, prune, or clear the set before handing it to Claude."
+    },
+    {
+      "id": "cmd-add-context-item",
+      "type": "command",
+      "label": "AddContextItem",
+      "inferred": true,
+      "description": "Add one typed reference { type: node | flow | hotspot, id } to the curated context bundle. Idempotent: re-adding an already-present item is a silent no-op that preserves insertion order.",
+      "tactical": {
+        "explanation": "Triggered by the right-click 'Add ... to context bundle' menu item (ContextMenu.jsx) or, for removal's inverse, the same toggle. The React store's addToContext(type, id) calls api.js addContext -> POST /api/context { type, id }. The server route delegates to the addContextItem command (application/commands/add-context-item.ts), which validates the ref via itemExists (see inv-bundle-item-exists) and, on success, calls bundle.add(type, id), which inserts into the in-memory Map keyed by `type:id` only when the key is absent. The response returns the whole ordered bundle, which the store writes to bundleItems so the pill count and drawer re-render.",
+        "anchors": [
+          {
+            "path": "src/web/components/ContextMenu.jsx",
+            "line": 46,
+            "symbol": "ContextMenu",
+            "note": "add/remove toggle button"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 51,
+            "symbol": "addToContext",
+            "note": "store action -> addContext -> setBundleItems"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 23,
+            "symbol": "addContext",
+            "note": "POST /api/context { type, id }"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 137,
+            "symbol": "createServer",
+            "note": "POST /api/context branch: calls addContextItem(services, bundle, type, id)"
+          },
+          {
+            "path": "src/application/commands/add-context-item.ts",
+            "line": 11,
+            "symbol": "addContextItem",
+            "note": "guard via itemExists then bundle.add(type, id)"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 27,
+            "symbol": "add",
+            "note": "Map.set only when key absent (dedup, insertion-ordered)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-remove-context-item",
+      "type": "command",
+      "label": "RemoveContextItem",
+      "inferred": true,
+      "description": "Remove one typed reference from the context bundle. Idempotent and unguarded: removing an item that is not present succeeds as a no-op, and unlike add it does NOT check that the id exists in the model.",
+      "tactical": {
+        "explanation": "Triggered two ways: the right-click 'Remove ... from context bundle' toggle (ContextMenu.jsx) or the per-row ✕ in the drawer (ContextBundle.jsx). Both call the store's removeFromContext(type, id) -> api.js removeContext -> DELETE /api/context { type, id }. The DELETE branch does NOT run itemExists; it calls the removeContextItem command (application/commands/remove-context-item.ts), which calls bundle.remove(type, id), a plain Map.delete on `type:id` (no-op if absent). Returns the updated ordered bundle.",
+        "anchors": [
+          {
+            "path": "src/web/components/ContextMenu.jsx",
+            "line": 46,
+            "symbol": "ContextMenu",
+            "note": "remove branch of the toggle"
+          },
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 50,
+            "symbol": "ContextBundle",
+            "note": "per-row ✕ remove button"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 52,
+            "symbol": "removeFromContext",
+            "note": "store action -> removeContext"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 24,
+            "symbol": "removeContext",
+            "note": "DELETE /api/context { type, id }"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 147,
+            "symbol": "createServer",
+            "note": "DELETE with id -> removeContextItem (no existence guard)"
+          },
+          {
+            "path": "src/application/commands/remove-context-item.ts",
+            "line": 4,
+            "symbol": "removeContextItem",
+            "note": "bundle.remove(type, id)"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 32,
+            "symbol": "remove",
+            "note": "Map.delete on type:id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-clear-context-bundle",
+      "type": "command",
+      "label": "ClearContextBundle",
+      "inferred": true,
+      "description": "Empty the entire context bundle in one action. Distinguished from RemoveContextItem by the absence of an id in the DELETE body.",
+      "tactical": {
+        "explanation": "Triggered by the drawer's 'Clear' button (ContextBundle.jsx) -> store clearBundle() -> api.js clearContext -> DELETE /api/context with NO body. The server DELETE branch: when body.id is falsy it falls through to the clearContextBundle command (application/commands/clear-context-bundle.ts) -> bundle.clear() (Map.clear) and returns { items: [] }. The store then sets bundleItems to []. So add/remove/clear all share the DELETE verb but branch on presence of an id.",
+        "anchors": [
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 59,
+            "symbol": "ContextBundle",
+            "note": "'Clear' ghost button"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 53,
+            "symbol": "clearBundle",
+            "note": "store action -> clearContext"
+          },
+          {
+            "path": "src/web/api.js",
+            "line": 25,
+            "symbol": "clearContext",
+            "note": "DELETE /api/context (no body)"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 148,
+            "symbol": "createServer",
+            "note": "DELETE with no id -> clearContextBundle -> { items: [] }"
+          },
+          {
+            "path": "src/application/commands/clear-context-bundle.ts",
+            "line": 4,
+            "symbol": "clearContextBundle",
+            "note": "bundle.clear()"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 37,
+            "symbol": "clear",
+            "note": "Map.clear()"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agg-context-bundle",
+      "type": "aggregate",
+      "label": "Context Bundle",
+      "inferred": true,
+      "description": "The curated set of items the operator has gathered for Claude: an insertion-ordered collection of typed refs { type: node | flow | hotspot, id }, deduped by `type:id`. Lives purely in the shared in-memory server state (never persisted); the same Map is read by the SPA drawer AND by connected Claude/MCP sessions. Its consistency boundary is the add-time existence guard.",
+      "tactical": {
+        "explanation": "Implemented by the ContextBundle class (domain/session/context-bundle.ts) as `private readonly bundle = new Map()` keyed `${type}:${id}` -> { type, id, at }. add() inserts only when the key is absent (dedup + preserves order); remove() deletes by key; clear() empties it; list() projects to [{ type, id }] in insertion order. The aggregate's only enforced rule (a valid model ref) is applied by the addContextItem command before bundle.add, not inside the ContextBundle class itself. Rendering to markdown (application/read-models/context.ts renderBundleMarkdown) is a read-side projection, not aggregate state.",
+        "anchors": [
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 18,
+            "symbol": "ContextBundle",
+            "note": "bundle = new Map(); the aggregate's state"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 15,
+            "symbol": "key",
+            "note": "dedup key `type:id`"
+          },
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 22,
+            "symbol": "list",
+            "note": "insertion-ordered projection to [{ type, id }]"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "items",
+          "conceptual": true,
+          "dataType": "array",
+          "derivation": "The ordered list of gathered refs, one per gathered node/flow/hotspot, each { type, id }. Backed by a Map keyed `type:id`, so at most one entry per (type,id); iteration order is insertion order. Held only in process memory (a stored `at` timestamp per entry is dropped by getBundle and not exposed).",
+          "sources": [
+            {
+              "ref": "ds-session-state",
+              "role": "derived-from",
+              "transform": "identity",
+              "note": "the in-memory bundle Map"
+            }
+          ],
+          "confidence": "high",
+          "provenance": [
+            "inferred-from-dto"
+          ],
+          "evidence": [
+            {
+              "path": "src/domain/session/context-bundle.ts",
+              "line": 28,
+              "symbol": "add",
+              "note": "Map<type:id, {type,id,at}> insertion-ordered, deduped"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inv-bundle-item-exists",
+      "type": "invariant",
+      "label": "A bundle item must reference a real model node/flow/hotspot of its type",
+      "inferred": true,
+      "description": "ERROR-level guard on AddContextItem: the POST /api/context route rejects (404) any add whose { type, id } does not resolve to an existing node, flow, or hotspot of that type, so the bundle can never hold a dangling ref. NOTE the guard is asymmetric: it runs only on add (POST); RemoveContextItem (DELETE) is unguarded but idempotent, so no stale ref can survive.",
+      "tactical": {
+        "explanation": "In the addContextItem command (application/commands/add-context-item.ts), `if (!id || !itemExists(services, type, id)) return { ok: false, error: ... }` runs before bundle.add, and the server route maps a not-ok result to HTTP 404. itemExists (application/read-models/items.ts) dispatches by type: flow -> model.flows.some(id); hotspot -> indexes.hotspotById.has(id); else -> indexes.nodeById.has(id). The same guard backs POST /api/comments and GET /api/item. The dedup rule (no duplicate `type:id`) is enforced inside ContextBundle.add itself but is a silent no-op, not a rejection, so it is folded here rather than modeled as a second invariant.",
+        "anchors": [
+          {
+            "path": "src/application/commands/add-context-item.ts",
+            "line": 12,
+            "symbol": "addContextItem",
+            "note": "guard: not-found when !itemExists, mapped to HTTP 404 by the route"
+          },
+          {
+            "path": "src/application/read-models/items.ts",
+            "line": 5,
+            "symbol": "itemExists",
+            "note": "type-dispatched existence check against the model/indexes"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-context-item-added",
+      "type": "event",
+      "label": "ContextItemAdded",
+      "inferred": true,
+      "description": "A node, flow, or hotspot has been gathered into the context bundle. The fact holds only for a genuinely new ref; re-adding an existing item is absorbed silently and raises nothing.",
+      "tactical": {
+        "explanation": "Realized by ContextBundle.add inserting a new `type:id` entry into the Map and returning the updated ordered bundle. Observable to the operator as the pill count incrementing and a new drawer row, and to a connected Claude session as an extra item in the event-storming://selected-nodes resource on its next read.",
+        "anchors": [
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 28,
+            "symbol": "add",
+            "note": "bundle.set(key, ...) when absent; return list()"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 143,
+            "symbol": "createServer",
+            "note": "respond { items: result.items } from addContextItem"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-context-item-removed",
+      "type": "event",
+      "label": "ContextItemRemoved",
+      "inferred": true,
+      "description": "A single item has been dropped from the context bundle (via the right-click toggle or the drawer ✕). Idempotent: a remove of an absent item still returns the (unchanged) bundle.",
+      "tactical": {
+        "explanation": "Realized by ContextBundle.remove deleting the `type:id` key and returning the updated ordered bundle. Surfaced by the store overwriting bundleItems, shrinking the drawer list and pill count.",
+        "anchors": [
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 32,
+            "symbol": "remove",
+            "note": "bundle.delete(key); return list()"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 147,
+            "symbol": "createServer",
+            "note": "respond { items: removeContextItem(...) }"
+          }
+        ]
+      }
+    },
+    {
+      "id": "evt-context-bundle-cleared",
+      "type": "event",
+      "label": "ContextBundleCleared",
+      "inferred": true,
+      "description": "The entire context bundle has been emptied in one action, resetting it to the boot state.",
+      "tactical": {
+        "explanation": "Realized by ContextBundle.clear() calling Map.clear(); the server returns { items: [] } and the store sets bundleItems to []. Modeled as a distinct event from ContextItemRemoved because it is a separate command (bulk reset, no id) with its own DELETE branch.",
+        "anchors": [
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 37,
+            "symbol": "clear",
+            "note": "bundle.clear()"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 148,
+            "symbol": "createServer",
+            "note": "clearContextBundle then respond { items: [] }"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-context-bundle",
+      "type": "readModel",
+      "label": "Context bundle drawer & pill",
+      "inferred": true,
+      "description": "What the operator reads to review the gathered set: the slide-over drawer listing each item as a colored row (label, type, ✕) plus the count on the Context pill. Backed by the bundleItems array the store keeps in sync from every add/remove/clear response. GET /api/context also returns a rendered markdown projection of the same set, which the 'Copy all for Claude' clipboard export and the MCP resource reuse (both modeled by other flows).",
+      "tactical": {
+        "explanation": "The store loads the bundle once on mount (getContext -> setBundleItems) and thereafter overwrites bundleItems from each mutation response, so the drawer/pill reflect server truth without re-fetching. ContextBundle.jsx maps bundleItems to rows via meta(item), resolving each ref's label/color from nodeById / hotspotById / model.flows. GET /api/context on the server calls the listContextBundle query (application/queries/list-context-bundle.ts), which returns { items, markdown } where markdown = renderBundleMarkdown(services, items) (application/read-models/context.ts) — that markdown is the read-side projection the copy-for-claude flow and the event-storming://selected-nodes MCP resource render; this flow only writes the underlying set.",
+        "anchors": [
+          {
+            "path": "src/web/components/ContextBundle.jsx",
+            "line": 43,
+            "symbol": "ContextBundle",
+            "note": "render bundleItems as drawer rows"
+          },
+          {
+            "path": "src/web/store.jsx",
+            "line": 34,
+            "symbol": "ExplorerProvider",
+            "note": "getContext().then(setBundleItems) on mount"
+          },
+          {
+            "path": "src/application/queries/list-context-bundle.ts",
+            "line": 6,
+            "symbol": "listContextBundle",
+            "note": "GET /api/context -> { items, markdown }"
+          },
+          {
+            "path": "src/application/read-models/context.ts",
+            "line": 234,
+            "symbol": "renderBundleMarkdown",
+            "note": "markdown projection reused by copy/MCP flows"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-claude-mcp",
+      "type": "externalSystem",
+      "label": "Connected Claude (MCP client)",
+      "inferred": true,
+      "description": "A Claude session connected to the es-view MCP endpoint over streamable HTTP. It reads the bundle the operator built by @-mentioning the event-storming://selected-nodes resource, which returns the same in-memory set rendered as grounded markdown. The MCP read itself is a separate flow; this flow only references it as the downstream consumer.",
+      "tactical": {
+        "explanation": "mcp-server.ts registers the resource 'selected-nodes' at event-storming://selected-nodes; its read handler returns renderBundleMarkdown(services, bundle.list()) over the SAME shared ContextBundle instance the /api/context routes mutate, so a browser add is visible to Claude on its next resource read.",
+        "anchors": [
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 83,
+            "symbol": "buildMcpServer",
+            "note": "event-storming://selected-nodes reads bundle.list()"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ds-session-state",
+      "type": "datastore",
+      "storeKind": "memory",
+      "label": "In-process session state",
+      "inferred": false,
+      "description": "The single in-memory Selection and ContextBundle instances created at server boot in the CLI composition root, holding the current selection and the context-bundle Map. Non-persistent (lost on restart, never written to disk) and process-global: one pair of instances is shared by all browser tabs and all MCP sessions in the run. The bundle instance is what this flow writes.",
+      "tactical": {
+        "explanation": "adapters/cli/es-view.ts's runView constructs `new Selection()` and `new ContextBundle()` once and passes both instances to startServer/createServer (HTTP route handlers) and createMcpHandler (every MCP session), which is why a click in the SPA is what a connected Claude reads.",
+        "anchors": [
+          {
+            "path": "src/adapters/cli/es-view.ts",
+            "line": 59,
+            "symbol": "runView",
+            "note": "single shared Selection + ContextBundle instances constructed once"
+          }
+        ]
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "build-context-bundle",
+      "name": "Operator builds a context bundle for Claude",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "In the es-view SPA the operator right-clicks any sticky, overview box, sidebar item, glossary chip, or hotspot card and picks 'Add to context bundle' to gather it; the same menu (or the drawer ✕) removes an item, and the drawer's 'Clear' empties the set. Each action posts to /api/context, which validates that an added ref resolves to a real model node/flow/hotspot before mutating the shared in-memory bundle Map, then returns the whole ordered set the drawer and Context-pill count re-render from. The bundle lives only in process memory and is shared with connected Claude sessions, which later read it as the event-storming://selected-nodes MCP resource (a separate flow). The point is to let a human hand-curate exactly the grounded slice of the model Claude should reason over.",
+      "trigger": "Right-click any node/flow/hotspot in the SPA -> 'Add to context bundle' (ContextMenu.jsx:46); remove via the same toggle or the drawer ✕; clear via the drawer's 'Clear' button.",
+      "steps": [
+        "actor-operator",
+        "cmd-add-context-item",
+        "agg-context-bundle",
+        "evt-context-item-added",
+        "rm-context-bundle"
+      ],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-add-context-item",
+          "verb": "issues"
+        },
+        {
+          "from": "actor-operator",
+          "to": "cmd-remove-context-item",
+          "verb": "issues"
+        },
+        {
+          "from": "actor-operator",
+          "to": "cmd-clear-context-bundle",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-add-context-item",
+          "to": "agg-context-bundle",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-remove-context-item",
+          "to": "agg-context-bundle",
+          "verb": "handled by"
+        },
+        {
+          "from": "cmd-clear-context-bundle",
+          "to": "agg-context-bundle",
+          "verb": "handled by"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "inv-bundle-item-exists",
+          "verb": "enforces"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "evt-context-item-added",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "evt-context-item-removed",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "evt-context-bundle-cleared",
+          "verb": "emits"
+        },
+        {
+          "from": "agg-context-bundle",
+          "to": "ds-session-state",
+          "verb": "persists to"
+        },
+        {
+          "from": "evt-context-item-added",
+          "to": "rm-context-bundle",
+          "verb": "updates"
+        },
+        {
+          "from": "evt-context-item-removed",
+          "to": "rm-context-bundle",
+          "verb": "updates"
+        },
+        {
+          "from": "evt-context-bundle-cleared",
+          "to": "rm-context-bundle",
+          "verb": "updates"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "actor-operator",
+          "verb": "read by"
+        },
+        {
+          "from": "rm-context-bundle",
+          "to": "ext-claude-mcp",
+          "verb": "read by"
+        }
+      ],
+      "hotspots": [
+        "hot-bundle-single-global-state"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-bundle-single-global-state",
+      "label": "One process-global bundle is shared by every browser tab and every Claude session",
+      "description": "The context bundle is a single in-memory Map on the one shared state object, with no per-client or per-session scoping. If two browser tabs (or two people on the same es-view URL) are open, or one operator curates while a Claude session reads, they all mutate and see the SAME bundle: an add in one tab appears in the other, and a 'Clear' wipes everyone's set. For the intended single-local-developer workflow this is the feature (the SPA click is exactly what Claude reads). Human question: is single-user, single-run the only supported mode, or should the bundle be scoped per browser session / per MCP session once es-view is ever shared or multi-tab? Restart also silently drops the bundle (no persistence).",
+      "tactical": {
+        "explanation": "runView constructs one `ContextBundle` instance (adapters/cli/es-view.ts:60); the server passes that same instance to all HTTP handlers and every MCP session, and list/add/remove/clear all operate on it with no client identity. The MCP resource reads the identical instance (mcp-server.ts:92). There is no keying by tab, cookie, or Mcp-Session-Id.",
+        "anchors": [
+          {
+            "path": "src/domain/session/context-bundle.ts",
+            "line": 17,
+            "symbol": "ContextBundle",
+            "note": "single global bundle Map, no per-client scope"
+          },
+          {
+            "path": "src/adapters/http/server.ts",
+            "line": 133,
+            "symbol": "createServer",
+            "note": "all /api/context calls mutate the one shared bundle instance"
+          },
+          {
+            "path": "src/adapters/mcp/mcp-server.ts",
+            "line": 92,
+            "symbol": "buildMcpServer",
+            "note": "MCP resource reads the same bundle.list()"
+          }
+        ]
+      }
+    }
+  ]
+}

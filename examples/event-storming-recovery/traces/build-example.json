@@ -1,0 +1,309 @@
+{
+  "nodes": [
+    {
+      "id": "actor-operator",
+      "type": "actor",
+      "label": "Operator",
+      "inferred": true,
+      "description": "The developer/orchestrator who runs the recovery CLIs (es-merge, es-generate, demo) and launches es-view. Here they run `npm run demo` to rebuild the bundled self-model example from its committed traces."
+    },
+    {
+      "id": "ext-ci",
+      "type": "externalSystem",
+      "label": "GitHub Actions CI",
+      "inferred": true,
+      "description": "The repository's CI workflow. Its second job step runs `npm run demo` as a smoke build on every push to main and every pull request, exercising the whole offline pipeline (merge -> generate) end to end. Outside the tool's deploy boundary; here it is a second, automated trigger of the same composition the operator runs by hand.",
+      "tactical": {
+        "explanation": "The ci job runs `npm test` then `npm run demo`. The demo step is purely a smoke build: it regenerates the example in place and CI only asserts the process exits 0 -- it never diffs the regenerated artifacts against the committed ones (see hot-demo-example-drift). Unchanged by the TS refactor.",
+        "anchors": [
+          {
+            "path": ".github/workflows/ci.yml",
+            "line": 19,
+            "symbol": "build the example (smoke)",
+            "note": "CI step: run: npm run demo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-build-example",
+      "type": "command",
+      "label": "BuildExample",
+      "inferred": true,
+      "description": "Rebuild the bundled self-model example end to end: an operator-run (or CI-run) automation that sequentially invokes es-merge and then es-generate over the committed example's traces, regenerating examples/event-storming-recovery/model/{flows.json,flows.dot,explorer.html}. Pure composition -- it owns no domain state; it sequences and wires the two already-traced CLIs.",
+      "tactical": {
+        "explanation": "scripts/build-example.mjs (the `npm run demo` script). Computes root = repo root, ex = examples/event-storming-recovery, model = ex/model/flows.json. A `run` helper does execFileSync('node', args, { stdio:'inherit', cwd: root }) -- child stdout/stderr stream through, and a NONZERO child exit THROWS, aborting the chain. Now that the Node side is TypeScript, the script FIRST compiles the CLIs with `tsc -p tsconfig.node.json` (a step that didn't exist pre-refactor) before invoking the compiled `dist/node/adapters/cli/cli.js`. It then calls the unified CLI's `merge` subcommand with (ex/traces, model) to write flows.json, THEN calls the `generate` subcommand with (model, ex/model, --repo-root root, --title 'Event Storming Recovery — self-model'). The ordering is load-bearing: generate reads the very flows.json the merge just wrote. Because merge writes flows.json even on validation error but exits 1, a broken trace set overwrites the committed flows.json and then throws before generate runs (see hot-demo-example-drift). Same script backs the CI smoke build (.github/workflows/ci.yml).",
+        "anchors": [
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 11,
+            "symbol": "run",
+            "note": "execFileSync('node', args, {stdio:'inherit', cwd:root}) -- throws on nonzero exit"
+          },
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 14,
+            "symbol": "build-example",
+            "note": "NEW: compile the TS CLIs (tsc -p tsconfig.node.json) before invoking dist/node/adapters/cli/cli.js"
+          },
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 16,
+            "symbol": "build-example",
+            "note": "run cli.js merge (ex/traces -> model/flows.json)"
+          },
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 17,
+            "symbol": "build-example",
+            "note": "run cli.js generate (model -> ex/model/{flows.dot,explorer.html})"
+          },
+          {
+            "path": "package.json",
+            "line": 43,
+            "symbol": "scripts.demo",
+            "note": "\"demo\": \"node scripts/build-example.mjs\""
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-merge-traces",
+      "type": "command",
+      "label": "MergeTraces",
+      "inferred": true,
+      "description": "Fold every per-flow trace document into one canonical, validated flows.json. In this composition flow it is the FIRST stage the demo calls; its internals (union, derived meta, invariant validation) are owned by the merge-traces flow.",
+      "tactical": {
+        "explanation": "Invoked by build-example.mjs as a child `node dist/node/adapters/cli/cli.js merge <ex/traces> <model/flows.json>` process. It reads the bundled example's traces directory and writes the merged flows.json, exiting 1 on any validation error (which would abort the demo's execFileSync chain). The unified CLI's `merge` subcommand (cli.ts) dispatches to runMerge (src/adapters/cli/es-merge.ts). See the merge-traces flow for the full internals.",
+        "anchors": [
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 16,
+            "symbol": "build-example",
+            "note": "demo invokes the unified CLI's merge subcommand as the first stage"
+          },
+          {
+            "path": "src/adapters/cli/cli.ts",
+            "line": 58,
+            "symbol": "program",
+            "note": "merge subcommand action dispatches to runMerge"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cmd-generate-views",
+      "type": "command",
+      "label": "GenerateViews",
+      "inferred": true,
+      "description": "Render the canonical flows.json into flows.dot + explorer.html. In this composition flow it is the SECOND stage the demo calls, reading the flows.json the merge stage just produced; its internals (DOT + HTML projection) are owned by the generate-views flow.",
+      "tactical": {
+        "explanation": "Invoked by build-example.mjs as a child `node dist/node/adapters/cli/cli.js generate <model/flows.json> <ex/model> --repo-root <root> --title 'Event Storming Recovery — self-model'` process, strictly after the merge stage. It reads flows.json and writes flows.dot + explorer.html into the example's model dir. The unified CLI's `generate` subcommand (cli.ts) dispatches to runGenerate (src/adapters/cli/es-generate.ts). See the generate-views flow for the full internals.",
+        "anchors": [
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 17,
+            "symbol": "build-example",
+            "note": "demo invokes the unified CLI's generate subcommand as the second stage, with --repo-root/--title"
+          },
+          {
+            "path": "src/adapters/cli/cli.ts",
+            "line": 69,
+            "symbol": "program",
+            "note": "generate subcommand action dispatches to runGenerate"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rm-explorer-html",
+      "type": "readModel",
+      "label": "Interactive explorer.html",
+      "inferred": true,
+      "description": "The self-contained interactive explorer produced by the generate stage and committed as the example's primary artifact. The operator opens it in a browser to read the recovered self-model. Backed by ds-explorer-html.",
+      "tactical": {
+        "explanation": "Written by the generate stage into ex/model/explorer.html; build-example.mjs's final console line points the operator at it. In this composition flow it is the terminal artifact the demo exists to produce.",
+        "anchors": [
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 18,
+            "symbol": "build-example",
+            "note": "console.log('built ' + ex/model/explorer.html)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ext-browser",
+      "type": "externalSystem",
+      "label": "Web browser",
+      "inferred": true,
+      "description": "The operator's browser, which opens the committed explorer.html directly from disk (no server) to read the rebuilt self-model. Outside the tool's deploy boundary."
+    },
+    {
+      "id": "ds-model-fs",
+      "type": "datastore",
+      "storeKind": "filesystem",
+      "label": "Local filesystem",
+      "inferred": false,
+      "description": "The local filesystem reached through node:fs by the two child CLIs. Holds the bundled example's committed traces (input) and its committed model artifacts (output), all under examples/event-storming-recovery."
+    },
+    {
+      "id": "ds-traces-dir",
+      "type": "datastore",
+      "storeKind": "directory",
+      "label": "traces/ directory",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "The bundled example's input trace directory (examples/event-storming-recovery/traces) that the demo passes to es-merge as its first argument. Every *.json in it is the source of truth the self-model example is rebuilt from."
+    },
+    {
+      "id": "ds-flows-json",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "flows.json (canonical model)",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "The canonical model file at examples/event-storming-recovery/model/flows.json. In the composition it is the inter-stage hand-off: es-merge writes it, then es-generate reads it. This is why the demo's two stages are strictly ordered.",
+      "tactical": {
+        "explanation": "build-example.mjs passes it as the OUTPUT of the merge call and the INPUT of the generate call, so the on-disk file is the contract between the two separate node processes. Unchanged by the refactor.",
+        "anchors": [
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 10,
+            "symbol": "build-example",
+            "note": "model = ex/model/flows.json -- shared between the merge and generate calls"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ds-flows-dot",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "flows.dot (Graphviz digraph)",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "Committed output artifact at examples/event-storming-recovery/model/flows.dot, written by the generate stage of the demo."
+    },
+    {
+      "id": "ds-explorer-html",
+      "type": "datastore",
+      "storeKind": "file",
+      "label": "explorer.html (self-contained SPA)",
+      "parent": "ds-model-fs",
+      "inferred": false,
+      "description": "Committed output artifact at examples/event-storming-recovery/model/explorer.html, written by the generate stage of the demo. Backing store for the rm-explorer-html read model."
+    }
+  ],
+  "flows": [
+    {
+      "id": "build-example",
+      "name": "Operator rebuilds the bundled self-model example (npm run demo)",
+      "tier": 1,
+      "kind": "write",
+      "status": "live",
+      "summary": "`npm run demo` runs scripts/build-example.mjs, an operator-run automation that composes the two already-traced offline CLIs: it compiles the TypeScript CLI, calls the unified CLI's `merge` subcommand to fold the bundled example's traces into examples/event-storming-recovery/model/flows.json, then calls its `generate` subcommand to render that flows.json into the committed flows.dot and explorer.html. The two stages are sequenced through the flows.json file on disk (merge writes it, generate reads it) and chained with execFileSync so a nonzero merge exit aborts before generate runs. The result is the tool's own recovered self-model, rebuilt from source. The same script backs the CI smoke build, which runs it end to end but discards the output.",
+      "trigger": "Operator runs `npm run demo` (package.json:43 -> scripts/build-example.mjs), or CI runs the same as its smoke-build step (.github/workflows/ci.yml).",
+      "steps": [
+        "actor-operator",
+        "cmd-build-example",
+        "cmd-merge-traces",
+        "cmd-generate-views",
+        "rm-explorer-html",
+        "ext-browser"
+      ],
+      "edges": [
+        {
+          "from": "actor-operator",
+          "to": "cmd-build-example",
+          "verb": "issues"
+        },
+        {
+          "from": "ext-ci",
+          "to": "cmd-build-example",
+          "verb": "issues"
+        },
+        {
+          "from": "cmd-build-example",
+          "to": "cmd-merge-traces",
+          "verb": "calls"
+        },
+        {
+          "from": "cmd-build-example",
+          "to": "cmd-generate-views",
+          "verb": "calls"
+        },
+        {
+          "from": "cmd-merge-traces",
+          "to": "ds-traces-dir",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-merge-traces",
+          "to": "ds-flows-json",
+          "verb": "writes"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-flows-json",
+          "verb": "reads"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-flows-dot",
+          "verb": "writes"
+        },
+        {
+          "from": "cmd-generate-views",
+          "to": "ds-explorer-html",
+          "verb": "writes"
+        },
+        {
+          "from": "rm-explorer-html",
+          "to": "ds-explorer-html",
+          "verb": "projects from"
+        },
+        {
+          "from": "rm-explorer-html",
+          "to": "ext-browser",
+          "verb": "read by"
+        }
+      ],
+      "hotspots": [
+        "hot-demo-example-drift"
+      ],
+      "instances": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-demo-example-drift",
+      "label": "CI regenerates the committed example but never verifies it is in sync",
+      "description": "The CI smoke-build runs `npm run demo`, which regenerates examples/event-storming-recovery/model/{flows.json,flows.dot,explorer.html} in place and then discards the result -- there is no `git diff --exit-code` (or equivalent) afterward. So the committed self-model example can silently drift from its source traces (someone edits a trace but forgets to rebuild, or hand-edits flows.json) and CI stays green, because it only asserts the build runs, not that the committed artifacts equal a fresh build. Compounding it: es-merge writes flows.json even when validation fails (see hot-invalid-model-written) and the demo's execFileSync chain aborts on merge's nonzero exit, so running demo against a broken trace set overwrites the committed flows.json with an invalid model and never reaches es-generate. Human question: should CI fail when `npm run demo` yields a diff against the committed example (treating the example as a verified fixture) and should build-example write to a temp/staging dir rather than mutating tracked files in place, or is regenerate-and-discard the intended smoke test?",
+      "tactical": {
+        "explanation": ".github/workflows/ci.yml runs `npm run demo` with no follow-up diff check. scripts/build-example.mjs writes directly into the committed ex/model dir (model = ex/model/flows.json; generate outDir = ex/model). The `run` helper uses execFileSync, which throws on a nonzero child exit, so a merge validation failure (which still wrote flows.json per hot-invalid-model-written) leaves a corrupted committed flows.json and aborts before the generate stage runs. Still true after the TS refactor; the only new wrinkle is the added tsc precompile step, which if it fails aborts even earlier (before either subcommand runs).",
+        "anchors": [
+          {
+            "path": ".github/workflows/ci.yml",
+            "line": 19,
+            "symbol": "build the example (smoke)",
+            "note": "runs npm run demo; no git diff / no artifact assertion"
+          },
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 16,
+            "symbol": "build-example",
+            "note": "merge writes into the committed ex/model/flows.json in place"
+          },
+          {
+            "path": "scripts/build-example.mjs",
+            "line": 11,
+            "symbol": "run",
+            "note": "execFileSync throws on nonzero merge exit, aborting before generate"
+          }
+        ]
+      }
+    }
+  ]
+}

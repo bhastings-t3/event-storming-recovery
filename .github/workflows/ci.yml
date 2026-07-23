@@ -13,7 +13,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # zero runtime dependencies — nothing to install
+          cache: npm
+      - name: install dependencies
+        run: npm ci
       - name: run tests (merge, generate, validator, manifests)
         run: npm test
       - name: build the example (smoke)

@@ -7,11 +7,39 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write # required to mint the OIDC token for npm Trusted Publishing
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Everything below runs ONLY on the push where release-please actually
+      # cuts a release (i.e. the run that merges its Release PR). Publishing
+      # lives here rather than in a separate `on: release` workflow because a
+      # release created with the automatic GITHUB_TOKEN does NOT trigger other
+      # workflows. Same run, no cascade, no stored PAT.
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+      - uses: actions/setup-node@v4
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      # Trusted Publishing needs npm CLI 11.5.1+; the npm bundled with
+      # setup-node isn't guaranteed to be new enough, so pin explicitly.
+      - name: ensure npm supports trusted publishing
+        if: ${{ steps.release.outputs.release_created }}
+        run: npm install -g npm@latest
+      - name: install dependencies
+        if: ${{ steps.release.outputs.release_created }}
+        run: npm ci
+      # `prepack` (npm run build) fires automatically during `npm publish`
+      # and rebuilds dist so the tarball ships the prebuilt CLI + SPA.
+      - name: publish to npm
+        if: ${{ steps.release.outputs.release_created }}
+        run: npm publish --provenance

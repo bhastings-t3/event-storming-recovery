@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.2...event-storming-recovery-v0.7.3) (2026-07-23)
+
+
+### Bug Fixes
+
+* scrub machine path from bundled example and genericize glossary examples ([e7d0012](https://github.com/bhastings-t3/event-storming-recovery/commit/e7d001238e3e8c86c88e63631e19dcb1bbe1c729))
+
 ## [0.7.2](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.1...event-storming-recovery-v0.7.2) (2026-07-23)
 
 

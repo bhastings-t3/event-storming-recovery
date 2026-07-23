@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.1...event-storming-recovery-v0.7.2) (2026-07-23)
+
+
+### Documentation
+
+* add a maintainer how-to for the automated npm release flow ([68c4772](https://github.com/bhastings-t3/event-storming-recovery/commit/68c47720597920deac3c0d1864305542813fa270))
+
 ## [0.7.1](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.0...event-storming-recovery-v0.7.1) (2026-07-23)
 
 

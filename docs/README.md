@@ -23,6 +23,8 @@ guide.
   evolve the schema/method itself.
 - [Regenerate the explorer and DOT graph](how-to/regenerate-views.md): re-merge and re-render
   after the traces change.
+- [Release a new version to npm](how-to/release-a-new-version.md): the automated release-please +
+  Trusted Publishing flow maintainers use to ship a release.
 
 ## Reference: look something up
 

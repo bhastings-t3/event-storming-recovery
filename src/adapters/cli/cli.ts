@@ -38,12 +38,14 @@ program
   .option('--repo-root <path>', 'repo root for resolving source anchors (default: cwd)')
   .option('--port <n>', 'preferred port (falls forward if taken)', '5178')
   .option('--host <addr>', 'bind address', '127.0.0.1')
+  .option('--allow-remote', 'permit a non-loopback --host (disables the loopback Origin/Host guard; use only on a trusted network)', false)
   .option('--no-open', "don't launch the browser")
-  .action(async (model: string | undefined, options: { model?: string; traces?: string; repoRoot?: string; port: string; host: string; open: boolean }) => {
+  .action(async (model: string | undefined, options: { model?: string; traces?: string; repoRoot?: string; port: string; host: string; allowRemote: boolean; open: boolean }) => {
     await runView({
       open: options.open,
       port: Number(options.port),
       host: options.host,
+      allowRemote: options.allowRemote,
       modelPath: options.model ?? model,
       tracesDir: options.traces,
       repoRoot: options.repoRoot,

@@ -365,8 +365,7 @@
       ],
       "hotspots": [
         "hot-discovery-ambiguity",
-        "hot-repo-root-stale",
-        "hot-unvalidated-model-served"
+        "hot-repo-root-stale"
       ],
       "instances": []
     }
@@ -412,28 +411,6 @@
             "line": 109,
             "symbol": "mergeTraceDocs",
             "note": "meta built WITHOUT a repoRoot key"
-          }
-        ]
-      }
-    },
-    {
-      "id": "hot-unvalidated-model-served",
-      "label": "Only --traces validates; --model/discovered/example are served unchecked",
-      "description": "Three of the four tiers (--model, auto-discovered, bundled example) load via readModelFile, whose ONLY check is that nodes[] and flows[] are arrays. They completely bypass the merge's invariant suite (referential integrity, ES grammar, term contract, data lineage). So a structurally-shaped but semantically-broken flows.json -- including one that es-merge itself wrote to disk despite failing validation (see hot-invalid-model-written) and that auto-discovery later picks up -- is served without complaint, while the same content passed via --traces would be rejected. Human question: should the load tiers also run the merge validation (or at least a referential-integrity pass) before serving, so the two entry paths agree?",
-      "tactical": {
-        "explanation": "readModelFile (src/adapters/fs/model-repository.ts) does JSON.parse + Array.isArray(nodes)/Array.isArray(flows) only. The --traces tier alone routes through mergeTraces/mergeTraceDocs and throws on merged.errors. This mirrors, on the read side, the CLI's write-before-validate gap: es-merge can leave an invalid flows.json on disk, and the discovered tier would serve it after only the shape check.",
-        "anchors": [
-          {
-            "path": "src/adapters/fs/model-repository.ts",
-            "line": 43,
-            "symbol": "readModelFile",
-            "note": "sole check on load tiers: nodes/flows are arrays"
-          },
-          {
-            "path": "src/application/commands/resolve-model.ts",
-            "line": 34,
-            "symbol": "resolveModel",
-            "note": "only --traces runs full merge validation (throws on error)"
           }
         ]
       }

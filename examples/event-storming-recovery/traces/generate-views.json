@@ -56,7 +56,7 @@
       "inferred": true,
       "description": "The canonical Event Storming model (flows.json): deduped nodes plus flows, hotspots, terms, and derived meta. In THIS flow it is a READ-ONLY input -- the generator projects it into views and never mutates or re-validates it. Its invariants are enforced upstream at merge time, not here.",
       "tactical": {
-        "explanation": "es-generate.ts's runGenerate JSON.parses flows.json into `model` (line 26) and reads model.meta.repoRoot / model.meta.title as fallbacks for the --repo-root / --title flags (lines 28-29). renderDot (generate-views.ts) builds its own nodeById index over model.nodes for the DOT pass; renderHtml inlines the whole model as-is for the client to index. The generator performs NO validation of its own -- it assumes the aggregate's merge-time invariants already held (see hot-generator-trusts-unvalidated-model). Unlike the merge-traces flow, this flow does not touch the explicit Model aggregate class (src/domain/model/model.ts) at all -- it works off the plain parsed JSON shape.",
+        "explanation": "es-generate.ts's runGenerate JSON.parses flows.json into `model` (line 26) and reads model.meta.repoRoot / model.meta.title as fallbacks for the --repo-root / --title flags (lines 28-29). renderDot (generate-views.ts) builds its own nodeById index over model.nodes for the DOT pass; renderHtml inlines the whole model as-is for the client to index. The generator performs NO validation of its own -- it assumes the aggregate's merge-time invariants already held. Unlike the merge-traces flow, this flow does not touch the explicit Model aggregate class (src/domain/model/model.ts) at all -- it works off the plain parsed JSON shape.",
         "anchors": [
           {
             "path": "src/adapters/cli/es-generate.ts",
@@ -331,40 +331,9 @@
           "verb": "calls"
         }
       ],
-      "hotspots": [
-        "hot-generator-trusts-unvalidated-model"
-      ],
+      "hotspots": [],
       "instances": []
     }
   ],
-  "hotspots": [
-    {
-      "id": "hot-generator-trusts-unvalidated-model",
-      "label": "es-generate renders any flows.json without validating it",
-      "description": "runGenerate JSON.parses flows.json and immediately hands it to renderDot/renderHtml with no validation and no try/catch. Unlike the server's resolveModel (which re-runs the merge and throws on errors), the es-generate path performs zero checks. Combined with the merge writing flows.json even when validation fails (see hot-invalid-model-written), an operator can generate an invalid or partial model and get a silently broken/misleading explorer, or a raw crash: a missing top-level `nodes` or `flows` array throws an uncaught TypeError from renderDot's `.map`/`for...of` (lines 21 and 31), and a missing outDir throws from writeViews's writeFileSync (no mkdir). Human question: should es-generate re-validate its input (import the domain validate()/crossValidate, or at least assert the required arrays) and fail loudly before rendering, or is trusting es-merge's output contract intended? Today the two consumers of flows.json disagree on whether to trust it.",
-      "tactical": {
-        "explanation": "es-generate.ts:26 `const model: Model = JSON.parse(fs.readFileSync(flowsFile, 'utf8'))` -- no try/catch, no schema check. generate-views.ts's renderDot:21 `new Map(model.nodes.map(...))` and :31 `for (const f of model.flows)` assume those arrays exist. No import of the domain validate()/crossValidate anywhere in es-generate.ts or generate-views.ts. Contrast src/application/commands/resolve-model.ts, which throws when merged.errors.length so the server never serves an unvalidated model. No fs.mkdirSync of outDir in generator-writer.ts, so a non-existent output dir also throws from writeFileSync. The old CLI's manual argv guard (missing flowsFile/outDir -> usage + exit 2) is gone; commander's required <flowsJson>/<outDir> arguments in cli.ts now enforce that instead, which is a genuine improvement but doesn't touch the model-validation gap this hotspot is about.",
-        "anchors": [
-          {
-            "path": "src/adapters/cli/es-generate.ts",
-            "line": 26,
-            "symbol": "runGenerate",
-            "note": "JSON.parse with no try/catch and no validation"
-          },
-          {
-            "path": "src/application/commands/generate-views.ts",
-            "line": 21,
-            "symbol": "renderDot",
-            "note": "model.nodes.map assumes the array exists"
-          },
-          {
-            "path": "src/adapters/fs/generator-writer.ts",
-            "line": 7,
-            "symbol": "writeViews",
-            "note": "writeFileSync with no mkdir of outDir"
-          }
-        ]
-      }
-    }
-  ]
+  "hotspots": []
 }

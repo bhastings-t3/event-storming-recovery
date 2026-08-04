@@ -17,6 +17,7 @@ import { Command } from 'commander';
 import { runView } from './es-view.js';
 import { runMerge } from './es-merge.js';
 import { runGenerate } from './es-generate.js';
+import { parsePort } from '../http/server.js';
 
 /** The package root (four levels up from dist/node/adapters/cli/). */
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
@@ -41,9 +42,18 @@ program
   .option('--allow-remote', 'permit a non-loopback --host (disables the loopback Origin/Host guard; use only on a trusted network)', false)
   .option('--no-open', "don't launch the browser")
   .action(async (model: string | undefined, options: { model?: string; traces?: string; repoRoot?: string; port: string; host: string; allowRemote: boolean; open: boolean }) => {
+    let port: number;
+    try {
+      port = parsePort(options.port);
+    } catch (err) {
+      // A non-numeric or out-of-range --port would otherwise reach listen() as NaN and bind a random
+      // free port silently. Fail loudly with a non-zero exit instead.
+      console.error(`\n✖ ${(err as Error).message}\n`);
+      process.exit(1);
+    }
     await runView({
       open: options.open,
-      port: Number(options.port),
+      port,
       host: options.host,
       allowRemote: options.allowRemote,
       modelPath: options.model ?? model,

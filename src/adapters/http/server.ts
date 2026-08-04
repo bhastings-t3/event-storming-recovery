@@ -119,9 +119,23 @@ function readJsonBody(req: IncomingMessage): Promise<any> {
 }
 
 function serveStatic(res: ServerResponse, distDir: string, urlPath: string): void {
-  const rel = decodeURIComponent(urlPath.split('?')[0]!).replace(/^\/+/, '');
+  let rel: string;
+  try {
+    // A malformed %-escape (`/%`, `/%zz`, `/foo%`) makes decodeURIComponent throw URIError. Answer a
+    // clean 400 rather than letting the throw bubble out of the request handler, where it would become
+    // an unhandledRejection and leave the (unauthenticated) client hanging with no response.
+    rel = decodeURIComponent(urlPath.split('?')[0]!).replace(/^\/+/, '');
+  } catch {
+    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Bad Request');
+    return;
+  }
   let filePath = path.resolve(distDir, rel);
-  if (!filePath.startsWith(path.resolve(distDir))) { res.writeHead(403).end('Forbidden'); return; }
+  // Containment: allow the dist root itself or a path strictly under it. Comparing with `+ path.sep`
+  // (like the domain's guardPath) stops a sibling that merely shares the prefix, e.g. `dist/web.bak`,
+  // from passing a bare startsWith on `dist/web`.
+  const resolvedDist = path.resolve(distDir);
+  if (filePath !== resolvedDist && !filePath.startsWith(resolvedDist + path.sep)) { res.writeHead(403).end('Forbidden'); return; }
   if (!rel || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
     filePath = path.join(distDir, 'index.html');
   }
@@ -151,7 +165,7 @@ export interface CreateServerOptions {
 
 export function createServer({ resolved, distDir, selection, bundle, services, sourceGateway, claudeCliGateway, mcpHandler, runtime = {}, allowRemote = false }: CreateServerOptions): http.Server {
   const mcpUrl = () => (runtime.baseUrl ? runtime.baseUrl + '/mcp' : null);
-  return http.createServer(async (req, res) => {
+  const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const method = req.method || 'GET';
     const url = new URL(req.url || '/', 'http://localhost');
     const p = url.pathname;
@@ -277,6 +291,18 @@ export function createServer({ resolved, distDir, selection, bundle, services, s
     if (p.startsWith('/api/') || p === '/mcp') return sendJson(res, 404, { error: 'unknown endpoint' });
 
     return serveStatic(res, distDir, req.url || '/');
+  };
+
+  // Defence in depth: the request handler is unauthenticated and trivially reachable, so any unexpected
+  // throw in a route must map to a response, never an unhandledRejection that hangs the client. A
+  // response is always sent — a 500 when we have not written headers yet, otherwise just close the stream.
+  return http.createServer(async (req, res) => {
+    try {
+      await handle(req, res);
+    } catch {
+      if (!res.headersSent) sendJson(res, 500, { error: 'internal server error' });
+      else res.end();
+    }
   });
 }
 
@@ -288,6 +314,19 @@ export interface StartServerOptions extends CreateServerOptions {
 /** True if a `--host` bind address names the loopback interface (the safe default). `0.0.0.0` / `::` and LAN addresses are not. */
 export function bindHostIsLoopback(host: string): boolean {
   return hostnameIsLoopback(host);
+}
+
+/**
+ * Validate a `--port` value into a bound integer port. `Number('abc')` is `NaN` and
+ * `Number('')`/`Number(undefined)` collapse to `NaN`/`0`; passing any of those to `listen()` makes
+ * Node bind an arbitrary free port silently. Throw a clear error instead so the CLI can exit non-zero.
+ */
+export function parsePort(value: string | number | undefined | null): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    throw new Error(`--port must be an integer between 1 and 65535 (got ${JSON.stringify(value)})`);
+  }
+  return n;
 }
 
 /** Listen on the first free port at/after `port`. Resolves with { server, url, port }. */

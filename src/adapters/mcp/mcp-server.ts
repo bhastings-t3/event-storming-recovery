@@ -54,7 +54,7 @@ function buildMcpServer(services: ServiceBundle, selection: Selection, bundle: C
     'get_flow',
     {
       title: 'Get a flow by id',
-      description: 'Returns a whole flow grounded in code: its trigger/summary, the command→aggregate→event chain, hotspots (open questions), and every node with its source anchors.',
+      description: 'Returns a whole flow grounded in code: its trigger/summary, the command→aggregate→event chain, hotspots (open questions), a Mermaid graph of the flow, and every node with its source anchors.',
       inputSchema: { flowId: z.string().describe('the flow id, e.g. "place-order"') },
     },
     async ({ flowId }) => text(getFlow(services, flowId)),
@@ -74,7 +74,7 @@ function buildMcpServer(services: ServiceBundle, selection: Selection, bundle: C
     'list_data_model',
     {
       title: 'List the recovered data model',
-      description: 'The physical storage the code actually touches: servers ▸ databases ▸ tables ▸ columns, and for each table the behavioral nodes that write/read/project it. Use this for "what tables does this touch", "where does this data live", or "who writes this table". For a single node\'s fields and lineage, use get_node.',
+      description: 'The storage the code actually touches, whatever its kind: the datastore containment tree — data stores (each with its store kind and host) and their fields — plus, for each record set, the behavioral nodes that write/read/project it. Use this for "what stores does this touch", "where does this data live", or "who writes this store". For a single node\'s fields and lineage, use get_node.',
       inputSchema: {},
     },
     async () => text(listDataModel(services)),

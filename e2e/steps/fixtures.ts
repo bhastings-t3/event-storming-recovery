@@ -38,6 +38,8 @@ export interface World {
   cliStderr?: string;
   /** The text a called MCP tool returned. */
   toolText?: string;
+  /** The text an MCP resource read returned (kept distinct from toolText — a resource is not a tool). */
+  resourceText?: string;
   /** Temp dirs to remove after the scenario. */
   tempDirs: string[];
 }

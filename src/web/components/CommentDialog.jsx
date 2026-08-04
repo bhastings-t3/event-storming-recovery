@@ -40,7 +40,7 @@ export default function CommentDialog() {
   const top = Math.max(8, Math.min(y, window.innerHeight - 300));
 
   return (
-    <div className="cmt-dialog" style={{ left, top }} onPointerDown={(e) => e.stopPropagation()}>
+    <div className="cmt-dialog" data-testid="comment-dialog" style={{ left, top }} onPointerDown={(e) => e.stopPropagation()}>
       <div className="cmt-head">
         <span className="cmt-title">Comments · <b>{label}</b></span>
         <button className="cmt-x" onClick={closeCommentDialog}>✕</button>

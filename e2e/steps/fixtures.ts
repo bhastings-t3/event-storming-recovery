@@ -12,11 +12,13 @@
  * process-global selection/bundle (issue #10, single-user-local by design) can't bleed across
  * scenarios. This is the seam issue #20 grows into: add feature files and step files, reuse these.
  */
-import { rmSync } from 'node:fs';
+import { rmSync, mkdtempSync, copyFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test as base, createBdd } from 'playwright-bdd';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startViewServer, type ViewServer } from '../support/server.js';
+import { startViewServer, exampleModel, type ViewServer } from '../support/server.js';
 
 /** A scenario-scoped scratchpad. Steps stash what later steps assert on; temp dirs get cleaned on teardown. */
 export interface World {
@@ -38,6 +40,7 @@ export interface World {
 
 interface Fixtures {
   viewServer: ViewServer;
+  writableViewServer: ViewServer;
   mcpClient: Client;
   world: World;
 }
@@ -49,6 +52,22 @@ export const test = base.extend<Fixtures>({
     const server = await startViewServer({ port: 5310 });
     await use(server);
     await server.stop();
+  },
+
+  // Like `viewServer`, but against a *writable* copy of the example model in a temp dir. The comment
+  // journey needs the sidecar (comments.json) to actually land on disk next to flows.json; the bundled
+  // example under the package can be read-only (issue #9's memory-only path), so a scenario that asserts
+  // a persisted comment must own a writable model dir rather than write into the shared fixture. Port
+  // 5311 (viewServer uses 5310) keeps the two servers from preferring the same port; server.ts still
+  // parses the real bound URL, so a collision falls forward.
+  writableViewServer: async ({}, use) => {
+    const dir = mkdtempSync(join(tmpdir(), 'es-e2e-model-'));
+    const modelPath = join(dir, 'flows.json');
+    copyFileSync(exampleModel, modelPath);
+    const server = await startViewServer({ port: 5311, model: modelPath });
+    await use(server);
+    await server.stop();
+    rmSync(dir, { recursive: true, force: true });
   },
 
   mcpClient: async ({ viewServer }, use) => {

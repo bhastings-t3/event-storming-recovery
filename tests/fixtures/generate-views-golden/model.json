@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "Golden Fixture Model",
+    "counts": {
+      "flows": 2,
+      "nodes": 7,
+      "hotspots": 1,
+      "terms": 1,
+      "unresolvedTerms": 1,
+      "byType": {
+        "command": 1,
+        "aggregate": 1,
+        "event": 1,
+        "readModel": 1,
+        "externalSystem": 1,
+        "datastore": 1,
+        "field": 1
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "cmd-PlaceOrder",
+      "type": "command",
+      "label": "Place Order",
+      "description": "Customer submits a cart to place an order.",
+      "tactical": {
+        "explanation": "Entry command for the checkout flow.",
+        "anchors": [
+          { "path": "src/order/place-order.ts", "line": 12, "symbol": "placeOrder", "note": "handler" }
+        ]
+      },
+      "usages": [
+        {
+          "flow": "flow-checkout",
+          "explanation": "Kicks off checkout when the customer confirms the cart.",
+          "anchors": [
+            { "path": "src/order/place-order.ts", "line": 12, "note": "invoked by the HTTP route" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agg-Order",
+      "type": "aggregate",
+      "label": "Order",
+      "description": "The order aggregate enforcing the no-overselling invariant.",
+      "tactical": {
+        "anchors": [
+          { "path": "src/order/order.ts", "line": 5, "symbol": "Order" }
+        ]
+      },
+      "fields": [
+        {
+          "name": "total",
+          "dataType": "Money",
+          "derivation": "Sum of line items.",
+          "confidence": "high",
+          "conceptual": true,
+          "sources": [
+            { "ref": "fld-orders-total", "role": "persisted" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evt-OrderPlaced",
+      "type": "event",
+      "label": "Order Placed",
+      "description": "Emitted once an order is accepted.",
+      "tactical": {
+        "anchors": [
+          { "path": "src/order/events.ts", "line": 20, "symbol": "OrderPlaced" }
+        ]
+      }
+    },
+    {
+      "id": "rm-OrderSummary",
+      "type": "readModel",
+      "label": "Order Summary",
+      "description": "Read model projecting placed orders for the customer.",
+      "usages": [
+        {
+          "flow": "flow-checkout",
+          "explanation": "Returned to the client after checkout.",
+          "anchors": [
+            { "path": "src/order/summary.ts", "line": 8 }
+          ]
+        }
+      ],
+      "fields": [
+        {
+          "name": "orderId",
+          "dataType": "string",
+          "confidence": "high",
+          "sources": [
+            { "ref": "fld-orders-total", "role": "read" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ext-PaymentGateway",
+      "type": "externalSystem",
+      "label": "Payment Gateway",
+      "description": "Third-party payment processor.",
+      "tactical": {
+        "anchors": [
+          { "path": "src/payment/gateway.ts", "line": 3 }
+        ]
+      }
+    },
+    {
+      "id": "ds-OrdersDb",
+      "type": "datastore",
+      "label": "orders",
+      "description": "The orders table.",
+      "storeKind": "table",
+      "host": "db.internal",
+      "engine": "postgres"
+    },
+    {
+      "id": "fld-orders-total",
+      "type": "field",
+      "label": "total",
+      "description": "Persisted order total column.",
+      "parent": "ds-OrdersDb",
+      "dataType": "numeric",
+      "fieldKind": "column",
+      "nullable": false
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-checkout",
+      "name": "Checkout",
+      "tier": 1,
+      "status": "live",
+      "summary": "Customer checks out and an order is placed.",
+      "trigger": "Customer submits the cart.",
+      "steps": [
+        "cmd-PlaceOrder",
+        "agg-Order",
+        "evt-OrderPlaced",
+        "rm-OrderSummary",
+        "ext-PaymentGateway",
+        "ds-OrdersDb"
+      ],
+      "edges": [
+        { "from": "cmd-PlaceOrder", "to": "agg-Order", "verb": "issues" },
+        { "from": "agg-Order", "to": "evt-OrderPlaced", "verb": "emits" },
+        { "from": "evt-OrderPlaced", "to": "rm-OrderSummary", "verb": "updates" },
+        { "from": "agg-Order", "to": "ext-PaymentGateway", "verb": "calls" },
+        { "from": "evt-OrderPlaced", "to": "ds-OrdersDb", "verb": "writes" }
+      ],
+      "hotspots": ["hot-order-overselling"]
+    },
+    {
+      "id": "flow-legacy-checkout",
+      "name": "Legacy Checkout",
+      "tier": 2,
+      "status": "superseded",
+      "supersededBy": "flow-checkout",
+      "summary": "The retired checkout path.",
+      "steps": ["cmd-PlaceOrder", "agg-Order"],
+      "edges": [
+        { "from": "cmd-PlaceOrder", "to": "agg-Order", "verb": "issues" }
+      ],
+      "hotspots": []
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "hot-order-overselling",
+      "label": "Overselling under concurrency",
+      "description": "Two concurrent orders can both pass the stock check and oversell.",
+      "tactical": {
+        "anchors": [
+          { "path": "src/order/order.ts", "line": 42, "note": "check-then-act race" }
+        ]
+      }
+    }
+  ],
+  "terms": [
+    {
+      "id": "term-Overselling",
+      "term": "Overselling",
+      "definition": "Accepting more orders for an item than there is stock to fulfill.",
+      "status": "open",
+      "category": "concept",
+      "openQuestion": "Is the reservation window authoritative, or the ledger?",
+      "relatedNodes": ["agg-Order"],
+      "aka": ["oversell"]
+    }
+  ]
+}

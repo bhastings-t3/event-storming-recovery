@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import { getItem } from '../api.js';
+import { copyMarkdown } from '../copy.js';
 
 const TYPE_WORD = { node: 'node', flow: 'flow', hotspot: 'hotspot' };
 
@@ -9,9 +10,11 @@ const TYPE_WORD = { node: 'node', flow: 'flow', hotspot: 'hotspot' };
 // grounded markdown, or add/show human comments (persisted next to the model).
 export default function ContextMenu() {
   const { menu, closeMenu, nodeById, hotspotById, model, isInBundle, addToContext, removeFromContext, commentsFor, openCommentDialog } = useExplorer();
+  const [copyFailed, setCopyFailed] = useState(false);
 
   useEffect(() => {
     if (!menu) return;
+    setCopyFailed(false); // fresh menu starts without a stale failure label
     const onDown = () => closeMenu();
     const onKey = (e) => { if (e.key === 'Escape') closeMenu(); };
     window.addEventListener('pointerdown', onDown);
@@ -32,8 +35,8 @@ export default function ContextMenu() {
   const nComments = commentsFor(type, id).length;
 
   const copy = async () => {
-    try { const r = await getItem(type, id); await navigator.clipboard.writeText(r.markdown || ''); } catch { /* clipboard blocked */ }
-    closeMenu();
+    if (await copyMarkdown(() => getItem(type, id))) closeMenu();
+    else setCopyFailed(true); // keep the menu open showing the failure, don't fake success
   };
   const openComments = () => { closeMenu(); openCommentDialog(x, y, ref); };
 
@@ -46,7 +49,7 @@ export default function ContextMenu() {
       <button onClick={() => { inBundle ? removeFromContext(type, id) : addToContext(type, id); closeMenu(); }}>
         {inBundle ? `− Remove ${word} from context bundle` : `+ Add ${word} to context bundle`}
       </button>
-      <button onClick={copy}>⧉ Copy this {word} for Claude</button>
+      <button onClick={copy}>{copyFailed ? '⧉ Copy failed' : `⧉ Copy this ${word} for Claude`}</button>
       <button onClick={openComments}>💬 Add comment</button>
       {nComments > 0 && <button onClick={openComments}>Show comments ({nComments})</button>}
     </div>

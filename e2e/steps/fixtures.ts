@@ -5,6 +5,7 @@
  *   - `viewServer`  a real `view` process (SPA + API + MCP), its own instance per scenario
  *   - `mcpClient`   an MCP SDK client already connected to that process's POST /mcp
  *   - `world`       a scenario-scoped scratchpad for passing state between steps, cleaned up after
+ *   - `staticExplorerUrl`  a file:// URL to a freshly generated static `explorer.html` (issue #42)
  *
  * Fixtures are lazy: a CLI scenario touches none of these and so spawns neither a server nor a
  * browser; an MCP scenario starts the server but no page; only an SPA scenario opens a browser. That
@@ -12,13 +13,15 @@
  * process-global selection/bundle (issue #10, single-user-local by design) can't bleed across
  * scenarios. This is the seam issue #20 grows into: add feature files and step files, reuse these.
  */
+import { execFileSync } from 'node:child_process';
 import { rmSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { test as base, createBdd } from 'playwright-bdd';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startViewServer, exampleModel, type ViewServer } from '../support/server.js';
+import { startViewServer, exampleModel, cliEntry, type ViewServer } from '../support/server.js';
 
 /** A scenario-scoped scratchpad. Steps stash what later steps assert on; temp dirs get cleaned on teardown. */
 export interface World {
@@ -51,7 +54,18 @@ interface Fixtures {
   world: World;
 }
 
-export const test = base.extend<Fixtures>({
+interface WorkerFixtures {
+  /**
+   * A file:// URL to a static `explorer.html` generated once per worker from the bundled example model
+   * via the real CLI (issue #42). The emitted file is self-contained (baked MODEL, no server, no /api),
+   * so the static-explorer scenarios open it directly — no `view` process. Generated once and shared
+   * because it is an immutable artifact: unlike `viewServer`, it holds no process-global session that
+   * could bleed between scenarios, so there is nothing to isolate per test.
+   */
+  staticExplorerUrl: string;
+}
+
+export const test = base.extend<Fixtures, WorkerFixtures>({
   // One view process per scenario. 5310 is a deliberately unusual port; server.ts still parses the
   // real bound URL, so a collision falls forward instead of failing.
   viewServer: async ({}, use) => {
@@ -89,6 +103,19 @@ export const test = base.extend<Fixtures>({
     await use(world);
     for (const dir of world.tempDirs) rmSync(dir, { recursive: true, force: true });
   },
+
+  staticExplorerUrl: [
+    async ({}, use) => {
+      const dir = mkdtempSync(join(tmpdir(), 'es-e2e-static-'));
+      // Produce the artifact under test exactly as a user would: `generate <flowsFile> <outDir>`.
+      // A stable placeholder --repo-root keeps the baked vscode:// links deterministic (they never
+      // resolve headless, and no scenario drives them — see static-explorer.steps.ts).
+      execFileSync(process.execPath, [cliEntry, 'generate', exampleModel, dir, '--repo-root', '/x'], { stdio: 'pipe' });
+      await use(pathToFileURL(join(dir, 'explorer.html')).href);
+      rmSync(dir, { recursive: true, force: true });
+    },
+    { scope: 'worker' },
+  ],
 });
 
 export const { Given, When, Then } = createBdd(test);

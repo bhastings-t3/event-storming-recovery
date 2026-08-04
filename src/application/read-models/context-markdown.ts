@@ -5,7 +5,7 @@
 // depends on the builders and their types, never the reverse.
 import { buildNodeContext, buildFlowContext, buildHotspotContext } from './context.js';
 import type { NodeContext, FlowContext, HotspotContext } from './context.js';
-import { datastoreConsumers, dataModelTree, isRecordSet } from './indexes.js';
+import { datastoreConsumers, dataModelTree, fieldTree, isRecordSet } from './indexes.js';
 import type { Node } from '../../domain/model/types.js';
 import type { Comment } from '../../domain/comment-store/comment-store.js';
 import type { ServiceBundle } from '../services.js';
@@ -117,23 +117,44 @@ export function renderHotspotMarkdown(hc: HotspotContext | null): string {
 export function renderDataModelMarkdown(services: ServiceBundle): string {
   const { model, indexes } = services;
   const nodeById = indexes.nodeById;
-  const { roots } = dataModelTree(model, nodeById);
+  const { roots, looseFields } = dataModelTree(model, nodeById);
   const dataCount = model.nodes.filter((n) => n.type === 'datastore' || n.type === 'field').length;
   if (!dataCount) return '_No data model recovered yet. Run the data-mapping phase to populate data stores and field lineage._';
   const out = ['# Data model', ''];
   const kindOf = (n: Node) => n.storeKind || 'store';
+  const fmtField = (f: Node) => `\`${f.label}\`${f.dataType ? ' ' + f.dataType : ''}`;
+  // A field can itself parent sub-fields (a JSON sub-document, a nested record). Those are counted
+  // in dataCount but the datastore only lists its DIRECT children, so emit each field's descendants
+  // indented beneath it — otherwise the count claims fields the reader never sees.
+  const emitSubFields = (parent: Node, pad: string) => {
+    for (const c of fieldTree(model, parent.id)) {
+      out.push(`${pad}- ${fmtField(c.node)}`);
+      emitSubFields(c.node, pad + '  ');
+    }
+  };
   const walk = (t: import('./indexes.js').DataTree, depth: number) => {
     const { node: ds, stores, fields } = t;
     const pad = '  '.repeat(depth);
     const header = depth === 0 ? `## ${ds.label}` : `${pad}- **${ds.label}**`;
     out.push(`${header} _(${kindOf(ds)})_${ds.host ? ` — \`${ds.host}\`` : ''}`);
-    if (fields.length) out.push(`${pad}  - fields: ${fields.map((c) => `\`${c.label}\`${c.dataType ? ' ' + c.dataType : ''}`).join(', ')}`);
+    if (fields.length) {
+      out.push(`${pad}  - fields: ${fields.map(fmtField).join(', ')}`);
+      for (const f of fields) emitSubFields(f, `${pad}    `);
+    }
     if (isRecordSet(model, nodeById, ds)) {
       for (const c of datastoreConsumers(model, nodeById, ds.id)) out.push(`${pad}  - ${c.node.label} _(${c.node.type})_ — ${c.verb}`);
     }
     for (const s of stores) walk(s, depth + 1);
   };
   for (const r of roots) walk(r, 0);
+  // Fields orphaned from any data store are still counted; list them so the total is honest.
+  if (looseFields.length) {
+    out.push('', '## Unattached fields _(not tied to a data store)_');
+    for (const f of looseFields) {
+      out.push(`- ${fmtField(f)}`);
+      emitSubFields(f, '  ');
+    }
+  }
   return out.join('\n');
 }
 

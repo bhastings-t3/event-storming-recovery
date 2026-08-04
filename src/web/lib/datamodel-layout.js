@@ -13,7 +13,7 @@
 // Imperative (DOM + measurement + SVG), mounted via a ref like the flow Board; reuses setupPanZoom.
 // ctx = { palette, onOpenDetail, collapsed:Set<id>, onToggle:(id)=>void }.
 import { el } from './dom.js';
-import { isRecordSet, datastoreConsumers } from '../../application/read-models/indexes';
+import { isRecordSet, datastoreConsumers, dataModelTree } from '../../application/read-models/indexes';
 import { VERB_COLORS } from '../../domain/model/palette';
 
 const svgNS = 'http://www.w3.org/2000/svg';
@@ -43,13 +43,29 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
   lane.style.position = 'relative';
 
   const stores = model.nodes.filter((n) => n.type === 'datastore');
-  if (!stores.length) { lane.style.width = '10px'; lane.style.height = '10px'; return { w: 10, h: 10 }; }
+  const { looseFields } = dataModelTree(model, nodeById);
+  if (!stores.length && !looseFields.length) { lane.style.width = '10px'; lane.style.height = '10px'; return { w: 10, h: 10 }; }
 
   const childStores = (id) => stores.filter((s) => s.parent === id);
   const hasStoreChildren = (ds) => stores.some((s) => s.parent === ds.id);
   const fieldsOf = (id) => model.nodes.filter((n) => n.type === 'field' && n.parent === id);
   const isRoot = (ds) => { const p = ds.parent ? nodeById.get(ds.parent) : null; return !p || p.type !== 'datastore'; };
   const countLeaves = (ds) => { const k = childStores(ds.id); return k.length ? k.reduce((a, c) => a + countLeaves(c), 0) : 1; };
+
+  // A field can itself parent sub-fields (a nested record / JSON sub-document). Those are in the header
+  // total but are not a datastore's direct child, so recurse and indent them — nothing counted-but-hidden.
+  const appendFieldRows = (wrap, fields, depth) => {
+    for (const c of fields) {
+      const attrs = { class: 'dm-node-col', onclick: (e) => { e.stopPropagation(); onOpenDetail(c.id); }, title: c.description || '' };
+      if (depth) attrs.style = `padding-left:${12 + depth * 14}px`;
+      const row = el('div', attrs, el('span', { class: 'dm-cn' }, c.label));
+      if (c.dataType) row.append(el('span', { class: 'dm-ct' }, c.dataType));
+      if (c.nullable === false) row.append(el('span', { class: 'dm-nn' }, 'NN'));
+      wrap.append(row);
+      const kids = fieldsOf(c.id);
+      if (kids.length) appendFieldRows(wrap, kids, depth + 1);
+    }
+  };
 
   // distinct interacting nodes (total, for the header badge) + ordered distinct verbs (for pills)
   const behavioral = (ds) => {
@@ -91,17 +107,24 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
     const fields = fieldsOf(ds.id);
     if (isRecordSet(model, nodeById, ds) && fields.length) {
       const wrap = el('div', { class: 'dm-node-cols' });
-      for (const c of fields.slice(0, MAXCOLS)) {
-        const row = el('div', { class: 'dm-node-col', onclick: (e) => { e.stopPropagation(); onOpenDetail(c.id); }, title: c.description || '' },
-          el('span', { class: 'dm-cn' }, c.label));
-        if (c.dataType) row.append(el('span', { class: 'dm-ct' }, c.dataType));
-        if (c.nullable === false) row.append(el('span', { class: 'dm-nn' }, 'NN'));
-        wrap.append(row);
-      }
+      appendFieldRows(wrap, fields.slice(0, MAXCOLS), 0);
       if (fields.length > MAXCOLS) wrap.append(el('div', { class: 'dm-node-more' }, '+' + (fields.length - MAXCOLS) + ' more fields'));
       card.append(wrap);
     }
     if (foot) card.append(foot);   // footer pills are the LAST child, below the columns
+    return card;
+  };
+
+  // Fields orphaned from any datastore are still in the header total; a plain card lists them so the
+  // count and the render agree instead of the tab claiming fields it never draws.
+  const buildLooseCard = (fields) => {
+    const card = el('div', { class: 'dm-node dm-loose' });
+    card.append(el('div', { class: 'dm-node-head' },
+      el('span', { class: 'dm-badge', style: 'background:#c3d3e2;color:#2c3e50' }, 'UNATTACHED'),
+      el('span', { class: 'dm-node-name' }, 'Fields not tied to a store')));
+    const wrap = el('div', { class: 'dm-node-cols' });
+    appendFieldRows(wrap, fields, 0);
+    card.append(wrap);
     return card;
   };
 
@@ -169,6 +192,11 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
   }
 
   const roots = stores.filter(isRoot).map(build);
+  if (looseFields.length) {
+    const cardEl = buildLooseCard(looseFields);
+    lane.append(cardEl);
+    roots.push({ kind: 'leaf', el: cardEl, w: CARDW, h: cardEl.offsetHeight });
+  }
   let cx = START, cy = START, rowH = 0;
   for (const rn of roots) {
     if (cx > START && cx + rn.w > MAXROW) { cx = START; cy += rowH + ROOTGAP; rowH = 0; }

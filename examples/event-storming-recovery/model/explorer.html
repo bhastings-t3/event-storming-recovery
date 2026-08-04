@@ -1079,6 +1079,21 @@ function dmConsumerChips(ds) {
   }
   return cons;
 }
+// Field rows for a store/loose-field list. A field can itself parent sub-fields (a JSON sub-document,
+// a nested record); those are counted in dataCount but are not the store's DIRECT children, so recurse
+// and indent them — otherwise the count claims fields that never render.
+function dmFieldCols(fields, cols, depth) {
+  for (const c of fields) {
+    const attrs = { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) };
+    if (depth) attrs.style = 'padding-left:' + (12 + depth * 14) + 'px';
+    const col = el('div', attrs, el('span', { class: 'dm-cn' }, c.label));
+    if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
+    if (c.nullable === false) col.append(el('span', { class: 'dm-nn' }, 'NN'));
+    cols.append(col);
+    const kids = MODEL.nodes.filter(n => n.type === 'field' && n.parent === c.id);
+    if (kids.length) dmFieldCols(kids, cols, depth + 1);
+  }
+}
 // A record-set datastore -> a CARD: storeKind badge + field rows + consumer chips + nested stores.
 function dmStoreCard(tree) {
   const { node: ds, fields, stores } = tree;
@@ -1090,12 +1105,7 @@ function dmStoreCard(tree) {
     el('span', { class: 'dm-tn' }, ds.label)));
   if (fields.length) {
     const cols = el('div', { class: 'dm-cols' });
-    for (const c of fields) {
-      const col = el('div', { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) }, el('span', { class: 'dm-cn' }, c.label));
-      if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
-      if (c.nullable === false) col.append(el('span', { class: 'dm-nn' }, 'NN'));
-      cols.append(col);
-    }
+    dmFieldCols(fields, cols, 0);
     card.append(cols);
   }
   const chips = dmConsumerChips(ds);
@@ -1155,6 +1165,9 @@ function buildDataModel() {
     block.append(el('div', { class: 'dm-server-head' },
       el('span', { class: 'dm-badge dm-unattached' }, 'UNATTACHED FIELDS'),
       el('span', { class: 'dm-sname' }, 'not tied to a data store')));
+    const cols = el('div', { class: 'dm-cols' });
+    dmFieldCols(looseFields, cols, 0);
+    block.append(cols);
     body.append(block);
   }
   g.append(body);

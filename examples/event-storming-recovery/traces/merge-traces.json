@@ -416,7 +416,7 @@
       "inferred": false,
       "description": "The output canonical model written by the es-merge CLI. Consumed downstream by the es-view server and the DOT/explorer generator. On the in-memory --traces server path this file is never written; the model is held in memory only.",
       "tactical": {
-        "explanation": "runMerge (src/adapters/cli/es-merge.ts) calls writeModelFile(outFile, model), which serializes the merged model with JSON.stringify(model, null, 2) and fs.writeFileSync (src/adapters/fs/model-repository.ts). Note it is written BEFORE the error check, so a failed validation still leaves a file on disk (see hot-invalid-model-written).",
+        "explanation": "runMerge (src/adapters/cli/es-merge.ts) calls writeModelFile(outFile, model), which serializes the merged model with JSON.stringify(model, null, 2) and fs.writeFileSync (src/adapters/fs/model-repository.ts). Note it is written BEFORE the error check, so a failed validation still leaves a file on disk.",
         "anchors": [
           {
             "path": "src/adapters/fs/model-repository.ts",
@@ -518,40 +518,9 @@
           "verb": "persists to"
         }
       ],
-      "hotspots": [
-        "hot-invalid-model-written"
-      ],
+      "hotspots": [],
       "instances": []
     }
   ],
-  "hotspots": [
-    {
-      "id": "hot-invalid-model-written",
-      "label": "es-merge writes an invalid flows.json even when validation fails",
-      "description": "The CLI writes the merged model to disk BEFORE it checks errors, then exits 1. So a validation failure still leaves an invalid flows.json on disk, which a later es-view auto-discovery could pick up and serve, whereas the server's --traces path throws and serves nothing. Human question: should es-merge withhold the output file on validation errors (write only when clean), or is emitting the invalid artifact for debugging intended? The two callers disagree today.",
-      "tactical": {
-        "explanation": "es-merge.ts's runMerge: `if (model) writeModelFile(outFile, model)` at line 24, then errors are printed and `process.exit(1)` at line 30 -- the file is already on disk. mergeTraceDocs always returns a model object (it never nulls on validation errors; null only happens in the application-layer mergeTraces when the dir has zero files). resolveModel (resolve-model.ts) instead throws when merged.errors.length, so the in-memory server path never exposes an invalid model. Still true after the refactor; the file/function names changed but the sequencing did not.",
-        "anchors": [
-          {
-            "path": "src/adapters/cli/es-merge.ts",
-            "line": 24,
-            "symbol": "runMerge",
-            "note": "writes model before the error check"
-          },
-          {
-            "path": "src/adapters/cli/es-merge.ts",
-            "line": 30,
-            "symbol": "runMerge",
-            "note": "errors printed then process.exit(1), after the write"
-          },
-          {
-            "path": "src/application/commands/resolve-model.ts",
-            "line": 37,
-            "symbol": "resolveModel",
-            "note": "server throws and refuses to serve on any error (37-40)"
-          }
-        ]
-      }
-    }
-  ]
+  "hotspots": []
 }

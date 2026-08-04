@@ -72,7 +72,7 @@
       "type": "invariant",
       "label": "Source reads stay inside the repo root",
       "inferred": true,
-      "description": "A source read may only resolve to a file at or under the repo root; a path that escapes it is REJECTED. ERROR-level (rejects the read): the request returns { exists:false, error:'path escapes repo root' } and no file is read. Effective against classic ../ traversal and absolute-path injection (see notes), but it is a lexical guard only — it does not resolve symlinks and does not restrict reads to files that are actually model anchors (see hot-source-read-scope).",
+      "description": "A source read may only resolve to a file at or under the repo root; a path that escapes it is REJECTED. ERROR-level (rejects the read): the request returns { exists:false, error:'path escapes repo root' } and no file is read. Effective against classic ../ traversal and absolute-path injection (see notes), but it is a lexical guard only — it does not resolve symlinks and does not restrict reads to files that are actually model anchors.",
       "tactical": {
         "explanation": "root = path.resolve(repoRoot); abs = path.resolve(root, relPath) (which normalizes any ../ sequences and lets an absolute relPath override root). The guard rejects unless abs === root OR abs starts with root + path.sep — the trailing separator blocks sibling-prefix escapes (e.g. /repo-secrets vs /repo). URL-encoded traversal (%2e%2e%2f) is decoded by URLSearchParams before path.resolve normalizes it, so encoded ../ is also caught. After the guard, a missing/non-file path returns { exists:false, error:'not found' }. The guard itself is now the pure guardPath() function in domain/source/source-window.ts; the fs source-gateway adapter calls it before reading.",
         "anchors": [
@@ -188,7 +188,7 @@
       "label": "Source file at anchor path",
       "parent": "ds-repo-fs",
       "inferred": false,
-      "description": "An arbitrary file addressed by a model anchor's repo-relative path (e.g. src/domain/model/merge.ts), read at or under the repo root. The excerpt projects a line window of this file. Note the read is NOT limited to files that are actually model anchors — any file under the root is reachable (see hot-source-read-scope).",
+      "description": "An arbitrary file addressed by a model anchor's repo-relative path (e.g. src/domain/model/merge.ts), read at or under the repo root. The excerpt projects a line window of this file. Note the read is NOT limited to files that are actually model anchors — any file under the root is reachable.",
       "tactical": {
         "explanation": "abs = path.resolve(root, relPath); after the sandbox guard (guardPath) passes and fs.statSync(abs).isFile() is true, fs.readFileSync(abs,'utf8') loads the whole file, split into lines for windowing.",
         "anchors": [
@@ -284,46 +284,9 @@
           "verb": "calls"
         }
       ],
-      "hotspots": [
-        "hot-source-read-scope"
-      ],
+      "hotspots": [],
       "instances": []
     }
   ],
-  "hotspots": [
-    {
-      "id": "hot-source-read-scope",
-      "label": "/api/source can read any file under the repo root, not just model anchors",
-      "description": "The path-traversal guard correctly blocks ../ and absolute-path escapes, but it only sandboxes reads to the repo ROOT — it does not restrict them to files that are actually anchors in the model, and it is a lexical guard that does NOT resolve symlinks. So the endpoint will serve the contents of ANY file under the repo root (e.g. .env, .git/config, committed keys) to whoever can reach the server, and a symlink inside the tree pointing outside would be followed. The default bind is 127.0.0.1 (localhost only, no auth), but --host accepts any address (e.g. 0.0.0.0), which would expose this unauthenticated file-read on the network. Human question: is arbitrary repo-root file read the intended trust boundary, and should the guard additionally (a) restrict to known anchor paths, (b) realpath-resolve symlinks, and/or (c) refuse to bind a non-loopback --host without auth?",
-      "tactical": {
-        "explanation": "guardPath guards abs against root+path.sep (domain/source/source-window.ts) — lexically sound, but there is no allowlist of anchor paths and no fs.realpath check, and the read (fs.readFileSync in the fs source-gateway) will return any in-root file. The handler is unauthenticated (server.ts's /api/source branch). startServer defaults host to 127.0.0.1 (server.ts) but the CLI's --host option (cli.ts, on the `view` subcommand) overrides it with no auth gate, so 0.0.0.0 would publish the read to the LAN.",
-        "anchors": [
-          {
-            "path": "src/domain/source/source-window.ts",
-            "line": 26,
-            "symbol": "guardPath",
-            "note": "lexical sandbox guard: no anchor allowlist, no symlink realpath"
-          },
-          {
-            "path": "src/adapters/http/server.ts",
-            "line": 194,
-            "symbol": "createServer",
-            "note": "unauthenticated /api/source returns viewSource(...) verbatim"
-          },
-          {
-            "path": "src/adapters/http/server.ts",
-            "line": 223,
-            "symbol": "startServer",
-            "note": "default host 127.0.0.1"
-          },
-          {
-            "path": "src/adapters/cli/cli.ts",
-            "line": 40,
-            "symbol": "view",
-            "note": "--host option on the `view` subcommand overrides the loopback default with no auth"
-          }
-        ]
-      }
-    }
-  ]
+  "hotspots": []
 }

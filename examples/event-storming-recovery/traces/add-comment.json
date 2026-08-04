@@ -265,7 +265,7 @@
       "type": "event",
       "label": "CommentAdded",
       "inferred": true,
-      "description": "A human note has been attached to a model item: a { id, text, at } record now hangs under the item's stable type:id key in the comment store. This fact holds as soon as the in-memory Map is updated, independently of whether the write-through to comments.json on disk succeeds (see hot-comment-nonatomic-persist).",
+      "description": "A human note has been attached to a model item: a { id, text, at } record now hangs under the item's stable type:id key in the comment store. This fact holds as soon as the in-memory Map is updated, independently of whether the write-through to comments.json on disk succeeds.",
       "tactical": {
         "explanation": "Realized inside CommentStore.add: byKey.set(k, [...(byKey.get(k)||[]), comment]) records the note in memory, then onChange() (wired by the fs comment-repository adapter to persist()) attempts the sidecar write. The handler returns store.get(type,id) (the fresh list) with HTTP 200; store.jsx setItemComments folds it into the SPA `comments` state so the dialog re-renders. The in-memory update always succeeds and is what the API confirms; durability is best-effort.",
         "anchors": [
@@ -515,46 +515,9 @@
           "verb": "read by"
         }
       ],
-      "hotspots": [
-        "hot-comment-nonatomic-persist"
-      ],
+      "hotspots": [],
       "instances": []
     }
   ],
-  "hotspots": [
-    {
-      "id": "hot-comment-nonatomic-persist",
-      "label": "Comment persistence is non-atomic and its failure is silent",
-      "description": "store.add updates the in-memory Map and the API returns 200 BEFORE (and regardless of whether) the disk write succeeds. persist() does a single fs.writeFileSync straight over comments.json with no temp-file-plus-rename, so a crash mid-write can leave a truncated/corrupt sidecar — and the loader silently swallows a corrupt file and starts empty, i.e. total loss of prior notes. Separately, if the location is read-only (e.g. the bundled example under a global npx install) the write throws, is caught, logged ONCE via a warned flag, and otherwise ignored; the operator's dialog still shows the note as saved, but it exists only in memory for that session and vanishes on restart. Questions for a human: (1) should the sidecar write be made atomic (write to a temp file then rename)? (2) should a persistence failure surface to the operator / return a non-200 instead of appearing successful? (3) is starting empty on a corrupt/unreadable sidecar acceptable, or should it be backed up rather than overwritten?",
-      "tactical": {
-        "explanation": "In the fs comment-repository adapter (adapters/fs/comment-repository.ts): CommentStore.add() calls onChange(), which is wired to persist(); persist() calls fs.writeFileSync(filePath, JSON.stringify(...)) with no atomic rename, and on throw does `if (!warned) { console.error(...); warned = true; }` — swallowed thereafter. The addComment command (application/commands/add-comment.ts) returns an 'ok' status with store.get(type,id) immediately after store.add() returns, irrespective of the write outcome, and the server maps that to HTTP 200. On startup createCommentStore's JSON.parse is wrapped in try/catch that discards a corrupt file and starts with an empty Map.",
-        "anchors": [
-          {
-            "path": "src/adapters/fs/comment-repository.ts",
-            "line": 17,
-            "symbol": "persist",
-            "note": "single writeFileSync, no temp+rename (non-atomic)"
-          },
-          {
-            "path": "src/adapters/fs/comment-repository.ts",
-            "line": 19,
-            "symbol": "persist",
-            "note": "write error caught, warned-once, then swallowed"
-          },
-          {
-            "path": "src/adapters/fs/comment-repository.ts",
-            "line": 29,
-            "symbol": "createCommentStore",
-            "note": "corrupt sidecar swallowed -> starts empty (data loss)"
-          },
-          {
-            "path": "src/application/commands/add-comment.ts",
-            "line": 21,
-            "symbol": "addComment",
-            "note": "store.add() called; 'ok' status returned regardless of persist outcome"
-          }
-        ]
-      }
-    }
-  ]
+  "hotspots": []
 }

@@ -225,7 +225,7 @@
       ],
       "anchors": [],
       "status": "partial",
-      "openQuestion": "es-generate fully trusts es-merge's output and never validates; is that an acceptable division of labor (validate-once-at-merge) given a hand-edited or externally-produced flows.json could reach es-generate directly (see hot-generator-trusts-unvalidated-model)?"
+      "openQuestion": "es-generate fully trusts es-merge's output and never validates; is that an acceptable division of labor (validate-once-at-merge) given a hand-edited or externally-produced flows.json could reach es-generate directly?"
     },
     {
       "id": "term-rt-scout",
@@ -450,7 +450,7 @@
         "ds-traces-dir"
       ],
       "status": "partial",
-      "openQuestion": "hot-demo-example-drift notes CI re-runs `npm run demo` on every push but never diffs the regenerated output against the committed example — so the checked-in self-model example can silently drift from what `npm run demo` would currently produce. Should CI fail the build on a diff instead of only smoke-testing that the pipeline runs?"
+      "openQuestion": "CI re-runs `npm run demo` on every push; does the demo-diff step (`git diff --exit-code -- examples/`) fully close the drift risk, or should build-example also write to a temp/staging dir rather than mutating tracked files in place?"
     }
   ]
 }

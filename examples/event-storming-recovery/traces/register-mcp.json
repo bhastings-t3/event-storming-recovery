@@ -244,75 +244,9 @@
           "verb": "emits"
         }
       ],
-      "hotspots": [
-        "hot-ui-shells-claude-cli",
-        "hot-mcp-register-no-csrf"
-      ],
+      "hotspots": [],
       "instances": []
     }
   ],
-  "hotspots": [
-    {
-      "id": "hot-ui-shells-claude-cli",
-      "label": "A browser click spawns a host process running the user's claude CLI",
-      "description": "Clicking 'Add to Claude' makes the loopback server run `claude mcp add` on the host via a SHELL STRING (exec, not execFile/arg-array). Today the inputs are non-injectable — name is a constant, the URL is the server's own quoted localhost address, and scope is double-whitelisted — so this is not arbitrary command execution, and the server already runs as the user, so the code argues 'no new privilege'. Still, a web page triggering host command execution is a real trust surface. Because the command is built by string concatenation and run through a shell, ANY future change that lets a caller-supplied value flow into the string (a different MCP name, a custom URL, extra flags) would become a shell-injection vector with no escaping in place. Human question: should the one-click convenience be kept as-is, or should host-command execution from the UI require an explicit terminal confirmation / a boot token, and should the exec be hardened to execFile with an argument array so the string can never be re-opened to injection?",
-      "tactical": {
-        "explanation": "POST /api/mcp/register (adapters/http/server.ts:202) -> the registerMcp application command -> claudeMcpAdd -> exec(command, ...) (adapters/process/claude-cli.ts:18). The command is a single string built at claude-cli.ts:16 by template concatenation; exec spawns it via the OS shell (cmd.exe on Windows, /bin/sh on POSIX). The file comment (claude-cli.ts:1-8) documents the deliberate choice of exec over execFile(args,{shell:true}) to let a Windows claude.cmd shim resolve, and asserts every part is controlled. That holds for the CURRENT inputs only; the safety is by-construction of the fixed template, not by escaping. The server binds 127.0.0.1 by default, overridable via --host (adapters/cli/cli.ts:40), which would expose this write endpoint beyond loopback.",
-        "anchors": [
-          {
-            "path": "src/adapters/process/claude-cli.ts",
-            "line": 16,
-            "symbol": "claudeMcpAdd",
-            "note": "command string built by template concatenation"
-          },
-          {
-            "path": "src/adapters/process/claude-cli.ts",
-            "line": 18,
-            "symbol": "claudeMcpAdd",
-            "note": "exec(command) runs the user's claude CLI through a shell"
-          },
-          {
-            "path": "src/adapters/http/server.ts",
-            "line": 202,
-            "symbol": "createServer",
-            "note": "unauthenticated POST route that triggers the shell-out"
-          },
-          {
-            "path": "src/adapters/cli/cli.ts",
-            "line": 40,
-            "symbol": "program",
-            "note": "--host option overrides the 127.0.0.1 default, widening exposure"
-          }
-        ]
-      }
-    },
-    {
-      "id": "hot-mcp-register-no-csrf",
-      "label": "The shell-out endpoint has no auth, CSRF, or Origin check",
-      "description": "POST /api/mcp/register performs a host-side side effect (running the user's claude CLI) with NO authentication, NO CSRF token, and NO Origin/Host validation anywhere in the server (a repo-wide grep for origin/cors/csrf/token/auth in src/adapters/http and src/adapters/mcp finds nothing). The SPA's own call sends content-type application/json, which forces a CORS preflight a cross-origin page can't satisfy — but the server reads the body with JSON.parse regardless of content-type and only uses body.scope, so a simple form-encoded or text/plain POST (which skips preflight) with an empty/garbage body still triggers registration. That opens a CSRF / DNS-rebinding path: a malicious page the operator visits while es-view is running could silently register this app into their Claude config. Impact is bounded — the command is fixed to `claude mcp add` pointing at this app's own URL, so it is not RCE — but it is still an unconsented host state change. Human question: should this endpoint require a same-origin/Origin check (or a per-boot token minted into the SPA) before it will shell out, and should it reject non-JSON content types?",
-      "tactical": {
-        "explanation": "adapters/http/server.ts has no Origin/Host/referer validation on any route (confirmed by grep). readJsonBody (adapters/http/server.ts:61-68) JSON.parses whatever body arrives and swallows parse errors to {}; the register route (adapters/http/server.ts:202-207) then calls the registerMcp application command, which whitelists body.scope (application/commands/register-mcp.ts:8) and proceeds — an empty body just yields scope=undefined, still a valid registration. Combined with the default loopback bind (mitigation) and the --host override (aggravator), the missing origin defense is the sharp part: loopback is not a trust boundary against a browser the user is driving. Note the register route sits BEFORE the generic /api 404 and has no gate other than inv-mcp-url-ready.",
-        "anchors": [
-          {
-            "path": "src/adapters/http/server.ts",
-            "line": 202,
-            "symbol": "createServer",
-            "note": "POST /api/mcp/register: no auth/CSRF/Origin check before shelling out"
-          },
-          {
-            "path": "src/adapters/http/server.ts",
-            "line": 61,
-            "symbol": "readJsonBody",
-            "note": "parses any body regardless of content-type; errors -> {}"
-          },
-          {
-            "path": "src/application/commands/register-mcp.ts",
-            "line": 8,
-            "symbol": "registerMcp",
-            "note": "only guard is the scope whitelist; empty body still registers"
-          }
-        ]
-      }
-    }
-  ]
+  "hotspots": []
 }

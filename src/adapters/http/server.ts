@@ -58,6 +58,57 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+// --- Loopback (anti-CSRF / anti-DNS-rebinding) guard ------------------------
+// es-view has no auth: it runs as the user, on loopback, for a single local human. The threat is a
+// *browser* on this machine — any web page the user has open, or a DNS-rebinding attack — driving the
+// state-changing endpoints or reading source cross-origin while es-view runs. The defence is to accept
+// only same-origin loopback traffic on the protected routes: a loopback `Host` (a rebound attacker name
+// resolves to 127.0.0.1 but still sends its own name as `Host`, so this rejects it) and, when present,
+// a loopback `Origin` (a cross-origin page sends its real, non-loopback Origin). The served SPA is
+// same-origin loopback, so it always passes.
+
+/** True if a bare hostname (no port) names the loopback interface. */
+export function hostnameIsLoopback(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase();
+  return h === 'localhost' || h === '::1' || /^127(?:\.\d{1,3}){3}$/.test(h);
+}
+
+/** The hostname out of a `Host` header, dropping the port (`127.0.0.1:5178`, `[::1]:5178`, `localhost`). */
+function hostnameFromHostHeader(hostHeader: string): string {
+  const h = hostHeader.trim();
+  if (h.startsWith('[')) { const end = h.indexOf(']'); return end > 0 ? h.slice(1, end) : h; }
+  const colon = h.indexOf(':');
+  return colon >= 0 ? h.slice(0, colon) : h;
+}
+
+/** True if an `Origin` header (`http://127.0.0.1:5178`) names a loopback host. A `null`/unparseable Origin is not loopback. */
+function originIsLoopback(origin: string): boolean {
+  try { return hostnameIsLoopback(new URL(origin).hostname); } catch { return false; }
+}
+
+/** The protected set: every state-changer plus the sensitive source read. Reads the connect-flow needs stay open. */
+function needsLoopbackGuard(method: string, pathname: string): boolean {
+  if (pathname === '/api/source') return true;
+  if (method === 'POST' || method === 'DELETE') {
+    return pathname === '/api/selection' || pathname === '/api/context'
+      || pathname === '/api/comments' || pathname === '/api/mcp/register';
+  }
+  return false;
+}
+
+/** Reason to 403 a protected request, or null to allow it. A missing `Origin` is allowed (some browsers omit it on same-origin GET); a loopback `Host` is still required as the DNS-rebinding backstop. */
+function loopbackGuardReason(req: IncomingMessage): string | null {
+  const hostHeader = req.headers.host;
+  if (!hostHeader || !hostnameIsLoopback(hostnameFromHostHeader(hostHeader))) {
+    return 'refused: Host is not loopback';
+  }
+  const origin = req.headers.origin;
+  if (origin && !originIsLoopback(origin)) {
+    return 'refused: cross-origin request';
+  }
+  return null;
+}
+
 function readJsonBody(req: IncomingMessage): Promise<any> {
   return new Promise((resolve) => {
     let data = '';
@@ -94,14 +145,23 @@ export interface CreateServerOptions {
   claudeCliGateway: ClaudeCliGateway;
   mcpHandler?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
   runtime?: { baseUrl?: string };
+  /** When true (operator ran `--allow-remote`), skip the loopback guard: the exposure was chosen explicitly. */
+  allowRemote?: boolean;
 }
 
-export function createServer({ resolved, distDir, selection, bundle, services, sourceGateway, claudeCliGateway, mcpHandler, runtime = {} }: CreateServerOptions): http.Server {
+export function createServer({ resolved, distDir, selection, bundle, services, sourceGateway, claudeCliGateway, mcpHandler, runtime = {}, allowRemote = false }: CreateServerOptions): http.Server {
   const mcpUrl = () => (runtime.baseUrl ? runtime.baseUrl + '/mcp' : null);
   return http.createServer(async (req, res) => {
     const method = req.method || 'GET';
     const url = new URL(req.url || '/', 'http://localhost');
     const p = url.pathname;
+
+    // Reject cross-origin / DNS-rebinding browser traffic on the protected routes before any state
+    // change or source read. Skipped when the operator opted into remote binding via --allow-remote.
+    if (!allowRemote && needsLoopbackGuard(method, p)) {
+      const reason = loopbackGuardReason(req);
+      if (reason) return sendJson(res, 403, { error: reason });
+    }
 
     // ---- MCP (delegated to the mounted handler) ----
     if (p === '/mcp' && mcpHandler) {
@@ -216,6 +276,11 @@ export function createServer({ resolved, distDir, selection, bundle, services, s
 export interface StartServerOptions extends CreateServerOptions {
   host?: string;
   port?: number;
+}
+
+/** True if a `--host` bind address names the loopback interface (the safe default). `0.0.0.0` / `::` and LAN addresses are not. */
+export function bindHostIsLoopback(host: string): boolean {
+  return hostnameIsLoopback(host);
 }
 
 /** Listen on the first free port at/after `port`. Resolves with { server, url, port }. */

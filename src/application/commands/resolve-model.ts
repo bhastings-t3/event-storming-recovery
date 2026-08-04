@@ -13,7 +13,28 @@
 import path from 'node:path';
 import type { ModelRepository } from '../ports.js';
 import type { ResolvedModel } from '../services.js';
+import type { Model as ModelData } from '../../domain/model/types.js';
+import { Model } from '../../domain/model/model.js';
 import { mergeTraces } from './merge-traces.js';
+
+/**
+ * Run the one model validator over an already-assembled model (the `--model`, discovered, and
+ * bundled tiers), returning its warnings. Errors are a hard failure: serving a model whose flow
+ * steps/edges reference nodes that do not exist, or that breaks the es-grammar, would surface broken
+ * references in the explorer and MCP. This mirrors the `--traces` tier, which already throws on the
+ * same errors — the whole point of issue #8 is that validation be a consistent boundary on every
+ * serve path, not just the merge-on-the-fly one. Warnings are surfaced, never fatal, so a working
+ * model with (say) an orphan node keeps loading exactly as before.
+ */
+function validateResolved(model: ModelData, label: string): string[] {
+  const { errors, warnings } = Model.from(model).validate();
+  if (errors.length) {
+    const err = new Error(`${label} failed validation:\n  ${errors.join('\n  ')}`);
+    (err as Error & { validation?: unknown }).validation = { errors, warnings };
+    throw err;
+  }
+  return warnings;
+}
 
 export interface ResolveModelOptions {
   modelPath?: string;
@@ -30,6 +51,7 @@ export function resolveModel({ modelPath, tracesDir, repoRoot, cwd, packageRoot 
   if (modelPath) {
     sourcePath = path.resolve(cwd, modelPath);
     model = repo.readModelFile(sourcePath);
+    warnings.push(...validateResolved(model, `--model ${modelPath}`));
     source = 'model';
   } else if (tracesDir) {
     sourcePath = path.resolve(cwd, tracesDir);
@@ -47,11 +69,13 @@ export function resolveModel({ modelPath, tracesDir, repoRoot, cwd, packageRoot 
     if (discovered.length) {
       sourcePath = discovered[0]!;
       model = repo.readModelFile(sourcePath);
-      source = 'discovered';
       if (discovered.length > 1) warnings.push(`found ${discovered.length} flows.json files; using ${path.relative(cwd, sourcePath) || sourcePath}. Pass --model to choose another.`);
+      warnings.push(...validateResolved(model, `discovered model ${path.relative(cwd, sourcePath) || sourcePath}`));
+      source = 'discovered';
     } else {
       sourcePath = path.join(packageRoot, 'examples', 'event-storming-recovery', 'model', 'flows.json');
       model = repo.readModelFile(sourcePath);
+      warnings.push(...validateResolved(model, 'bundled example model'));
       source = 'example';
     }
   }

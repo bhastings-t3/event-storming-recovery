@@ -88,9 +88,13 @@ excludes `src/web` so the Node build never compiles the SPA.
   single-user local use; the subject of issue #10.
 - **The Vite proxy must match `^/api/`** (not bare `/api`) or it swallows the
   SPA's own `/api.js` module (`vite.config.mjs`).
-- **Windows paths:** `scripts/build-example.mjs` passes `--repo-root '.'` on
-  purpose so committed deep links stay relative and never bake in an absolute
-  path or username.
+- **Windows paths:** `generate` resolves `--repo-root` to an absolute path and
+  normalizes separators to `/` for the `vscode://file/` scheme (issue #27), so a
+  committed `explorer.html`/`flows.dot` carries an absolute root. To keep the
+  published self-model free of a real username, `scripts/build-example.mjs` passes
+  a stable placeholder root (`/event-storming-recovery`), not `.`; the emitted
+  `explorer.html` treats the baked root as a default the reader overrides via the
+  "Source root" control (persisted to `localStorage`). See ADR-0006.
 - The `examples/event-storming-recovery/` self-model is pipeline-shaped, an
   atypical but deliberate fixture that exercises the two-plane modeling rule.
 

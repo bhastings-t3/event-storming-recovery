@@ -3,8 +3,16 @@
 // interactive explorer, no external deps). Pure string builders (no fs, no timestamps/random); the
 // generator-writer adapter persists them. Ported byte-for-byte from tools/generate-views.js; the
 // PALETTE is the shared domain palette (identical values/order, so the embedded JSON is unchanged).
+import path from 'node:path';
 import { PALETTE } from '../../domain/model/palette.js';
 import type { Model } from '../../domain/model/types.js';
+
+// vscode://file/ links need an ABSOLUTE path with forward slashes, even on Windows where
+// path.resolve yields backslashes. Normalize once so both views (and the reader-override in the
+// emitted HTML) build a well-formed URI. Trailing slashes are trimmed so the join stays clean.
+function toUriRoot(p: string): string {
+  return p.replace(/\\/g, '/').replace(/\/+$/, '');
+}
 
 export interface GeneratedViews {
   dot: string;
@@ -375,6 +383,7 @@ export function renderHtml(model: Model, repoRoot: string, title: string): strin
   <button id="tab-datamodel" class="tab">Data model</button>
   <button id="tab-glossary" class="tab">Glossary</button>
   <button id="tab-overview" class="tab">Overview</button>
+  <button id="reporoot-btn" class="tab" style="margin-left:auto" title="Set the local repository root for source links">Source root</button>
 </div>
 <div id="shell">
 <aside id="sidebar">
@@ -400,7 +409,34 @@ export function renderHtml(model: Model, repoRoot: string, title: string): strin
 </div>
 <script>
 const MODEL = ${modelJson};
-const REPO_ROOT = ${JSON.stringify(repoRoot)};
+// Source links open in the reader's editor via vscode://file/<root>/<path>. The board bakes the
+// generating machine's absolute root as a DEFAULT; each reader may override it with their own local
+// checkout path (persisted to localStorage), so one committed board works for everyone. See
+// docs/architecture/decisions/0006-reader-overridable-source-root.md.
+const REPO_ROOT_DEFAULT = ${JSON.stringify(repoRoot)};
+const normRoot = r => String(r == null ? '' : r).replace(/\\\\/g, '/').replace(/\\/+$/, '');
+let repoRootOverride = (() => { try { return localStorage.getItem('esRepoRoot') || null; } catch (e) { return null; } })();
+function currentRepoRoot() { return repoRootOverride ? normRoot(repoRootOverride) : REPO_ROOT_DEFAULT; }
+function relAnchor(a) { return a.path + (a.line ? ':' + a.line : ''); }
+function buildAnchorUrl(rel) { return 'vscode://file/' + currentRepoRoot() + '/' + rel; }
+// Re-derive every already-rendered source link when the reader changes their local root.
+function refreshAnchors() { document.querySelectorAll('a[data-anchor]').forEach(a => { a.href = buildAnchorUrl(a.getAttribute('data-anchor')); }); }
+function promptRepoRoot() {
+  const cur = repoRootOverride || REPO_ROOT_DEFAULT;
+  const next = prompt('Local path to your checkout of this repository, used for the source links.\\n\\nLeave blank to reset to the board default:\\n' + REPO_ROOT_DEFAULT, cur);
+  if (next === null) return;
+  try {
+    if (next.trim() === '') { localStorage.removeItem('esRepoRoot'); repoRootOverride = null; }
+    else { repoRootOverride = next.trim(); localStorage.setItem('esRepoRoot', repoRootOverride); }
+  } catch (e) { repoRootOverride = next.trim() || null; }
+  refreshAnchors();
+  updateRepoRootBtn();
+}
+function updateRepoRootBtn() {
+  const b = document.getElementById('reporoot-btn'); if (!b) return;
+  b.textContent = repoRootOverride ? 'Source root ●' : 'Source root';
+  b.title = 'Source links open at: ' + currentRepoRoot() + (repoRootOverride ? '  (your local override — click to change or clear)' : '  (board default — click to set your local checkout path)');
+}
 const PALETTE = ${JSON.stringify(PALETTE)};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
@@ -439,7 +475,7 @@ function el(tag, attrs, ...children) {
   for (const c of children) if (c != null) e.append(c);
   return e;
 }
-function anchorUrl(a) { return 'vscode://file/' + REPO_ROOT + '/' + a.path + (a.line ? ':' + a.line : ''); }
+function anchorUrl(a) { return buildAnchorUrl(relAnchor(a)); }
 
 // the set of node ids a flow touches (steps + both ends of every edge)
 function flowNodeIds(f) { return new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]); }
@@ -959,8 +995,8 @@ function termFlows(t) {
   return out;
 }
 function anchorLink(a) {
-  const url = 'vscode://file/' + REPO_ROOT + '/' + a.path + (a.line ? ':' + a.line : '');
-  return el('a', { class: 'gl-src', href: url, title: a.symbol || a.path, onclick: e => e.stopPropagation() }, (a.symbol || a.path.split('/').pop()) + (a.line ? ':' + a.line : ''));
+  const rel = relAnchor(a);
+  return el('a', { class: 'gl-src', href: buildAnchorUrl(rel), 'data-anchor': rel, title: a.symbol || a.path, onclick: e => e.stopPropagation() }, (a.symbol || a.path.split('/').pop()) + (a.line ? ':' + a.line : ''));
 }
 function renderGlossaryList() {
   const list = document.getElementById('gllist'); if (!list) return;
@@ -1405,7 +1441,7 @@ function openDetail(id) {
       if (u.flow) box.append(el('div', { class: 'uflow' }, 'in flow: ' + u.flow));
       if (u.explanation) box.append(el('div', { class: 'uexp' }, u.explanation));
       for (const a of u.anchors || []) {
-        box.append(el('a', { class: 'anchor', href: anchorUrl(a) },
+        box.append(el('a', { class: 'anchor', href: anchorUrl(a), 'data-anchor': relAnchor(a) },
           a.path + (a.line ? ':' + a.line : '') + (a.symbol ? '  (' + a.symbol + ')' : ''),
           a.note ? el('span', { class: 'note' }, '  — ' + a.note) : null));
       }
@@ -1474,6 +1510,8 @@ document.getElementById('tab-gallery').addEventListener('click', () => setMode('
 document.getElementById('tab-datamodel').addEventListener('click', () => setMode('datamodel'));
 document.getElementById('tab-glossary').addEventListener('click', () => setMode('glossary'));
 document.getElementById('tab-overview').addEventListener('click', () => setMode('overview'));
+document.getElementById('reporoot-btn').addEventListener('click', promptRepoRoot);
+updateRepoRootBtn();
 
 renderSidebar('');
 if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);
@@ -1486,7 +1524,10 @@ else setMode('flows');
 }
 
 export function generateViews(model: Model, opts: GenerateViewsOptions = {}): GeneratedViews {
-  const repoRoot = opts.repoRoot ?? (((model.meta && model.meta.repoRoot) as string) || '.');
+  // Resolve to an absolute path so the documented `--repo-root .` produces a working link instead
+  // of a dead `vscode://file/./...` relative one, then normalize separators for the URI scheme.
+  const rawRoot = opts.repoRoot ?? (((model.meta && model.meta.repoRoot) as string) || '.');
+  const repoRoot = toUriRoot(path.resolve(rawRoot));
   const title = opts.title ?? (((model.meta && model.meta.title) as string) || 'Event Storming Explorer');
   return { dot: renderDot(model, repoRoot), html: renderHtml(model, repoRoot, title) };
 }

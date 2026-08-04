@@ -4,7 +4,7 @@
     "title": "Golden Fixture Model",
     "counts": {
       "flows": 2,
-      "nodes": 7,
+      "nodes": 10,
       "hotspots": 1,
       "terms": 1,
       "unresolvedTerms": 1,
@@ -15,7 +15,7 @@
         "readModel": 1,
         "externalSystem": 1,
         "datastore": 1,
-        "field": 1
+        "field": 4
       }
     }
   },
@@ -129,6 +129,31 @@
       "dataType": "numeric",
       "fieldKind": "column",
       "nullable": false
+    },
+    {
+      "id": "fld-orders-shipping",
+      "type": "field",
+      "label": "shipping",
+      "description": "Shipping details, stored as a JSON sub-document.",
+      "parent": "ds-OrdersDb",
+      "dataType": "jsonb",
+      "fieldKind": "column"
+    },
+    {
+      "id": "fld-orders-carrier",
+      "type": "field",
+      "label": "carrier",
+      "description": "Carrier code nested inside the shipping sub-document.",
+      "parent": "fld-orders-shipping",
+      "dataType": "text",
+      "fieldKind": "key"
+    },
+    {
+      "id": "fld-orphan-metric",
+      "type": "field",
+      "label": "orphaned_metric",
+      "description": "A recovered field not yet tied to a data store.",
+      "dataType": "text"
     }
   ],
   "flows": [

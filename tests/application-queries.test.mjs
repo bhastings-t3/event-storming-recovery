@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 
 import { buildServices } from '../dist/node/application/services.js';
 import { listModel } from '../dist/node/application/queries/list-model.js';
+import { listDataModel } from '../dist/node/application/queries/list-data-model.js';
 import { getNode } from '../dist/node/application/queries/get-node.js';
 import { getItem } from '../dist/node/application/queries/get-item.js';
 import { getCurrentSelection } from '../dist/node/application/queries/get-current-selection.js';
@@ -93,6 +94,49 @@ test('listModel: a non-live flow carries its [status] tag; a live flow does not'
   const md = listModel(services);
   assert.match(md, /- `flow-legacy` — Legacy checkout \[superseded\]/, 'non-live flow shows its status');
   assert.match(md, /- `flow-checkout` — Checkout(?!\s*\[)/, 'a live flow is NOT tagged with [live]');
+});
+
+// ---------------------------------------------------------------------------
+// listDataModel — the `list_data_model` MCP tool text. The header count is every
+// datastore+field node, so the render must show every field, not just a store's
+// direct children: sub-fields (a field parented to a field) and loose fields (a
+// field tied to no store) are counted too (issue #11, hot-data-model-drops-nested-loose-fields).
+// ---------------------------------------------------------------------------
+
+function buildDataServices() {
+  const model = {
+    version: 1, meta: { title: 'Data Model Test' },
+    nodes: [
+      { id: 'ds-orders', type: 'datastore', label: 'orders', storeKind: 'table', host: 'db.internal' },
+      { id: 'fld-total', type: 'field', label: 'total', parent: 'ds-orders', dataType: 'numeric' },
+      { id: 'fld-shipping', type: 'field', label: 'shipping', parent: 'ds-orders', dataType: 'jsonb' },
+      { id: 'fld-carrier', type: 'field', label: 'carrier', parent: 'fld-shipping', dataType: 'text' }, // nested sub-field
+      { id: 'fld-orphan', type: 'field', label: 'orphaned_metric', dataType: 'text' },                  // loose, no store
+    ],
+    flows: [], hotspots: [], terms: [],
+  };
+  const resolved = { model, source: 'bundled', sourcePath: 'flows.json', repoRoot: REPO_ROOT, warnings: [] };
+  const services = buildServices(resolved, { comments: null, sourceGateway: { read: () => ({ path: '', exists: false }) } });
+  return { services, model };
+}
+
+test('listDataModel: renders every counted field — a store\'s direct fields AND nested sub-fields', () => {
+  const { services, model } = buildDataServices();
+  const md = listDataModel(services);
+  const dataCount = model.nodes.filter((n) => n.type === 'datastore' || n.type === 'field').length;
+  assert.equal(dataCount, 5, 'the header count is every datastore+field node');
+  assert.match(md, /^# Data model/, 'starts with the data-model heading');
+  assert.match(md, /## orders _\(table\)_ — `db\.internal`/, 'the store header carries its kind and host');
+  assert.match(md, /- fields: `total` numeric, `shipping` jsonb/, 'direct fields are listed');
+  // A field parented to another field was counted but never drawn before the fix.
+  assert.match(md, /- `carrier` text/, 'a nested sub-field is rendered under its parent field');
+});
+
+test('listDataModel: lists loose fields (tied to no data store) so the count is honest', () => {
+  const { services } = buildDataServices();
+  const md = listDataModel(services);
+  assert.match(md, /## Unattached fields _\(not tied to a data store\)_/, 'a section collects orphaned fields');
+  assert.match(md, /- `orphaned_metric` text/, 'the loose field is named, not just counted');
 });
 
 // ---------------------------------------------------------------------------

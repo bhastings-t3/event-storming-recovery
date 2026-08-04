@@ -1,0 +1,23 @@
+digraph event_storming {
+  bgcolor="#0a0a0d"; rankdir=LR; fontname="Segoe UI"; compound=true;
+  node [shape=box, style="filled,rounded", fontname="Segoe UI", fontsize=10, margin="0.15,0.08"];
+  edge [fontname="Segoe UI", fontsize=8, color="#8a8a94", fontcolor="#a1a1aa"];
+  subgraph "cluster_flow-checkout" {
+    label="Checkout"; fontsize=13; color="#4a4a56"; style="rounded"; fontcolor="#e4e4e7";
+    "flow-checkout__cmd-PlaceOrder" [label="Place Order", fillcolor="#6BA3E8", color="#2f68b0", fontcolor="#123252", style="filled,rounded", tooltip="Customer submits a cart to place an order.", URL="vscode://file//golden/repo-root/src/order/place-order.ts:12"];
+    "flow-checkout__agg-Order" [label="Order", fillcolor="#E3D68A", color="#a89a4a", fontcolor="#4c4212", style="filled,rounded", tooltip="The order aggregate enforcing the no-overselling invariant.", URL="vscode://file//golden/repo-root/src/order/order.ts:5"];
+    "flow-checkout__evt-OrderPlaced" [label="Order Placed", fillcolor="#E9A23B", color="#a56a14", fontcolor="#4a2c02", style="filled,rounded", tooltip="Emitted once an order is accepted.", URL="vscode://file//golden/repo-root/src/order/events.ts:20"];
+    "flow-checkout__rm-OrderSummary" [label="Order Summary", fillcolor="#6FC993", color="#358a5a", fontcolor="#124a2c", style="filled,rounded", tooltip="Read model projecting placed orders for the customer."];
+    "flow-checkout__ext-PaymentGateway" [label="Payment Gateway", fillcolor="#E68DAF", color="#b05378", fontcolor="#59213b", style="filled,rounded", tooltip="Third-party payment processor.", URL="vscode://file//golden/repo-root/src/payment/gateway.ts:3"];
+    "flow-checkout__cmd-PlaceOrder" -> "flow-checkout__agg-Order" [label="issues"];
+    "flow-checkout__agg-Order" -> "flow-checkout__evt-OrderPlaced" [label="emits"];
+    "flow-checkout__evt-OrderPlaced" -> "flow-checkout__rm-OrderSummary" [label="updates"];
+    "flow-checkout__agg-Order" -> "flow-checkout__ext-PaymentGateway" [label="calls"];
+  }
+  subgraph "cluster_flow-legacy-checkout" {
+    label="Legacy Checkout  [SUPERSEDED]"; fontsize=13; color="#3a3a44"; style="rounded"; fontcolor="#71717a";
+    "flow-legacy-checkout__cmd-PlaceOrder" [label="Place Order", fillcolor="#6BA3E8", color="#2f68b0", fontcolor="#123252", style="filled,rounded,dashed", tooltip="Customer submits a cart to place an order.", URL="vscode://file//golden/repo-root/src/order/place-order.ts:12"];
+    "flow-legacy-checkout__agg-Order" [label="Order", fillcolor="#E3D68A", color="#a89a4a", fontcolor="#4c4212", style="filled,rounded,dashed", tooltip="The order aggregate enforcing the no-overselling invariant.", URL="vscode://file//golden/repo-root/src/order/order.ts:5"];
+    "flow-legacy-checkout__cmd-PlaceOrder" -> "flow-legacy-checkout__agg-Order" [label="issues"];
+  }
+}

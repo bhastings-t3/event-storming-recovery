@@ -16,12 +16,20 @@
 import { execFileSync } from 'node:child_process';
 import { rmSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test as base, createBdd } from 'playwright-bdd';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startViewServer, exampleModel, cliEntry, type ViewServer } from '../support/server.js';
+import { startViewServer, exampleModel, cliEntry, repoRoot, type ViewServer } from '../support/server.js';
+
+/**
+ * The conventional (command→aggregate→event→policy→readModel) fixture's trace directory (issue #33).
+ * The bundled self-model the other scenarios drive is pipeline-shaped and atypical (it has no policy
+ * at all); this hand-written toy-shop domain is the ordinary shape most domains have, so driving it
+ * proves the harness handles a conventional model and keeps the E2E net from being self-model-biased.
+ */
+const toyShopTraces = resolve(repoRoot, 'tests', 'fixtures', 'toy-shop', 'traces');
 
 /** A scenario-scoped scratchpad. Steps stash what later steps assert on; temp dirs get cleaned on teardown. */
 export interface World {
@@ -63,6 +71,15 @@ interface WorkerFixtures {
    * could bleed between scenarios, so there is nothing to isolate per test.
    */
   staticExplorerUrl: string;
+
+  /**
+   * Like `staticExplorerUrl`, but for the CONVENTIONAL toy-shop model (issue #33). Built by running
+   * the real CLI end to end — `merge` the toy-shop traces into a flows.json, then `generate` the
+   * static explorer from it — so this exercises the full merge→generate→render pipeline over an
+   * ordinary command/aggregate/event/policy domain, not just the bundled pipeline-shaped self-model.
+   * Same worker scope + immutability rationale as `staticExplorerUrl`.
+   */
+  staticExplorerToyShopUrl: string;
 }
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
@@ -111,6 +128,20 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
       // A stable placeholder --repo-root keeps the baked vscode:// links deterministic (they never
       // resolve headless, and no scenario drives them — see static-explorer.steps.ts).
       execFileSync(process.execPath, [cliEntry, 'generate', exampleModel, dir, '--repo-root', '/x'], { stdio: 'pipe' });
+      await use(pathToFileURL(join(dir, 'explorer.html')).href);
+      rmSync(dir, { recursive: true, force: true });
+    },
+    { scope: 'worker' },
+  ],
+
+  staticExplorerToyShopUrl: [
+    async ({}, use) => {
+      const dir = mkdtempSync(join(tmpdir(), 'es-e2e-toyshop-'));
+      const model = join(dir, 'flows.json');
+      // Build the conventional model exactly as a user would: merge the traces, then generate. merge
+      // validates before writing, so reaching `generate` already proves the fixture is a valid model.
+      execFileSync(process.execPath, [cliEntry, 'merge', toyShopTraces, model], { stdio: 'pipe' });
+      execFileSync(process.execPath, [cliEntry, 'generate', model, dir, '--repo-root', '/x'], { stdio: 'pipe' });
       await use(pathToFileURL(join(dir, 'explorer.html')).href);
       rmSync(dir, { recursive: true, force: true });
     },

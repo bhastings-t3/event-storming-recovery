@@ -7,9 +7,10 @@ Feature: Explorer SPA — hotspots and the source behind an anchor
 
   Scenario: Opening a hotspot shows its detail
     Given the explorer is open on the example model
-    When I open the hotspots drawer for the current flow
-    And I click the hotspot card "Comment persistence is non-atomic and its failure is silent"
-    Then the detail panel shows the hotspot "Comment persistence is non-atomic and its failure is silent"
+    When I select the flow named "es-view resolves which model the session serves"
+    And I open the hotspots drawer for the current flow
+    And I click the hotspot card "Auto-discovery silently picks one flows.json among many"
+    Then the detail panel shows the hotspot "Auto-discovery silently picks one flows.json among many"
 
   Scenario: Revealing the source behind a node's anchor returns real code
     Given the explorer is open on the example model

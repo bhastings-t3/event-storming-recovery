@@ -23,6 +23,14 @@ Given('the static explorer is open', async ({ page, staticExplorerUrl }) => {
   await expect(page.locator('.sticky').first()).toBeVisible();
 });
 
+// The same generated explorer, but built from the CONVENTIONAL toy-shop model (issue #33). Once the
+// page has loaded, every When/Then step below operates on `page` and is agnostic to which model was
+// baked in, so the conventional scenarios reuse them wholesale — only the entry point differs.
+Given('the conventional static explorer is open', async ({ page, staticExplorerToyShopUrl }) => {
+  await page.goto(staticExplorerToyShopUrl);
+  await expect(page.locator('.sticky').first()).toBeVisible();
+});
+
 Then('the static board shows stickies', async ({ page }) => {
   expect(await page.locator('.sticky').count()).toBeGreaterThan(0);
 });

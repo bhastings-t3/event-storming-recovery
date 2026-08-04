@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/guard-merge.mjs\"",
+            "if": "Bash(git *)",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/guard-merge.mjs\"",
+            "if": "Bash(gh *)",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

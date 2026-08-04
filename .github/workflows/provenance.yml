@@ -1,0 +1,38 @@
+name: provenance
+
+# Detection, not prevention. On every push to main, verify each new commit
+# belongs to a merged pull request. A squash merge is associated with its PR;
+# a direct push is associated with nothing. See
+# docs/architecture/decisions/0001-pr-only-provenance.md.
+#
+# Kept in its own workflow, not as a required PR check on purpose: a job that
+# only runs on push reads as "never ran" on every pull request and would refuse
+# every merge.
+
+on:
+  push:
+    branches: [main]
+
+# Needs to read pull-request associations for commits.
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The baseline commit must be reachable; a shallow clone does not
+          # reach back far enough for merge-base --is-ancestor.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: verify every new commit came through a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_BEFORE: ${{ github.event.before }}
+          PROVENANCE_AFTER: ${{ github.event.after }}
+        run: node scripts/check-main-provenance.mjs

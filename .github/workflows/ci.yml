@@ -20,6 +20,8 @@ jobs:
         run: npm test
       - name: build the example (smoke)
         run: npm run demo
+      - name: assert the committed example did not drift
+        run: git diff --exit-code -- examples/
 
   # The Gherkin BDD end-to-end harness (#19): drives all three faces — SPA (real browser),
   # CLI, MCP — against the actual app. NOT a required merge check yet (scripts/merge-pr.mjs

@@ -346,7 +346,7 @@ const MODEL = {"version":1,"meta":{"generatedFrom":["add-comment.json","build-co
 // generating machine's absolute root as a DEFAULT; each reader may override it with their own local
 // checkout path (persisted to localStorage), so one committed board works for everyone. See
 // docs/architecture/decisions/0006-reader-overridable-source-root.md.
-const REPO_ROOT_DEFAULT = "C:/event-storming-recovery";
+const REPO_ROOT_DEFAULT = "/event-storming-recovery";
 const normRoot = r => String(r == null ? '' : r).replace(/\\/g, '/').replace(/\/+$/, '');
 let repoRootOverride = (() => { try { return localStorage.getItem('esRepoRoot') || null; } catch (e) { return null; } })();
 function currentRepoRoot() { return repoRootOverride ? normRoot(repoRootOverride) : REPO_ROOT_DEFAULT; }

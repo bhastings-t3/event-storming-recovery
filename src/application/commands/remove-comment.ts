@@ -8,12 +8,16 @@ export type RemoveCommentResult =
   | { status: 'no-store' }
   | { status: 'not-found'; error: string }
   | { status: 'invalid'; error: string }
-  | { status: 'ok'; comments: Comment[] };
+  // `persisted` false (with a `reason`) means the deletion did not reach disk and is memory-only for
+  // this session; the removal still took effect in memory. A DELETE must be as honest as a POST here.
+  | { status: 'ok'; comments: Comment[]; persisted: boolean; reason?: string };
 
 export function removeComment(services: ServiceBundle, type: string, id: string | null | undefined, commentId: string | undefined): RemoveCommentResult {
   const store = services.comments;
   if (!store) return { status: 'no-store' };
   if (!id || !itemExists(services, type, id)) return { status: 'not-found', error: `unknown ${type} '${id}'` };
   if (!commentId) return { status: 'invalid', error: 'commentId required' };
-  return { status: 'ok', comments: store.remove(type, id, commentId) };
+  const comments = store.remove(type, id, commentId); // triggers onChange → the fs adapter's atomic persist
+  const health = services.commentPersistence?.status() ?? { persisted: true };
+  return { status: 'ok', comments, persisted: health.persisted, ...(health.reason ? { reason: health.reason } : {}) };
 }

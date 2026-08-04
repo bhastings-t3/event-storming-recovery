@@ -29,6 +29,7 @@ export function ExplorerProvider({ model, meta, children }) {
   const [menu, setMenu] = useState(null); // { x, y, ref: { type, id, label } } | null
   const [comments, setComments] = useState({}); // { "type:id": [{ id, text, at }] }
   const [commentDialog, setCommentDialog] = useState(null); // { x, y, ref } | null
+  const [commentDurability, setCommentDurability] = useState(null); // { reason } when the last write was memory-only
 
   // load the bundle + comments once (the server holds them; survive a page reload within a run)
   useEffect(() => { getContext().then((r) => setBundleItems(r.items || [])).catch(() => {}); }, []);
@@ -58,8 +59,11 @@ export function ExplorerProvider({ model, meta, children }) {
   const openCommentDialog = useCallback((x, y, ref) => setCommentDialog({ x, y, ref }), []);
   const closeCommentDialog = useCallback(() => setCommentDialog(null), []);
   const setItemComments = (type, id, list) => setComments((c) => ({ ...c, [`${type}:${id}`]: list || [] }));
-  const addCommentTo = useCallback((type, id, text) => addComment(type, id, text).then((r) => setItemComments(type, id, r.comments)).catch(() => {}), []);
-  const removeCommentFrom = useCallback((type, id, commentId) => removeComment(type, id, commentId).then((r) => setItemComments(type, id, r.comments)).catch(() => {}), []);
+  // Track the server's honesty about durability: `persisted:false` means the sidecar location is
+  // read-only and the comment is kept in memory for this session only, which the dialog surfaces.
+  const noteDurability = (r) => setCommentDurability(r && r.persisted === false ? { reason: r.reason || 'kept in memory for this session only' } : null);
+  const addCommentTo = useCallback((type, id, text) => addComment(type, id, text).then((r) => { setItemComments(type, id, r.comments); noteDurability(r); }).catch(() => {}), []);
+  const removeCommentFrom = useCallback((type, id, commentId) => removeComment(type, id, commentId).then((r) => { setItemComments(type, id, r.comments); noteDurability(r); }).catch(() => {}), []);
 
   const value = {
     model, meta, PALETTE, nodeById, hotspotById, types,
@@ -79,6 +83,7 @@ export function ExplorerProvider({ model, meta, children }) {
     comments,
     commentsFor: (type, id) => comments[`${type}:${id}`] || [],
     commentDialog, openCommentDialog, closeCommentDialog, addCommentTo, removeCommentFrom,
+    commentDurability,
     selectFlow, openDetail, openHotspot, closeDetail,
   };
   return <ExplorerContext.Provider value={value}>{children}</ExplorerContext.Provider>;

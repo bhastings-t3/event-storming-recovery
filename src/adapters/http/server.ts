@@ -222,19 +222,22 @@ export function createServer({ resolved, distDir, selection, bundle, services, s
       const body = await readJsonBody(req);
       const type = (body && body.type) || 'node';
       const id = body && body.id;
+      // On success we still return 200 with the comments, but carry `persisted` (and a `reason` when
+      // false) so the client can never mistake a memory-only write for a durable save. A memory-only
+      // sidecar is degraded-but-working, not a server error, so it is not a 500 (see ADR 0004).
       if (method === 'POST') {
         const result = addComment(services, type, id, body && body.text);
         if (result.status === 'not-found') return sendJson(res, 404, { error: result.error });
         if (result.status === 'invalid') return sendJson(res, 400, { error: result.error });
-        if (result.status === 'ok') return sendJson(res, 200, { comments: result.comments });
-        return sendJson(res, 200, { comments: [] });
+        if (result.status === 'ok') return sendJson(res, 200, { comments: result.comments, persisted: result.persisted, ...(result.reason ? { reason: result.reason } : {}) });
+        return sendJson(res, 200, { comments: [], persisted: false });
       }
       if (method === 'DELETE') {
         const result = removeComment(services, type, id, body && body.commentId);
         if (result.status === 'not-found') return sendJson(res, 404, { error: result.error });
         if (result.status === 'invalid') return sendJson(res, 400, { error: result.error });
-        if (result.status === 'ok') return sendJson(res, 200, { comments: result.comments });
-        return sendJson(res, 200, { comments: [] });
+        if (result.status === 'ok') return sendJson(res, 200, { comments: result.comments, persisted: result.persisted, ...(result.reason ? { reason: result.reason } : {}) });
+        return sendJson(res, 200, { comments: [], persisted: false });
       }
     }
 

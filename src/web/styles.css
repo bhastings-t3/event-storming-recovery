@@ -306,6 +306,7 @@ svg.edges path { transition: opacity .13s; }
 .cmt-input { margin: 0 11px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--input); color: var(--fg); font: inherit; font-size: 12.5px; resize: vertical; min-height: 52px; outline: none; }
 .cmt-input:focus { border-color: var(--ring); box-shadow: 0 0 0 3px rgba(120,120,140,.16); }
 .cmt-input::placeholder { color: var(--muted); }
+.cmt-warn { margin: 6px 11px 0; padding: 6px 9px; border-radius: 6px; font-size: 11px; line-height: 1.35; color: #7a4c00; background: #fff3d6; border: 1px solid #f0d38a; }
 .cmt-actions { display: flex; justify-content: flex-end; padding: 9px 11px 11px; }
 .cmt-actions .btn-primary { flex: 0 0 auto; padding: 6px 14px; }
 

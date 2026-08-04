@@ -5,7 +5,7 @@ import { useExplorer } from '../store.jsx';
 // comments and takes a new one — Enter submits, Shift+Enter for a newline. Comments persist
 // server-side (next to the model) and ride into context when the item is bundled/selected.
 export default function CommentDialog() {
-  const { commentDialog, closeCommentDialog, nodeById, hotspotById, model, commentsFor, addCommentTo, removeCommentFrom } = useExplorer();
+  const { commentDialog, closeCommentDialog, nodeById, hotspotById, model, commentsFor, addCommentTo, removeCommentFrom, commentDurability } = useExplorer();
   const [text, setText] = useState('');
 
   useEffect(() => {
@@ -68,6 +68,11 @@ export default function CommentDialog() {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
       />
+      {commentDurability && (
+        <div className="cmt-warn" title={commentDurability.reason}>
+          ⚠ Not saved to disk — kept for this session only.
+        </div>
+      )}
       <div className="cmt-actions">
         <button className="btn-primary" disabled={!text.trim()} onClick={submit}>Add comment</button>
       </div>

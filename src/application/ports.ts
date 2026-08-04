@@ -23,6 +23,24 @@ export interface CommentRepository {
   persist(entries: Map<string, Comment[]>): void;
 }
 
+/** Health of the comment sidecar's most recent write. */
+export interface CommentPersistenceStatus {
+  /** True when the sidecar on disk reflects the last mutation; false = the write did not reach disk and the change is memory-only for this session. */
+  persisted: boolean;
+  /** When not persisted, a short human reason (e.g. a read-only location). */
+  reason?: string;
+}
+
+/**
+ * Read-only view of the sidecar's persistence health, exposed by the fs adapter and read by the
+ * comment commands so the HTTP face can tell the client whether a comment reached disk. This is the
+ * seam that carries persistence status out without making the domain CommentStore fs-aware: the pure
+ * store's `onChange` stays `void`; the adapter records the write outcome and answers `status()` here.
+ */
+export interface CommentPersistence {
+  status(): CommentPersistenceStatus;
+}
+
 /** Read the real source behind an anchor, sandboxed to the repo root. */
 export interface SourceGateway {
   read(repoRoot: string, relPath: string | undefined | null, line?: number, ctx?: number): SourceView;

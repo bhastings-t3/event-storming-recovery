@@ -264,6 +264,10 @@ export function createServer({ resolved, distDir, selection, bundle, services, s
     }
     if (p === '/api/mcp/register' && method === 'POST') {
       const u = mcpUrl();
+      // `inv-mcp-url-ready`: refuse registration until the server's own MCP URL is known. This guard
+      // stays in the adapter on purpose — url-readiness is a server-runtime fact (`runtime.baseUrl`,
+      // set by startServer only once the port is bound), not a property the pure `registerMcp` command
+      // could know. Moving it inward would couple the command to HTTP-server lifecycle state.
       if (!u) return sendJson(res, 503, { ok: false, stderr: 'server URL not ready yet' });
       const body = await readJsonBody(req);
       const result = await registerMcp({ name: MCP_NAME, url: u, scope: body && body.scope }, claudeCliGateway);

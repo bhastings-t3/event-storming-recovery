@@ -1,7 +1,10 @@
 // AddComment: append a human comment to an item (node / flow / hotspot). No store → empty; unknown
 // target → not-found; blank text → invalid; otherwise persists via the store and returns the item's
-// comments. The store enforces the text-nonempty invariant; this guard preserves the 'empty comment'
-// text and the store→target→text order the pre-refactor HTTP route used.
+// comments. The store owns the text-nonempty invariant (it throws EmptyCommentError). This command
+// guard is not redundant defence: it front-runs that throw so an empty comment is a typed `invalid`
+// (HTTP 400, text 'empty comment') in store→target→text order — the pre-refactor route's contract —
+// rather than letting the store's throw escape as an uncaught 500. The domain throw stays as the
+// aggregate's rule for direct callers (see comment-store.ts + domain-aggregates.test.mjs).
 import type { ServiceBundle } from '../services.js';
 import type { Comment } from '../../domain/comment-store/comment-store.js';
 import { itemExists } from '../read-models/items.js';

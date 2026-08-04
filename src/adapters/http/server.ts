@@ -329,22 +329,47 @@ export function parsePort(value: string | number | undefined | null): number {
   return n;
 }
 
+/** How many ports past the requested one `startServer` probes before giving up. */
+const PORT_FALLFORWARD_ATTEMPTS = 20;
+
+/**
+ * Every port in `startPort..endPort` was taken. This is a user-actionable condition (pick another
+ * port), not a bug, so the composition root prints `.message` and exits non-zero — no stack dump.
+ * A distinct type lets the CLI (and tests) tell it apart from an unexpected listen failure.
+ */
+export class PortUnavailableError extends Error {
+  constructor(readonly startPort: number, readonly endPort: number, readonly host: string) {
+    super(`no free port found in ${startPort}..${endPort} on ${host}; pass --port <n> to choose one`);
+    this.name = 'PortUnavailableError';
+  }
+}
+
 /** Listen on the first free port at/after `port`. Resolves with { server, url, port }. */
 export function startServer(opts: StartServerOptions): Promise<{ server: http.Server; url: string; port: number }> {
   const { runtime = {}, host = '127.0.0.1', port = 5178 } = opts;
   const server = createServer({ ...opts, runtime });
+  const lastPort = port + PORT_FALLFORWARD_ATTEMPTS;
   return new Promise((resolve, reject) => {
-    const tryListen = (pnum: number, attemptsLeft: number) => {
-      server.once('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE' && attemptsLeft > 0) { tryListen(pnum + 1, attemptsLeft - 1); }
-        else reject(err);
-      });
-      server.listen(pnum, host, () => {
-        const url = `http://${host}:${pnum}`;
-        runtime.baseUrl = url; // so /api/mcp/* can build the exact connect command
-        resolve({ server, url, port: pnum });
-      });
+    // One persistent handler pair, not one per attempt. Re-arming `server.listen(pnum, host, cb)` on
+    // every retry would leave the *failed* attempts' `listening` callbacks queued; when a later port
+    // finally binds they all fire and the first (stale `pnum`) wins the resolve — reporting a port the
+    // server is not actually on. So we listen without a callback and read the bound port authoritatively.
+    let current = port;
+    const onError = (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && current < lastPort) { current += 1; server.listen(current, host); }
+      // Exhausted the fall-forward window: a clean, actionable error, not the raw EADDRINUSE stack the CLI
+      // would otherwise dump. Non-EADDRINUSE failures (EACCES, …) still reject raw — the operator's to read.
+      else if (err.code === 'EADDRINUSE') reject(new PortUnavailableError(port, lastPort, host));
+      else reject(err);
     };
-    tryListen(port, 20);
+    server.on('error', onError);
+    server.once('listening', () => {
+      server.removeListener('error', onError);
+      const bound = (server.address() as import('node:net').AddressInfo).port;
+      const url = `http://${host}:${bound}`;
+      runtime.baseUrl = url; // so /api/mcp/* can build the exact connect command
+      resolve({ server, url, port: bound });
+    });
+    server.listen(current, host);
   });
 }

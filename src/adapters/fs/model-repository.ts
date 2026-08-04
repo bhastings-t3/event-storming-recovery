@@ -65,10 +65,16 @@ export function writeModelFile(file: string, model: Model): void {
   fs.writeFileSync(file, JSON.stringify(model, null, 2));
 }
 
+/** True if `dir` exists and is a directory. A missing path or any stat error (e.g. EACCES) reads as "not a usable directory". */
+export function directoryExists(dir: string): boolean {
+  try { return fs.statSync(dir).isDirectory(); } catch { return false; }
+}
+
 export const modelRepository: ModelRepository = {
   readModelFile,
   discoverFlowsFiles: findFlowsFiles,
   readTraceDocs,
+  directoryExists,
   writeModelFile,
 };
 

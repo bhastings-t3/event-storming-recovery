@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,6 +111,78 @@ test('merge REJECTS an invalid model (aggregate issuing a command)', () => {
     assert.throws(
       () => execFileSync('node', [cli, 'merge', traces, join(out, 'flows.json')], { stdio: 'pipe' }),
       'merge should exit non-zero on an aggregate that issues a command'
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test('merge does NOT leave an invalid flows.json on disk (validate-then-write)', () => {
+  // Issue #8: a failed validation must not persist a broken artifact. The server's --traces path
+  // throws instead of serving; the CLI must agree by writing only after validation passes.
+  const out = mkdtempSync(join(tmpdir(), 'es-'));
+  const traces = join(out, 'traces');
+  const outFile = join(out, 'flows.json');
+  mkdirSync(traces);
+  writeFileSync(join(traces, 'bad.json'), JSON.stringify({
+    nodes: [
+      { id: 'agg-x', type: 'aggregate', label: 'X' },
+      { id: 'cmd-y', type: 'command', label: 'Y', tactical: { explanation: '.', anchors: [{ path: 'a', line: 1 }] } }
+    ],
+    flows: [{
+      id: 'bad', name: 'bad', tier: 1, kind: 'write', status: 'live',
+      steps: ['agg-x', 'cmd-y'], edges: [{ from: 'agg-x', to: 'cmd-y', verb: 'issues' }], hotspots: []
+    }],
+    hotspots: []
+  }));
+  try {
+    assert.throws(
+      () => execFileSync('node', [cli, 'merge', traces, outFile], { stdio: 'pipe' }),
+      'merge should exit non-zero on an invalid model'
+    );
+    assert.equal(existsSync(outFile), false, 'no flows.json is written when validation fails');
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test('generate REFUSES to render an invalid (but shape-valid) flows.json', () => {
+  // Issue #8: generate must not trust merge's output blindly. A dangling step ref is a validator
+  // error; generate must fail cleanly instead of rendering a corrupt explorer or crashing.
+  const out = mkdtempSync(join(tmpdir(), 'es-'));
+  const flows = join(out, 'flows.json');
+  writeFileSync(flows, JSON.stringify({
+    version: 1, meta: { title: 'Broken' },
+    nodes: [{ id: 'agg-x', type: 'aggregate', label: 'X' }],
+    flows: [{ id: 'f1', name: 'F1', kind: 'write', status: 'live', steps: ['agg-x', 'does-not-exist'], edges: [], hotspots: [] }],
+    hotspots: [], terms: []
+  }));
+  try {
+    assert.throws(
+      () => execFileSync('node', [cli, 'generate', flows, out], { stdio: 'pipe' }),
+      'generate should exit non-zero on a model with a dangling step ref'
+    );
+    assert.equal(existsSync(join(out, 'explorer.html')), false, 'no explorer.html is rendered from an invalid model');
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test('view REFUSES an invalid --model before serving it', () => {
+  // Issue #8: the --model serve tier now runs the same validator, so an invalid model is rejected
+  // rather than served. (The invalid path exits before binding a port, so this does not hang.)
+  const out = mkdtempSync(join(tmpdir(), 'es-'));
+  const flows = join(out, 'flows.json');
+  writeFileSync(flows, JSON.stringify({
+    version: 1, meta: { title: 'Broken' },
+    nodes: [{ id: 'agg-x', type: 'aggregate', label: 'X' }],
+    flows: [{ id: 'f1', name: 'F1', kind: 'write', status: 'live', steps: ['agg-x', 'does-not-exist'], edges: [], hotspots: [] }],
+    hotspots: [], terms: []
+  }));
+  try {
+    assert.throws(
+      () => execFileSync('node', [cli, 'view', '--model', flows, '--no-open', '--port', '5399'], { stdio: 'pipe' }),
+      'view should exit non-zero on an invalid --model'
     );
   } finally {
     rmSync(out, { recursive: true, force: true });

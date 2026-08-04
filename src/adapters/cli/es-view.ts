@@ -69,13 +69,15 @@ export async function runView(opts: ViewOptions): Promise<void> {
   const distDir = path.join(packageRoot, 'dist', 'web');
   const selection = new Selection();
   const bundle = new ContextBundle();
-  // human comments persist to a sidecar next to the model (survives model regeneration)
+  // human comments persist to a sidecar next to the model (survives model regeneration); the handle
+  // also exposes persistence health so the API can tell the client when a write stayed in memory only
+  // (e.g. the bundled example under a global install, or a read-only --traces input dir).
   const commentsPath = path.join(path.dirname(resolved.sourcePath), 'comments.json');
-  const comments = createCommentStore(commentsPath);
+  const { store: comments, persistence: commentPersistence } = createCommentStore(commentsPath);
   // Source reads are scoped to this model's anchors (see source-gateway); reused by the HTTP /api/source
   // face and the context read-model so both are confined to the same allow-set.
   const sourceGateway = createAnchorScopedGateway(resolved.repoRoot, resolved.model);
-  const services = buildServices(resolved, { comments, sourceGateway });
+  const services = buildServices(resolved, { comments, commentPersistence, sourceGateway });
   const mcpHandler = createMcpHandler(services, selection, bundle);
   const { url } = await startServer({ resolved, distDir, selection, bundle, services, sourceGateway, claudeCliGateway, mcpHandler, host: opts.host, port: opts.port, allowRemote: opts.allowRemote });
 

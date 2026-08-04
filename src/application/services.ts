@@ -3,7 +3,7 @@
 // the composition root from a resolved model and the concrete adapters.
 import type { Model } from '../domain/model/types.js';
 import type { CommentStore } from '../domain/comment-store/comment-store.js';
-import type { SourceGateway } from './ports.js';
+import type { SourceGateway, CommentPersistence } from './ports.js';
 import { buildIndexes, type Indexes } from './read-models/indexes.js';
 
 export interface ResolvedModel {
@@ -19,11 +19,14 @@ export interface ServiceBundle {
   indexes: Indexes;
   repoRoot: string;
   comments: CommentStore | null;
+  /** Persistence health of the comment sidecar (null when there is no store, or a store without a backing file). */
+  commentPersistence: CommentPersistence | null;
   readSource: SourceGateway['read'];
 }
 
 export interface BuildServicesDeps {
   comments?: CommentStore | null;
+  commentPersistence?: CommentPersistence | null;
   sourceGateway: SourceGateway;
 }
 
@@ -34,6 +37,7 @@ export function buildServices(resolved: ResolvedModel, deps: BuildServicesDeps):
     indexes: buildIndexes(resolved.model),
     repoRoot: resolved.repoRoot,
     comments: deps.comments ?? null,
+    commentPersistence: deps.commentPersistence ?? null,
     readSource: (repoRoot, relPath, line, ctx) => deps.sourceGateway.read(repoRoot, relPath, line, ctx),
   };
 }

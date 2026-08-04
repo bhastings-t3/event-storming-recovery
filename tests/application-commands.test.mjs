@@ -199,6 +199,28 @@ test('AddComment: no comment store configured yields no-store', () => {
   assert.equal(result.status, 'no-store');
 });
 
+test('AddComment: threads persistence health from the persistence port into the result', () => {
+  const model = buildModel();
+  const resolved = { model, source: 'bundled', sourcePath: 'flows.json', repoRoot: REPO_ROOT, warnings: [] };
+  const commentStore = new CommentStore();
+  const sourceGateway = makeSourceGateway();
+  // a persistence port reporting a read-only / memory-only sidecar
+  const commentPersistence = { status: () => ({ persisted: false, reason: 'not writable (EACCES); kept in memory for this session only' }) };
+  const services = buildServices(resolved, { comments: commentStore, commentPersistence, sourceGateway });
+
+  const result = addComment(services, 'node', 'agg-Order', 'kept in memory');
+  assert.equal(result.status, 'ok');
+  assert.equal(result.persisted, false);
+  assert.match(result.reason, /memory/);
+});
+
+test('AddComment: defaults to persisted:true when there is no persistence port', () => {
+  const { services } = buildTestServices();
+  const result = addComment(services, 'node', 'agg-Order', 'durable');
+  assert.equal(result.status, 'ok');
+  assert.equal(result.persisted, true);
+});
+
 // ---------------------------------------------------------------------------
 // SelectNode
 // ---------------------------------------------------------------------------

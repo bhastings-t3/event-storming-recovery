@@ -1,0 +1,69 @@
+/**
+ * The shared support library for every face. Step files import { Given, When, Then } from here, so
+ * they all speak to the same fixtures:
+ *
+ *   - `viewServer`  a real `view` process (SPA + API + MCP), its own instance per scenario
+ *   - `mcpClient`   an MCP SDK client already connected to that process's POST /mcp
+ *   - `world`       a scenario-scoped scratchpad for passing state between steps, cleaned up after
+ *
+ * Fixtures are lazy: a CLI scenario touches none of these and so spawns neither a server nor a
+ * browser; an MCP scenario starts the server but no page; only an SPA scenario opens a browser. That
+ * laziness is also the isolation story — each scenario that needs a server gets a fresh one, so the
+ * process-global selection/bundle (issue #10, single-user-local by design) can't bleed across
+ * scenarios. This is the seam issue #20 grows into: add feature files and step files, reuse these.
+ */
+import { rmSync } from 'node:fs';
+import { test as base, createBdd } from 'playwright-bdd';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { startViewServer, type ViewServer } from '../support/server.js';
+
+/** A scenario-scoped scratchpad. Steps stash what later steps assert on; temp dirs get cleaned on teardown. */
+export interface World {
+  /** The label of the node a step clicked, so a later step can assert the panel names the same one. */
+  clickedLabel?: string;
+  /** The traces directory a CLI `merge` step reads. */
+  tracesDir?: string;
+  /** The flows.json a CLI `merge` writes / `generate` reads. */
+  flowsPath?: string;
+  /** Where a CLI `generate` wrote, asserted on by a later step. */
+  outDir?: string;
+  /** Exit code of the last CLI invocation (for the invalid-input scenario). */
+  cliExitCode?: number;
+  /** The text a called MCP tool returned. */
+  toolText?: string;
+  /** Temp dirs to remove after the scenario. */
+  tempDirs: string[];
+}
+
+interface Fixtures {
+  viewServer: ViewServer;
+  mcpClient: Client;
+  world: World;
+}
+
+export const test = base.extend<Fixtures>({
+  // One view process per scenario. 5310 is a deliberately unusual port; server.ts still parses the
+  // real bound URL, so a collision falls forward instead of failing.
+  viewServer: async ({}, use) => {
+    const server = await startViewServer({ port: 5310 });
+    await use(server);
+    await server.stop();
+  },
+
+  mcpClient: async ({ viewServer }, use) => {
+    const client = new Client({ name: 'es-e2e-mcp-client', version: '0.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL(viewServer.url + '/mcp'));
+    await client.connect(transport);
+    await use(client);
+    await client.close();
+  },
+
+  world: async ({}, use) => {
+    const world: World = { tempDirs: [] };
+    await use(world);
+    for (const dir of world.tempDirs) rmSync(dir, { recursive: true, force: true });
+  },
+});
+
+export const { Given, When, Then } = createBdd(test);

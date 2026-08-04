@@ -19,13 +19,19 @@ export function pushSelection(nodeId) {
 }
 
 // Curated context bundle of typed refs { type: 'node' | 'flow' | 'hotspot', id }.
-export const getContext = () => fetch('/api/context').then((r) => r.json()); // { items, markdown }
+export const getContext = () => fetch('/api/context').then((r) => {
+  if (!r.ok) throw new Error(`/api/context responded ${r.status}`);
+  return r.json(); // { items, markdown }
+});
 export const addContext = (type, id) => fetch('/api/context', json('POST', { type, id })).then((r) => r.json());
 export const removeContext = (type, id) => fetch('/api/context', json('DELETE', { type, id })).then((r) => r.json());
 export const clearContext = () => fetch('/api/context', json('DELETE')).then((r) => r.json());
 
 // A single item's ready-to-paste markdown (node / flow / hotspot).
-export const getItem = (type, id) => fetch('/api/item?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id)).then((r) => r.json());
+export const getItem = (type, id) => fetch('/api/item?type=' + encodeURIComponent(type) + '&id=' + encodeURIComponent(id)).then((r) => {
+  if (!r.ok) throw new Error(`/api/item responded ${r.status}`);
+  return r.json();
+});
 
 // Human comments on items (node / flow / hotspot), persisted server-side to comments.json.
 export const getComments = () => fetch('/api/comments').then((r) => r.json()); // { comments: { "type:id": [...] } }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useExplorer } from '../store.jsx';
 import { getContext } from '../api.js';
+import { copyMarkdown } from '../copy.js';
 import ConnectClaude from './ConnectClaude.jsx';
 
 // Slide-over drawer for the curated context bundle: nodes, whole flows (with a Mermaid graph),
@@ -12,6 +13,7 @@ export default function ContextBundle() {
     openDetail, openHotspot, selectFlow, removeFromContext, clearBundle,
   } = useExplorer();
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
   if (!bundleOpen) return null;
 
   const meta = (item) => {
@@ -21,7 +23,11 @@ export default function ContextBundle() {
   };
 
   const copyAll = async () => {
-    try { const r = await getContext(); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
+    if (await copyMarkdown(getContext)) {
+      setCopied(true); setTimeout(() => setCopied(false), 1400);
+    } else {
+      setFailed(true); setTimeout(() => setFailed(false), 1400);
+    }
   };
 
   return (
@@ -55,7 +61,7 @@ export default function ContextBundle() {
         )}
 
         <div className="drawer-actions">
-          <button className="btn-primary" disabled={!bundleItems.length} onClick={copyAll}>{copied ? 'Copied ✓' : 'Copy all for Claude'}</button>
+          <button className="btn-primary" disabled={!bundleItems.length} onClick={copyAll}>{copied ? 'Copied ✓' : failed ? 'Copy failed' : 'Copy all for Claude'}</button>
           <button className="btn-ghost" disabled={!bundleItems.length} onClick={clearBundle}>Clear</button>
         </div>
       </aside>

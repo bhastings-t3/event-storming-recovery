@@ -6,6 +6,7 @@ import {
 } from '../model.js';
 import { VERB_COLORS } from '../../domain/model/palette';
 import { getItem, fetchSource } from '../api.js';
+import { copyMarkdown } from '../copy.js';
 
 const VERB_ORDER = ['writes', 'persists to', 'projects from', 'reads', 'connects via'];
 
@@ -162,16 +163,21 @@ function Anchor({ repoRoot, a }) {
 function DetailActions({ node }) {
   const { isInBundle, addToContext, removeFromContext } = useExplorer();
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
   const inBundle = isInBundle('node', node.id);
   const copy = async () => {
-    try { const r = await getItem('node', node.id); await navigator.clipboard.writeText(r.markdown || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* blocked */ }
+    if (await copyMarkdown(() => getItem('node', node.id))) {
+      setCopied(true); setTimeout(() => setCopied(false), 1400);
+    } else {
+      setFailed(true); setTimeout(() => setFailed(false), 1400);
+    }
   };
   return (
     <div className="detail-actions">
       <button className={inBundle ? 'da-in' : ''} onClick={() => (inBundle ? removeFromContext('node', node.id) : addToContext('node', node.id))}>
         {inBundle ? 'In bundle ✓' : '+ Add to context'}
       </button>
-      <button onClick={copy}>{copied ? 'Copied ✓' : '⧉ Copy for Claude'}</button>
+      <button onClick={copy}>{copied ? 'Copied ✓' : failed ? 'Copy failed' : '⧉ Copy for Claude'}</button>
     </div>
   );
 }

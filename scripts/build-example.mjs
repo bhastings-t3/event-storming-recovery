@@ -14,8 +14,9 @@ const run = (args) => execFileSync('node', args, { stdio: 'inherit', cwd: root }
 run([join(root, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.node.json']);
 const cli = join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js');
 run([cli, 'merge', join(ex, 'traces'), model]);
-// Pass a portable repo-root ('.') so the generated deep links stay relative and
-// never bake this machine's absolute path (and OS username) into the committed,
-// published example. Viewers regenerate against their own checkout for live links.
-run([cli, 'generate', model, join(ex, 'model'), '--repo-root', '.', '--title', 'Event Storming Recovery — self-model']);
+// generate now resolves --repo-root to an absolute path (issue #27), so passing '.' would bake
+// THIS machine's absolute path and OS username into the committed, published example. Pass a
+// stable, username-free placeholder instead: the committed board's baked root is only a DEFAULT
+// the reader overrides (the "Source root" control) to point links at their own checkout.
+run([cli, 'generate', model, join(ex, 'model'), '--repo-root', '/event-storming-recovery', '--title', 'Event Storming Recovery — self-model']);
 console.log('\nbuilt ' + join(ex, 'model', 'explorer.html'));

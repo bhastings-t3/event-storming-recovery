@@ -65,7 +65,9 @@ npm run demo   # rebuilds examples/event-storming-recovery/model from its traces
 Left: the flows, badged by kind (read/write/policy) and status (dead/superseded), with hotspot
 counts. Center: the flow as an Event-Storming sticky lane, invariants hanging off aggregates, edge
 verbs between stickies. Click any sticky for its tactical explanation and a `vscode://` deep link
-to `file:line`. Red cards are **hotspots**: the questions a human needs to answer. The **Data
+to `file:line`. Those links carry the generating machine's absolute checkout path; if you open a
+board someone else generated, click **Source root** in the tab bar once to point them at your own
+local checkout (it is remembered in your browser). Red cards are **hotspots**: the questions a human needs to answer. The **Data
 model** tab shows the storage the code touches (here, the filesystem model dir and `flows.json`'s
 shape, since there's no database) cross-linked to the read models and aggregates that read and
 write it.

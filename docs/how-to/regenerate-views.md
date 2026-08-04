@@ -28,8 +28,14 @@ npx event-storming-recovery generate <out>/model/flows.json <out>/model \
   --repo-root /abs/path/to/your/checkout --title "<Project> Event Storming"
 ```
 
-- Use an absolute `--repo-root` if you want the explorer's `vscode://` links to open the right
-  local files; without it, they resolve relative to wherever the file is opened from.
+- `--repo-root` controls where the explorer's `vscode://` source links point. It is always
+  resolved to an absolute path, so the documented `--repo-root .` bakes *this machine's* absolute
+  checkout path into the committed `explorer.html` and `flows.dot` (not a dead relative `./` link).
+  Pass an explicit absolute path only if you generate from somewhere other than the repo root.
+- The committed `explorer.html` treats that baked path as a **default**: anyone opening the board on
+  another machine can click **Source root** in the tab bar and set their own local checkout path
+  once (persisted in their browser), and every source link re-derives to open their files. `flows.dot`
+  has no runtime, so its links stay machine-local by nature.
 - Drop `--title` to fall back to the model's own `meta.title`, if it has one.
 
 See the [CLI reference](../reference/cli.md) for the full option list (`generate`).

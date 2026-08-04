@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createServer, parsePort } from '../dist/node/adapters/http/server.js';
+import { createServer, parsePort, startServer as startServerReal, PortUnavailableError } from '../dist/node/adapters/http/server.js';
 import { buildServices } from '../dist/node/application/services.js';
 import { Selection } from '../dist/node/domain/session/selection.js';
 import { ContextBundle } from '../dist/node/domain/session/context-bundle.js';
@@ -141,5 +141,101 @@ test('parsePort rejects non-numeric, empty, and out-of-range values', () => {
 test('parsePort never returns a non-port number for junk input', () => {
   for (const bad of ['abc', '', '999999']) {
     try { const n = parsePort(bad); assert.fail(`expected throw, got ${n}`); } catch { /* expected */ }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Item 1 (issue #11): port fall-forward — a taken requested port falls forward; an exhausted range
+// rejects with a clean, actionable PortUnavailableError (no raw EADDRINUSE stack for the CLI to dump).
+// ---------------------------------------------------------------------------
+
+// startServer probes port..port+20 (21 ports). This mirrors PORT_FALLFORWARD_ATTEMPTS in server.ts.
+const PORT_FALLFORWARD_ATTEMPTS = 20;
+
+/** Build the opts startServer needs, with a throwaway dist dir. */
+function startOpts() {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'es11-port-'));
+  const distDir = path.join(base, 'web');
+  fs.mkdirSync(distDir);
+  fs.writeFileSync(path.join(distDir, 'index.html'), '<!doctype html><title>spa</title>');
+  const model = emptyModel();
+  const resolved = { model, source: 'bundled', sourcePath: path.join(distDir, 'flows.json'), repoRoot: distDir, warnings: [] };
+  const services = buildServices(resolved, { comments: null, sourceGateway: { read: () => ({ path: '', exists: false }) } });
+  return {
+    base,
+    opts: {
+      resolved, distDir, selection: new Selection(), bundle: new ContextBundle(),
+      services, sourceGateway: { read: () => ({ path: '', exists: false }) },
+      claudeCliGateway: { add: async () => ({ ok: true, command: 'x', stdout: '', stderr: '', notFound: false }) },
+      host: '127.0.0.1',
+    },
+  };
+}
+
+const closeServer = (server) => new Promise((res) => server.close(res));
+
+// Blockers bind with `exclusive: true` (SO_EXCLUSIVEADDRUSE on Windows). A plain default bind sets
+// SO_REUSEADDR, and on Windows two SO_REUSEADDR sockets can BOTH hold the same loopback port in one
+// process — so a plain blocker never makes the SUT see EADDRINUSE. An exclusive holder does, on every OS.
+function occupyExclusive(port) {
+  return new Promise((resolve) => {
+    const s = net.createServer();
+    s.once('error', () => resolve(null));
+    s.listen({ port, host: '127.0.0.1', exclusive: true }, () => resolve(s));
+  });
+}
+
+/** Hold `count` contiguous ports exclusively, starting at some free base; retries to dodge collisions. */
+async function occupyContiguous(count) {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const first = await occupyExclusive(0); // ephemeral: a currently-free base
+    if (!first) continue;
+    const base = first.address().port;
+    const servers = [first];
+    let ok = true;
+    for (let i = 1; i < count; i++) {
+      const s = await occupyExclusive(base + i);
+      if (!s) { ok = false; break; }
+      servers.push(s);
+    }
+    if (ok) return { base, servers };
+    await Promise.all(servers.map(closeServer));
+  }
+  throw new Error('could not reserve a contiguous port range for the port tests');
+}
+
+test('port: startServer falls forward past taken ports to a free one', async () => {
+  const { base: tmp, opts } = startOpts();
+  // Hold the requested port and the two after it; startServer must land beyond them, within the window.
+  const { base, servers } = await occupyContiguous(3);
+  try {
+    const { server, port } = await startServerReal({ ...opts, port: base });
+    try {
+      assert.ok(port > base, `should fall forward past the taken port ${base}, got ${port}`);
+      assert.ok(port <= base + PORT_FALLFORWARD_ATTEMPTS, `should land within the fall-forward window, got ${port}`);
+    } finally { await closeServer(server); }
+  } finally {
+    await Promise.all(servers.map(closeServer));
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('port: exhausting the fall-forward range rejects with a clean PortUnavailableError, not a raw stack', async () => {
+  const { base: tmp, opts } = startOpts();
+  // Every port startServer(base) would probe (base .. base+20) is held.
+  const { base, servers } = await occupyContiguous(PORT_FALLFORWARD_ATTEMPTS + 1);
+  try {
+    await assert.rejects(
+      startServerReal({ ...opts, port: base }),
+      (err) => {
+        assert.ok(err instanceof PortUnavailableError, `expected PortUnavailableError, got ${err && err.name}`);
+        assert.match(err.message, /no free port found in \d+\.\.\d+/, 'names the exhausted range');
+        assert.match(err.message, /pass --port <n>/, 'is actionable');
+        return true;
+      },
+    );
+  } finally {
+    await Promise.all(servers.map(closeServer));
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

@@ -13,6 +13,8 @@ export interface ModelRepository {
   discoverFlowsFiles(root: string, maxDepth?: number): string[];
   /** Read every *.json in a dir into parsed trace docs, with parse errors and the file list. */
   readTraceDocs(dir: string): { sources: TraceSource[]; parseErrors: string[]; files: string[] };
+  /** True if `dir` exists on disk and is a directory. Used to validate a model's repo root before serving. */
+  directoryExists(dir: string): boolean;
   /** Write a model to a file (pretty-printed JSON). */
   writeModelFile(file: string, model: Model): void;
 }

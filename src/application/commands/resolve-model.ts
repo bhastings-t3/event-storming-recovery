@@ -88,5 +88,12 @@ export function resolveModel({ modelPath, tracesDir, repoRoot, cwd, packageRoot 
       ? packageRoot
       : (model.meta && model.meta.repoRoot) || cwd;
 
+  // A model can be viewed without its source tree, so a missing repo root is a warning, not a failure:
+  // the explorer still loads, but "view source" anchors resolve nowhere. Surface it so the user knows
+  // why source links are dead and how to fix it, rather than letting them fail silently at click time.
+  if (!repo.directoryExists(resolvedRepoRoot)) {
+    warnings.push(`repo root '${resolvedRepoRoot}' does not exist; source links will not resolve. Pass --repo-root <path> to point at the source tree.`);
+  }
+
   return { model, source, sourcePath, repoRoot: resolvedRepoRoot, warnings };
 }

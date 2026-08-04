@@ -79,7 +79,16 @@ export async function runView(opts: ViewOptions): Promise<void> {
   const sourceGateway = createAnchorScopedGateway(resolved.repoRoot, resolved.model);
   const services = buildServices(resolved, { comments, commentPersistence, sourceGateway });
   const mcpHandler = createMcpHandler(services, selection, bundle);
-  const { url } = await startServer({ resolved, distDir, selection, bundle, services, sourceGateway, claudeCliGateway, mcpHandler, host: opts.host, port: opts.port, allowRemote: opts.allowRemote });
+  let url: string;
+  try {
+    // A failed bind (every fall-forward port taken, or an EACCES on a privileged port) rejects here;
+    // print the reason and exit non-zero rather than letting the raw error/stack reach the top-level
+    // catch in cli.ts. PortUnavailableError already carries an actionable "pass --port <n>" message.
+    ({ url } = await startServer({ resolved, distDir, selection, bundle, services, sourceGateway, claudeCliGateway, mcpHandler, host: opts.host, port: opts.port, allowRemote: opts.allowRemote }));
+  } catch (err) {
+    console.error(`\n✖ ${(err as Error).message}\n`);
+    process.exit(1);
+  }
 
   const c = resolved.model.meta && resolved.model.meta.counts;
   // show a repo-relative path when the model lives at/under cwd, else the absolute path

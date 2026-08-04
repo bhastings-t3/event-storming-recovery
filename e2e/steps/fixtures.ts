@@ -32,6 +32,10 @@ export interface World {
   outDir?: string;
   /** Exit code of the last CLI invocation (for the invalid-input scenario). */
   cliExitCode?: number;
+  /** stdout of the last CLI invocation, so a later step can pin the printed counts / validator errors. */
+  cliStdout?: string;
+  /** stderr of the last CLI invocation, so a later step can pin the "refusing to write/render" text. */
+  cliStderr?: string;
   /** The text a called MCP tool returned. */
   toolText?: string;
   /** Temp dirs to remove after the scenario. */

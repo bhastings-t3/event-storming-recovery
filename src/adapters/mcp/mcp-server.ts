@@ -44,20 +44,26 @@ function buildMcpServer(services: ServiceBundle, selection: Selection, bundle: C
     'get_node',
     {
       title: 'Get a domain node by id',
-      description: 'Returns the grounded context for a specific node id (see list_model for ids): its type, description, enforced/enforcing invariants, flows, and source anchors with real code.',
-      inputSchema: { nodeId: z.string().describe('the node id, e.g. "agg-order"') },
+      description: 'Returns the grounded context for a specific node id (see list_model for ids): its type, description, enforced/enforcing invariants, flows, and source anchors with real code. Source excerpts are included by default; pass includeSource:false for a lighter response that keeps each anchor\'s path/line but drops the code.',
+      inputSchema: {
+        nodeId: z.string().describe('the node id, e.g. "agg-order"'),
+        includeSource: z.boolean().optional().describe('include the real source excerpt behind each anchor (default true); pass false for a lighter response with anchor path/line but no code'),
+      },
     },
-    async ({ nodeId }) => text(getNode(services, nodeId)),
+    async ({ nodeId, includeSource }) => text(getNode(services, nodeId, { includeSource })),
   );
 
   server.registerTool(
     'get_flow',
     {
       title: 'Get a flow by id',
-      description: 'Returns a whole flow grounded in code: its trigger/summary, the command→aggregate→event chain, hotspots (open questions), a Mermaid graph of the flow, and every node with its source anchors.',
-      inputSchema: { flowId: z.string().describe('the flow id, e.g. "place-order"') },
+      description: 'Returns a whole flow grounded in code: its trigger/summary, the command→aggregate→event chain, hotspots (open questions), a Mermaid graph of the flow, and every node with its source anchors. Source excerpts are included by default; pass includeSource:false for a lighter response that keeps each anchor\'s path/line but drops the code.',
+      inputSchema: {
+        flowId: z.string().describe('the flow id, e.g. "place-order"'),
+        includeSource: z.boolean().optional().describe('include the real source excerpt behind each anchor (default true); pass false for a lighter response with anchor path/line but no code'),
+      },
     },
-    async ({ flowId }) => text(getFlow(services, flowId)),
+    async ({ flowId, includeSource }) => text(getFlow(services, flowId, { includeSource })),
   );
 
   server.registerTool(

@@ -18,6 +18,7 @@ import { buildServices } from '../dist/node/application/services.js';
 import { listModel } from '../dist/node/application/queries/list-model.js';
 import { listDataModel } from '../dist/node/application/queries/list-data-model.js';
 import { getNode } from '../dist/node/application/queries/get-node.js';
+import { getFlow } from '../dist/node/application/queries/get-flow.js';
 import { getItem } from '../dist/node/application/queries/get-item.js';
 import { getCurrentSelection } from '../dist/node/application/queries/get-current-selection.js';
 import { listContextBundle } from '../dist/node/application/queries/list-context-bundle.js';
@@ -153,6 +154,55 @@ test('getNode: a known node renders its grounded markdown heading', () => {
 test('getNode: an unknown id returns the exact MCP fallback string (a contract, not a throw)', () => {
   const { services } = buildTestServices();
   assert.equal(getNode(services, 'nope'), "Unknown node 'nope'. Use list_model to see available node ids.");
+});
+
+// ---------------------------------------------------------------------------
+// includeSource — the MCP `get_node`/`get_flow` grounding weight control (issue
+// #11, hot-mcp-grounded-output-unbounded). The flag already lives on the
+// builders; these prove the query threads it: default grounds each anchor with
+// its real code, includeSource:false keeps the anchor path/line but drops the
+// code. A source gateway that returns real code makes the difference observable.
+// ---------------------------------------------------------------------------
+
+const SOURCE_MARKER = 'CODE_EXCERPT_MARKER_LINE';
+
+function buildGroundedServices() {
+  const model = buildModel();
+  const resolved = { model, source: 'bundled', sourcePath: 'flows.json', repoRoot: REPO_ROOT, warnings: [] };
+  // A gateway that always returns a real excerpt, so the code fence is present unless suppressed.
+  const sourceGateway = { read: (_root, relPath, line) => ({ path: relPath, exists: true, line, startLine: line, endLine: line, code: `${SOURCE_MARKER} ${relPath}:${line}` }) };
+  const services = buildServices(resolved, { comments: null, sourceGateway });
+  return { services };
+}
+
+test('getNode: by default grounds each anchor with its real source excerpt', () => {
+  const { services } = buildGroundedServices();
+  const md = getNode(services, 'agg-Order');
+  assert.match(md, /`src\/order\/order\.ts:5`/, 'the anchor path/line reference is present');
+  assert.match(md, new RegExp(SOURCE_MARKER), 'the code excerpt is grounded by default');
+});
+
+test('getNode: includeSource:false keeps the anchor reference but drops the code excerpt', () => {
+  const { services } = buildGroundedServices();
+  const md = getNode(services, 'agg-Order', { includeSource: false });
+  assert.match(md, /`src\/order\/order\.ts:5`/, 'the anchor path/line reference still stands');
+  assert.doesNotMatch(md, new RegExp(SOURCE_MARKER), 'no source code excerpt in the lighter response');
+  assert.doesNotMatch(md, /```/, 'no code fence at all when source is suppressed');
+});
+
+test('getNode: includeSource:undefined is byte-identical to the default (additive, non-breaking)', () => {
+  const { services } = buildGroundedServices();
+  assert.equal(getNode(services, 'agg-Order', { includeSource: undefined }), getNode(services, 'agg-Order'));
+});
+
+test('getFlow: by default grounds every node in the flow; includeSource:false strips the code', () => {
+  const { services } = buildGroundedServices();
+  const full = getFlow(services, 'flow-checkout');
+  assert.match(full, new RegExp(SOURCE_MARKER), 'default flow output carries source excerpts');
+  const light = getFlow(services, 'flow-checkout', { includeSource: false });
+  assert.match(light, /# Flow: Checkout/, 'the flow structure is unchanged');
+  assert.match(light, /`src\/order\/order\.ts:5`/, 'anchors survive in the lighter flow');
+  assert.doesNotMatch(light, new RegExp(SOURCE_MARKER), 'no excerpts in the lighter flow');
 });
 
 // ---------------------------------------------------------------------------

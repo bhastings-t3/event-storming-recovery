@@ -1,6 +1,12 @@
 # build artifacts from the local static-serve verify step
 **/serve.js
 .playwright-cli/
+
+# playwright-bdd E2E harness (#19): generated specs + Playwright run output
+.features-gen/
+playwright-report/
+test-results/
+blob-report/
 node_modules/
 *.log
 

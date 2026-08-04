@@ -27,7 +27,7 @@ export default function ContextBundle() {
   return (
     <>
       <div className="drawer-scrim" onClick={() => setBundleOpen(false)} />
-      <aside className="drawer">
+      <aside className="drawer" data-testid="context-drawer">
         <div className="drawer-head">
           <h3>Context bundle <span className="count">{bundleItems.length}</span></h3>
           <button className="drawer-x" onClick={() => setBundleOpen(false)}>✕</button>

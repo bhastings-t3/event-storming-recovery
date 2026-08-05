@@ -77,6 +77,30 @@ When('I open the context bundle', async ({ page }) => {
   await expect(drawer(page)).toBeVisible();
 });
 
+// --- board sticky right-click menu (issue #63) ------------------------------
+// The contextmenu handler that opens the menu is wired by the imperative layout engine
+// (flow-geometry.js placeCard adds the listener on each `.sticky`), not by React, so these steps
+// drive the real board path #42 refactored. `click({ button: 'right' })` fires the `contextmenu`
+// event the handler listens for; the handler calls preventDefault, so no native menu appears.
+
+When('I right-click the board node labelled {string}', async ({ page }, label: string) => {
+  const sticky = page.locator('.sticky').filter({ has: page.getByText(label, { exact: true }) }).first();
+  await expect(sticky).toBeVisible();
+  await sticky.click({ button: 'right' });
+});
+
+Then('the board context menu offers the node actions for {string}', async ({ page }, label: string) => {
+  const menu = page.locator('.ctxmenu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.ctxmenu-head')).toHaveText(label);
+  await expect(menu.getByRole('button', { name: /Add node to context bundle/ })).toBeVisible();
+  await expect(menu.getByRole('button', { name: /Copy this node for Claude/ })).toBeVisible();
+});
+
+When('I add the node to the context bundle from its context menu', async ({ page }) => {
+  await page.locator('.ctxmenu').getByRole('button', { name: /Add node to context bundle/ }).click();
+});
+
 Then('the context bundle lists {string}', async ({ page }, label: string) => {
   await expect(drawer(page).getByText(label, { exact: true })).toBeVisible();
 });

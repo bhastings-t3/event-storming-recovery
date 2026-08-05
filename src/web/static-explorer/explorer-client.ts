@@ -1,29 +1,48 @@
-// renderClientScript: the ~1,100-line vanilla-JS client embedded in explorer.html, returned as a
-// string. It stays an inlined string in the emitted HTML (the build pipeline is unchanged; making
-// it a separately type-checked asset is a deliberate follow-up). Extracted verbatim from
-// generate-views.ts (issue #21, Target 2 / slice 21-C2) with byte-identical output. The only
-// interpolations are MODEL (modelJson), REPO_ROOT_DEFAULT (repoRoot) and PALETTE.
-import { PALETTE } from '../../../domain/model/palette.js';
-import type { Model } from '../../../domain/model/types.js';
+// The static explorer's client, as real type-checked source (issue #41). Formerly a ~1,100-line
+// untyped template STRING in generate-views/client-script.ts; now a browser .ts module built to a
+// self-contained IIFE (dist/client/explorer-client.js) by scripts/build-client.mjs and inlined into
+// explorer.html by the generator (generate-views/html.ts). This is the build-and-inline delivery
+// pattern of ADR-0007; issue #42 (de-dup with src/web) builds on it.
+//
+// The per-model values MODEL, REPO_ROOT_DEFAULT and PALETTE are NOT interpolated here: the generator
+// emits a tiny preamble that sets `window.__ES__ = { MODEL, REPO_ROOT_DEFAULT, PALETTE }` ahead of
+// this bundle, and the client reads them from there. Behaviour is byte-for-byte the pre-refactor
+// client (proven by the static-explorer E2E); the golden fixture was re-baselined because the emitted
+// bytes are now a built bundle + preamble rather than the hand-inlined string.
+//
+// Typed against the real model shape: MODEL is the domain `Model` (imported type-only, erased at
+// build), so model-root access is checked. Deeper dynamic traversal stays loose exactly as the
+// sibling render code (generate-views/dot.ts) does — this is a mechanical string -> typed-asset move,
+// not a rewrite of the explorer.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Model } from '../../domain/model/types.js';
+import type { PaletteEntry } from '../../domain/model/palette.js';
 
-export function renderClientScript(model: Model, repoRoot: string): string {
-  const modelJson = JSON.stringify(model).replace(/</g, '\\u003c');
-  return `const MODEL = ${modelJson};
+declare global {
+  interface Window {
+    __ES__: {
+      MODEL: Model;
+      REPO_ROOT_DEFAULT: string;
+      PALETTE: Record<string, PaletteEntry>;
+    };
+  }
+}
+
+const { MODEL, REPO_ROOT_DEFAULT, PALETTE } = window.__ES__;
 // Source links open in the reader's editor via vscode://file/<root>/<path>. The board bakes the
 // generating machine's absolute root as a DEFAULT; each reader may override it with their own local
 // checkout path (persisted to localStorage), so one committed board works for everyone. See
 // docs/architecture/decisions/0006-reader-overridable-source-root.md.
-const REPO_ROOT_DEFAULT = ${JSON.stringify(repoRoot)};
-const normRoot = r => String(r == null ? '' : r).replace(/\\\\/g, '/').replace(/\\/+$/, '');
+const normRoot = r => String(r == null ? '' : r).replace(/\\/g, '/').replace(/\/+$/, '');
 let repoRootOverride = (() => { try { return localStorage.getItem('esRepoRoot') || null; } catch (e) { return null; } })();
 function currentRepoRoot() { return repoRootOverride ? normRoot(repoRootOverride) : REPO_ROOT_DEFAULT; }
 function relAnchor(a) { return a.path + (a.line ? ':' + a.line : ''); }
 function buildAnchorUrl(rel) { return 'vscode://file/' + currentRepoRoot() + '/' + rel; }
 // Re-derive every already-rendered source link when the reader changes their local root.
-function refreshAnchors() { document.querySelectorAll('a[data-anchor]').forEach(a => { a.href = buildAnchorUrl(a.getAttribute('data-anchor')); }); }
+function refreshAnchors() { document.querySelectorAll<HTMLAnchorElement>('a[data-anchor]').forEach(a => { a.href = buildAnchorUrl(a.getAttribute('data-anchor')); }); }
 function promptRepoRoot() {
   const cur = repoRootOverride || REPO_ROOT_DEFAULT;
-  const next = prompt('Local path to your checkout of this repository, used for the source links.\\n\\nLeave blank to reset to the board default:\\n' + REPO_ROOT_DEFAULT, cur);
+  const next = prompt('Local path to your checkout of this repository, used for the source links.\n\nLeave blank to reset to the board default:\n' + REPO_ROOT_DEFAULT, cur);
   if (next === null) return;
   try {
     if (next.trim() === '') { localStorage.removeItem('esRepoRoot'); repoRootOverride = null; }
@@ -37,7 +56,6 @@ function updateRepoRootBtn() {
   b.textContent = repoRootOverride ? 'Source root ●' : 'Source root';
   b.title = 'Source links open at: ' + currentRepoRoot() + (repoRootOverride ? '  (your local override — click to change or clear)' : '  (board default — click to set your local checkout path)');
 }
-const PALETTE = ${JSON.stringify(PALETTE)};
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
 let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 'tier';
@@ -67,9 +85,9 @@ const glossaryCats = () => { const p = new Set((MODEL.terms || []).map(catOf)); 
 const glossaryState = { q: '', cats: new Set(glossaryCats()), flaggedOnly: false };
 let glossaryBuilt = false;
 
-function el(tag, attrs, ...children) {
+function el(tag: string, attrs?: any, ...children: any[]): any {
   const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) {
+  for (const [k, v] of Object.entries(attrs || {}) as [string, any][]) {
     if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
   }
   for (const c of children) if (c != null) e.append(c);
@@ -83,7 +101,7 @@ function flowNodeIds(f) { return new Set([...(f.steps || []), ...(f.edges || [])
 // sidebar grouping. 'tier' keeps the original two buckets; 'actor'/'aggregate' pivot the list so
 // each node of that type heads a group listing every flow it appears in (a flow with two actors
 // shows under both). Returns [{ title, pred, color }].
-function sidebarGroups() {
+function sidebarGroups(): any[] {
   if (groupMode === 'tier') {
     return [
       { title: 'Tier 1 — domain flows', pred: f => f.tier !== 2 },
@@ -97,7 +115,7 @@ function sidebarGroups() {
     if (!nn || nn.type !== groupMode) continue;
     (flowsByNode.get(nid) || flowsByNode.set(nid, new Set()).get(nid)).add(f.id);
   }
-  const groups = [...flowsByNode.entries()]
+  const groups: any[] = [...flowsByNode.entries()]
     .map(([nid, fset]) => ({ node: nodeById.get(nid), fset }))
     .sort((a, b) => String(a.node.label).localeCompare(String(b.node.label)))
     .map(({ node, fset }) => ({ title: node.label, pred: f => fset.has(f.id), color: p.fill }));
@@ -204,7 +222,7 @@ function renderFlowInto(f, lane) {
   // --- build INSTANCES: nodes duplicate so the flow stays strictly left-to-right ---
   let uid = 0;
   const insts = [], primary = {}, instsOf = {}, instByIid = {};
-  const mk = (node, r, kind, anchorIid) => { const o = { iid: ++uid, id: node.id, node, rank: r, kind: kind || 'spine', anchorIid }; insts.push(o); (instsOf[node.id] ||= []).push(o); instByIid[o.iid] = o; return o; };
+  const mk = (node, r, kind?, anchorIid?) => { const o: any = { iid: ++uid, id: node.id, node, rank: r, kind: kind || 'spine', anchorIid }; insts.push(o); (instsOf[node.id] ||= []).push(o); instByIid[o.iid] = o; return o; };
   spine.forEach(n => { primary[n.id] = mk(n, rank[n.id], 'spine'); });
   const drawn = [];
   for (const e of (f.edges || [])) {
@@ -249,7 +267,7 @@ function renderFlowInto(f, lane) {
 
   // place spine cards, measure them
   const cardByIid = {}, box = {};
-  const measure = o => { const e = cardByIid[o.iid], b = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight }; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[o.iid] = b; };
+  const measure = o => { const e = cardByIid[o.iid], b: any = { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight }; b.cx = b.x + b.w / 2; b.cy = b.y + b.h / 2; box[o.iid] = b; };
   for (const o of spineInsts) { cardByIid[o.iid] = placeCard(o, lane, o.x, o.y, dupColor[o.id]); measure(o); }
   let spineTop = Infinity, spineBottom = -Infinity;
   spineInsts.forEach(o => { spineTop = Math.min(spineTop, box[o.iid].y); spineBottom = Math.max(spineBottom, box[o.iid].y + box[o.iid].h); });
@@ -283,7 +301,7 @@ function renderFlowInto(f, lane) {
   lane.style.width = (maxR + PAD) + 'px'; lane.style.height = (maxB + PAD) + 'px';
 
   const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('class', 'edges'); svg.setAttribute('width', maxR + PAD); svg.setAttribute('height', maxB + PAD);
+  svg.setAttribute('class', 'edges'); svg.setAttribute('width', (maxR + PAD) as any); svg.setAttribute('height', (maxB + PAD) as any);
   svg.innerHTML = '<defs>' +
     '<marker id="ah" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#b7b7c2"/></marker>' +
     '<marker id="ahd" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7f7f8e"/></marker>' +
@@ -385,10 +403,10 @@ function renderOverview() {
 // One pan/zoom controller for the board: wheel zooms toward the cursor, left-drag on the
 // background pans, buttons zoom/fit. Attached to the persistent #lane-wrap once; later renders
 // just swap in the new #lane and re-fit.
-function setupPanZoom(wrap, lane, ids) {
+function setupPanZoom(wrap, lane, ids?) {
   if (wrap.__pz) { wrap.__pz.lane = lane; return wrap.__pz; }
   ids = ids || { zin: 'zin', zout: 'zout', zfit: 'zfit' };
-  const st = { wrap, lane, scale: 1, tx: 0, ty: 0, cw: 0, ch: 0 };
+  const st: any = { wrap, lane, scale: 1, tx: 0, ty: 0, cw: 0, ch: 0 };
   const MIN = 0.12, MAX = 2.6;
   const apply = () => { st.lane.style.transform = 'translate(' + st.tx + 'px,' + st.ty + 'px) scale(' + st.scale + ')'; };
   st.fit = (cw, ch) => {
@@ -475,7 +493,7 @@ function selectFlow(id) {
   setMode('flows');                       // jumping to a flow (e.g. from a gallery card) shows the board
   currentFlow = MODEL.flows.find(f => f.id === id);
   selectedId = null;
-  renderSidebar((document.getElementById('search').value || '').toLowerCase());
+  renderSidebar(((document.getElementById('search') as HTMLInputElement).value || '').toLowerCase());
   renderFlow();
   closeDetail();
 }
@@ -635,11 +653,11 @@ function renderGlossaryList() {
     if (t.definition) entry.append(el('div', { class: 'gl-def' }, t.definition));
     if (flagged && t.openQuestion) entry.append(el('div', { class: 'gl-oq' }, el('b', {}, 'Open question: '), t.openQuestion));
     const rel = (t.relatedNodes || []).map(id => nodeById.get(id)).filter(Boolean);
-    if (rel.length || (t.anchors || []).length || termFlows(t).length) {
+    if (rel.length || ((t as any).anchors || []).length || termFlows(t).length) {
       const used = el('div', { class: 'gl-used' });
       for (const n of rel) { const p = PALETTE[n.type] || PALETTE.invariant; used.append(el('div', { class: 'gl-nchip', style: 'border-color:' + p.edge, title: 'Open ' + p.name + ' "' + n.label + '"', onclick: () => openDetail(n.id) }, n.label)); }
       for (const f of termFlows(t)) { const dead = f.status && f.status !== 'live'; used.append(el('div', { class: 'gl-fchip' + (dead ? ' dead' : ''), title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name)); }
-      for (const a of t.anchors || []) used.append(anchorLink(a));
+      for (const a of (t as any).anchors || []) used.append(anchorLink(a));
       entry.append(used);
     }
     list.append(entry);
@@ -751,7 +769,7 @@ function dmConsumerChips(ds) {
 // and indent them — otherwise the count claims fields that never render.
 function dmFieldCols(fields, cols, depth) {
   for (const c of fields) {
-    const attrs = { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) };
+    const attrs: any = { class: 'dm-col', title: c.description || '', onclick: () => openDetail(c.id) };
     if (depth) attrs.style = 'padding-left:' + (12 + depth * 14) + 'px';
     const col = el('div', attrs, el('span', { class: 'dm-cn' }, c.label));
     if (c.dataType) col.append(el('span', { class: 'dm-ct' }, c.dataType));
@@ -1024,7 +1042,7 @@ function openDetail(id) {
   // came in from, so an aggregate lists every invariant it guards and an invariant lists every
   // aggregate it guards. Each entry navigates to that node's detail.
   const relatedEnforces = (fromType, toType) => {
-    const ids = new Set();
+    const ids = new Set<string>();
     for (const f of MODEL.flows) for (const e of (f.edges || [])) {
       const s = nodeById.get(e.from), t = nodeById.get(e.to);
       if (!s || !t) continue;
@@ -1069,9 +1087,9 @@ function openDetail(id) {
     inner.append(el('h4', {}, 'Appears in ' + inFlows.length + ' flow' + (inFlows.length > 1 ? 's' : '')));
     for (const f of inFlows) {
       const fIds = new Set([...(f.steps || []), ...(f.edges || []).flatMap(e => [e.from, e.to])]);
-      const counts = {};
+      const counts: any = {};
       for (const fid of fIds) { const fn = nodeById.get(fid); if (fn) counts[fn.type] = (counts[fn.type] || 0) + 1; }
-      const total = Object.values(counts).reduce((s, c) => s + c, 0);
+      const total = Object.values(counts).reduce((s: any, c: any) => s + c, 0);
       const dead = f.status && f.status !== 'live';
       const row = el('div', { class: 'flowrow', title: f.name + ' — ' + total + ' stickies', onclick: () => selectFlow(f.id) });
       const name = el('div', { class: 'fr-name' }, f.name);
@@ -1112,11 +1130,11 @@ function openHotspot(id) {
 }
 
 function closeDetail() { document.getElementById('detail').classList.remove('open'); selectedId = null; if (currentMode === 'gallery') renderGrid(); }
-document.getElementById('search').addEventListener('input', e => renderSidebar(e.target.value.toLowerCase()));
-document.querySelectorAll('#groupby .gb').forEach(b => b.addEventListener('click', () => {
+document.getElementById('search').addEventListener('input', e => renderSidebar((e.target as HTMLInputElement).value.toLowerCase()));
+document.querySelectorAll<HTMLElement>('#groupby .gb').forEach(b => b.addEventListener('click', () => {
   groupMode = b.dataset.mode;
   document.querySelectorAll('#groupby .gb').forEach(x => x.classList.toggle('active', x === b));
-  renderSidebar((document.getElementById('search').value || '').toLowerCase());
+  renderSidebar(((document.getElementById('search') as HTMLInputElement).value || '').toLowerCase());
 }));
 document.getElementById('tab-flows').addEventListener('click', () => setMode('flows'));
 document.getElementById('tab-gallery').addEventListener('click', () => setMode('gallery'));
@@ -1128,5 +1146,4 @@ updateRepoRootBtn();
 
 renderSidebar('');
 if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);
-else setMode('flows');`;
-}
+else setMode('flows');

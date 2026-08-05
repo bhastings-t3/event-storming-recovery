@@ -242,7 +242,10 @@ Then('the generated flows.dot carries an absolute forward-slashed vscode link', 
 
 Then('the generated explorer.html bakes the absolute repo root as its default', async ({ world }) => {
   const html = readFileSync(join(world.outDir!, 'explorer.html'), 'utf8');
-  const baked = (html.match(/REPO_ROOT_DEFAULT = "([^"]*)"/) || [])[1];
+  // Since #41 the per-model values are injected via the window.__ES__ preamble the built client
+  // reads (`REPO_ROOT_DEFAULT: "<root>"`), not the old `const REPO_ROOT_DEFAULT = "<root>"`. The
+  // baked-value behaviour below is unchanged; only where it is read from moved.
+  const baked = (html.match(/REPO_ROOT_DEFAULT:\s*"([^"]*)"/) || [])[1];
   expect(baked, 'the HTML bakes a REPO_ROOT_DEFAULT').toBeTruthy();
   expect(baked).not.toBe('.');
   expect(baked).not.toContain('\\');

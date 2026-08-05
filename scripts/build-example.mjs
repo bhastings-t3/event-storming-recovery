@@ -13,6 +13,9 @@ const run = (args) => execFileSync('node', args, { stdio: 'inherit', cwd: root }
 
 // The Node side is TypeScript now; compile the CLIs before invoking them.
 run([join(root, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.node.json']);
+// generate inlines the BUILT static-explorer client bundle (issue #41 / ADR-0007), so build it too,
+// else `generate` below cannot read dist/client/explorer-client.js.
+run([join(root, 'scripts', 'build-client.mjs')]);
 const cli = join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js');
 run([cli, 'merge', join(ex, 'traces'), model]);
 // generate now resolves --repo-root to an absolute path (issue #27), so passing '.' would bake

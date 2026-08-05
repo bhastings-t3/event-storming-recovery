@@ -53,7 +53,9 @@ test('generate-views emits a self-contained explorer and a valid DOT', () => {
 
     const html = readFileSync(join(out, 'explorer.html'), 'utf8');
     assert.match(html, /<title>Smoke Title<\/title>/, 'title is injected');
-    assert.match(html, /const MODEL = /, 'model is embedded (self-contained)');
+    // The model is inlined via the window.__ES__ preamble the built client reads (issue #41): proves
+    // it is embedded (self-contained), replacing the pre-#41 `const MODEL = ` hand-inlined form.
+    assert.match(html, /window\.__ES__ = \{ MODEL:/, 'model is embedded (self-contained)');
     assert.doesNotMatch(html, /<script src=/, 'no external script tags (offline-safe)');
 
     const dot = readFileSync(join(out, 'flows.dot'), 'utf8');

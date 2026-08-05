@@ -1,10 +1,49 @@
-// renderHtml: the self-contained explorer.html — the HTML shell + <style> CSS, with the client
-// JS spliced in from renderClientScript. Pure string builder (no fs, no timestamps/random).
-// Extracted verbatim from generate-views.ts (issue #21, Target 2 / slice 21-C2), byte-identical.
+// renderHtml: the self-contained explorer.html — the HTML shell + <style> CSS, with the client JS
+// inlined from the BUILT client bundle (issue #41 / ADR-0007). The client is now real type-checked
+// source (src/web/static-explorer/explorer-client.ts) built to dist/client/explorer-client.js by
+// scripts/build-client.mjs; here we read that bundle from dist and inline it behind a tiny
+// window.__ES__ preamble carrying the per-model MODEL / REPO_ROOT_DEFAULT / PALETTE. The bundle is a
+// self-contained IIFE, so explorer.html stays a single offline file (no external <script>/CDN).
+//
+// Deterministic (same model -> same bytes): the only I/O is reading the immutable built bundle. That
+// fs read is a runtime read of a dist artifact, NOT an import into src/web — the ports-and-adapters
+// boundary (application must not import adapters/web) is intact (tests/architecture-boundary.test.mjs
+// scans import specifiers, not fs reads).
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PALETTE } from '../../../domain/model/palette.js';
 import type { Model } from '../../../domain/model/types.js';
-import { renderClientScript } from './client-script.js';
+
+// Resolve the built client bundle relative to THIS module so `generate` works from a published
+// install exactly as the bin does: html.js sits at dist/node/application/commands/generate-views/,
+// the bundle at dist/client/explorer-client.js (four dirs up, then client/). package.json `files`
+// ships all of dist, so the same relative layout holds in an installed package.
+const CLIENT_BUNDLE_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../client/explorer-client.js',
+);
+let clientBundle: string | null = null;
+function readClientBundle(): string {
+  if (clientBundle === null) clientBundle = readFileSync(CLIENT_BUNDLE_PATH, 'utf8');
+  return clientBundle;
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// Serialize a value for safe embedding inside a <script> element: JSON, with `<` escaped so a value
+// containing `</script>` (a node description, say) cannot break out of the tag. Mirrors the pre-#41
+// modelJson guard, now applied to all three injected globals.
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+// The preamble the client (explorer-client.ts) reads: it sets the per-model globals BEFORE the bundle
+// IIFE runs, so the client source carries no interpolation. Preserves REPO_ROOT_DEFAULT as the reader-
+// overridable board default (localStorage esRepoRoot, ADR-0006) — the client's own logic, unchanged.
+function renderClientPreamble(model: Model, repoRoot: string): string {
+  return `window.__ES__ = { MODEL: ${scriptJson(model)}, REPO_ROOT_DEFAULT: ${scriptJson(repoRoot)}, PALETTE: ${scriptJson(PALETTE)} };`;
+}
+
 export function renderHtml(model: Model, repoRoot: string, title: string): string {
   const esc = (s: any) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const html = `<!DOCTYPE html>
@@ -350,8 +389,8 @@ export function renderHtml(model: Model, repoRoot: string, title: string): strin
 <aside id="detail"><div class="inner" id="detail-inner"></div></aside>
 </div>
 <script>
-${renderClientScript(model, repoRoot)}
-</script>
+${renderClientPreamble(model, repoRoot)}
+${readClientBundle()}</script>
 </body>
 </html>
 `;

@@ -1,0 +1,18 @@
+{
+  "//": "Type-checks the static explorer's browser client (src/web/static-explorer). It uses the DOM (document/window/SVG), so it needs the DOM lib the Node build (tsconfig.node.json) deliberately omits. Kept separate from tsconfig.node.json, which excludes all of src/web. `npm run typecheck` runs both. Lenient (strict off, implicit-any allowed) so the mechanical string->typed-asset move stays behaviour-preserving: MODEL is typed against the real domain Model, but deeper dynamic traversal stays loose exactly as generate-views/dot.ts does.",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "verbatimModuleSyntax": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
+  },
+  "include": ["src/web/static-explorer/**/*.ts"]
+}

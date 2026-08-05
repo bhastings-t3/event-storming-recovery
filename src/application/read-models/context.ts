@@ -75,7 +75,19 @@ export interface FlowContext {
   nodes: NodeContext[];
   mermaid: string;
   comments: Comment[];
+  // Set only when the grounding cap engaged: the one-line note the renderer appends so a Claude
+  // terminal knows the tail was grounded by anchor only (and how to reach the rest). null otherwise.
+  groundingNote: string | null;
 }
+
+// Upper bound on how many of a flow's nodes carry a full source excerpt in one get_flow / bundle
+// response. Beyond it, a node still ships its anchor reference (path/line/symbol) but no code, so a
+// pathologically large flow can't blow the connected terminal's token budget. Set comfortably above
+// the largest real flow (the self-model's biggest grounds 14 nodes) so typical and self-model output
+// is unaffected and byte-identical; the cap only ever engages on a pathological flow. Reachability is
+// preserved — every capped node is still retrievable via get_node. See issue #11
+// (hot-mcp-grounded-output-unbounded). Overridable per-call via buildFlowContext's maxGroundedNodes.
+export const DEFAULT_MAX_GROUNDED_NODES = 40;
 
 export interface HotspotContext {
   id: string;
@@ -160,13 +172,27 @@ export function buildNodeContext(services: ServiceBundle, nodeId: string, { incl
   };
 }
 
-/** Assemble a whole flow: metadata, its edges (as labeled verbs), hotspots, and every node grounded. */
-export function buildFlowContext(services: ServiceBundle, flowId: string, { includeSource = true }: { includeSource?: boolean } = {}): FlowContext | null {
+/**
+ * Assemble a whole flow: metadata, its edges (as labeled verbs), hotspots, and its nodes grounded.
+ * The first `maxGroundedNodes` nodes (in flow order) carry a full source excerpt; any beyond the cap
+ * keep their anchor reference but drop the code, and `groundingNote` is set so the renderer can say
+ * so once. The cap only bites when source is on (includeSource:true) — includeSource:false already
+ * strips every excerpt, so its all-or-nothing semantics are untouched.
+ */
+export function buildFlowContext(services: ServiceBundle, flowId: string, { includeSource = true, maxGroundedNodes = DEFAULT_MAX_GROUNDED_NODES }: { includeSource?: boolean; maxGroundedNodes?: number } = {}): FlowContext | null {
   const { model, indexes } = services;
   const f = model.flows.find((x) => x.id === flowId);
   if (!f) return null;
   const nodeById = indexes.nodeById;
-  const nodes = [...flowNodeIds(f)].map((id) => buildNodeContext(services, id, { includeSource })).filter((x): x is NodeContext => Boolean(x));
+  // Resolve to real node ids first so the cap counts by position over the nodes that will render.
+  const ids = [...flowNodeIds(f)].filter((id) => nodeById.has(id));
+  const nodes = ids
+    .map((id, i) => buildNodeContext(services, id, { includeSource: includeSource && i < maxGroundedNodes }))
+    .filter((x): x is NodeContext => Boolean(x));
+  const anchorOnly = includeSource ? Math.max(0, ids.length - maxGroundedNodes) : 0;
+  const groundingNote = anchorOnly > 0
+    ? `… ${anchorOnly} more node${anchorOnly === 1 ? '' : 's'} grounded by anchor only; call get_node for their source.`
+    : null;
   const edges: FlowEdgeView[] = (f.edges || []).map((e) => ({
     from: e.from, to: e.to, verb: e.verb,
     fromLabel: (nodeById.get(e.from) || {} as Node).label || e.from,
@@ -180,6 +206,7 @@ export function buildFlowContext(services: ServiceBundle, flowId: string, { incl
     edges, hotspots, nodes,
     mermaid: flowMermaid(services, f),   // a colored flowchart so the model "sees" the graph
     comments: services.comments ? services.comments.get('flow', f.id) : [],
+    groundingNote,
   };
 }
 

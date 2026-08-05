@@ -177,5 +177,7 @@ export function renderFlowMarkdown(fc: FlowContext | null): string {
   }
   if (fc.mermaid) out.push('\n**Graph (Mermaid):**\n' + fc.mermaid);
   out.push('\n---\n\n' + fc.nodes.map(renderNodeContextMarkdown).join('\n\n'));
+  // The grounding cap engaged: the tail nodes rendered anchor-only. Say so once, at the end.
+  if (fc.groundingNote) out.push('\n' + fc.groundingNote);
   return out.join('\n');
 }

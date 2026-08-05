@@ -9,9 +9,17 @@ export {
   parentChain, dataModelTree, isRecordSet, fieldTree, datastoreConsumers, fieldConsumers, nodeStorageLinks,
 } from '../application/read-models/indexes';
 
-// types present in the model, in palette order (drives gallery/glossary filter chips + sort)
+// types present in the model, in palette order (drives the Gallery filter chips + sort)
 export function galleryTypes(model) {
   return Object.keys(PALETTE).filter((t) => t !== 'hotspot' && model.nodes.some((n) => n.type === t));
+}
+
+// Node types the Glossary tracks as ubiquitous-language vocabulary. Physical storage (datastore,
+// field) and rule nodes (invariant) are substrate, not verbiage, so they stay in the Gallery
+// (galleryTypes) but must not bloat the domain glossary. See issue #11.
+const NON_GLOSSARY_TYPES = new Set(['datastore', 'field', 'invariant']);
+export function glossaryTypes(model) {
+  return galleryTypes(model).filter((t) => !NON_GLOSSARY_TYPES.has(t));
 }
 
 // sidebar grouping. 'tier' keeps the two buckets; 'actor'/'aggregate' pivot the list so each

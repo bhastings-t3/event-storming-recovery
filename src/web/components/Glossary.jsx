@@ -8,7 +8,9 @@ const letterOf = (n) => { const c = (n.label || '').trim()[0]; return c && /[a-z
 // Glossary: the ubiquitous language as an alphabetical, readable dictionary. Ported from
 // buildGlossary/renderGlossaryList in generate-views.js.
 export default function Glossary() {
-  const { model, PALETTE, types, glossary, setGlossary, selectFlow, openDetail, openMenu } = useExplorer();
+  // `types` here is the glossary-scoped set (domain verbiage: no datastore/field/invariant) — the
+  // Gallery keeps the full palette, so the two intentionally differ. See issue #11.
+  const { model, PALETTE, glossaryTypes: types, glossary, setGlossary, selectFlow, openDetail, openMenu } = useExplorer();
   const { q, active, sharedOnly } = glossary;
 
   const toggleType = (t) => setGlossary((s) => {
@@ -26,7 +28,10 @@ export default function Glossary() {
     for (const n of model.nodes) m.set(n.id, (n.label + ' ' + (n.description || '')).toLowerCase());
     return m;
   }, [model]);
-  let nodes = model.nodes
+  // Nodes eligible for the glossary at all (the scoped vocabulary types); the denominator counts
+  // these, not every node in the model, since physical/rule nodes can never appear here.
+  const inScope = model.nodes.filter((n) => types.includes(n.type));
+  let nodes = inScope
     .filter((n) => active.has(n.type))
     .filter((n) => !tokens.length || matchesQuery(nodeHaystacks.get(n.id), tokens));
   if (sharedOnly) nodes = nodes.filter((n) => nodeFlows(model, n.id).length > 1);
@@ -49,7 +54,7 @@ export default function Glossary() {
   return (
     <section id="glossary" className="show">
       <div className="gl-head">
-        <h2>Ubiquitous Language<span className="count">{nodes.length} of {model.nodes.length} terms</span></h2>
+        <h2>Ubiquitous Language<span className="count">{nodes.length} of {inScope.length} terms</span></h2>
         <input
           className="gl-search"
           type="search"

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
 import { PALETTE } from './palette.js';
-import { buildIndexes, galleryTypes } from './model.js';
+import { buildIndexes, galleryTypes, glossaryTypes } from './model.js';
 import { pushSelection, getContext, addContext, removeContext, clearContext, getComments, addComment, removeComment } from './api.js';
 
 const sameRef = (a, type, id) => a.type === type && a.id === id;
@@ -15,6 +15,8 @@ export const useExplorer = () => useContext(ExplorerContext);
 export function ExplorerProvider({ model, meta, children }) {
   const { nodeById, hotspotById } = useMemo(() => buildIndexes(model), [model]);
   const types = useMemo(() => galleryTypes(model), [model]);
+  // The Glossary is scoped to domain verbiage, so it excludes physical/rule types the Gallery keeps.
+  const glTypes = useMemo(() => glossaryTypes(model), [model]);
 
   const [mode, setMode] = useState('flows');
   const [currentFlowId, setCurrentFlowId] = useState(model.flows.length ? model.flows[0].id : null);
@@ -23,7 +25,7 @@ export function ExplorerProvider({ model, meta, children }) {
   const [groupMode, setGroupMode] = useState('tier');
   const [filter, setFilter] = useState('');
   const [gallery, setGallery] = useState({ q: '', active: new Set(types) });
-  const [glossary, setGlossary] = useState({ q: '', active: new Set(types), sharedOnly: false });
+  const [glossary, setGlossary] = useState({ q: '', active: new Set(glTypes), sharedOnly: false });
   const [bundleItems, setBundleItems] = useState([]); // [{ type, id }]
   const [bundleOpen, setBundleOpen] = useState(false);
   const [menu, setMenu] = useState(null); // { x, y, ref: { type, id, label } } | null
@@ -66,7 +68,7 @@ export function ExplorerProvider({ model, meta, children }) {
   const removeCommentFrom = useCallback((type, id, commentId) => removeComment(type, id, commentId).then((r) => { setItemComments(type, id, r.comments); noteDurability(r); }).catch(() => {}), []);
 
   const value = {
-    model, meta, PALETTE, nodeById, hotspotById, types,
+    model, meta, PALETTE, nodeById, hotspotById, types, glossaryTypes: glTypes,
     repoRoot: meta.repoRoot,
     mode, setMode,
     currentFlowId,

@@ -27,13 +27,15 @@ const MAXCOLS = 14;       // field rows shown before "+N more"
 const COLLAPSE_OVER = 12; // default-collapse a container with more leaf descendants than this
 const VERB_ORDER = ['writes', 'persists to', 'projects from', 'reads', 'connects via'];
 
-// Containers with > COLLAPSE_OVER leaf (table/file) descendants start collapsed.
+// Containers with > COLLAPSE_OVER leaf (table/file) descendants start collapsed. Walks the shared
+// dataModelTree (issue #64) rather than re-deriving the datastore forest: a container tree node is
+// one with child stores; its leaf count is the leaves of that subtree.
 export function defaultCollapsed(model, nodeById) {
-  const stores = model.nodes.filter((n) => n.type === 'datastore');
-  const kidsOf = (id) => stores.filter((s) => s.parent === id);
-  const countLeaves = (ds) => { const k = kidsOf(ds.id); return k.length ? k.reduce((a, c) => a + countLeaves(c), 0) : 1; };
+  const { roots } = dataModelTree(model, nodeById);
+  const leaves = (t) => t.stores.length ? t.stores.reduce((a, c) => a + leaves(c), 0) : 1;
   const set = new Set();
-  for (const s of stores) if (kidsOf(s.id).length && countLeaves(s) > COLLAPSE_OVER) set.add(s.id);
+  const walk = (t) => { if (t.stores.length && leaves(t) > COLLAPSE_OVER) set.add(t.node.id); t.stores.forEach(walk); };
+  roots.forEach(walk);
   return set;
 }
 
@@ -42,15 +44,15 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
   lane.innerHTML = '';
   lane.style.position = 'relative';
 
-  const stores = model.nodes.filter((n) => n.type === 'datastore');
-  const { looseFields } = dataModelTree(model, nodeById);
-  if (!stores.length && !looseFields.length) { lane.style.width = '10px'; lane.style.height = '10px'; return { w: 10, h: 10 }; }
+  // The datastore containment forest + orphaned fields, from the one shared pure builder (issue #64).
+  // The layout below consumes this tree directly instead of re-deriving root selection / child-store
+  // recursion, so the SPA, the static explorer, and the MCP/markdown renderer all agree on structure.
+  const { roots: treeRoots, looseFields } = dataModelTree(model, nodeById);
+  if (!treeRoots.length && !looseFields.length) { lane.style.width = '10px'; lane.style.height = '10px'; return { w: 10, h: 10 }; }
 
-  const childStores = (id) => stores.filter((s) => s.parent === id);
-  const hasStoreChildren = (ds) => stores.some((s) => s.parent === ds.id);
   const fieldsOf = (id) => model.nodes.filter((n) => n.type === 'field' && n.parent === id);
-  const isRoot = (ds) => { const p = ds.parent ? nodeById.get(ds.parent) : null; return !p || p.type !== 'datastore'; };
-  const countLeaves = (ds) => { const k = childStores(ds.id); return k.length ? k.reduce((a, c) => a + countLeaves(c), 0) : 1; };
+  // Leaf (record-set) descendants of a tree node — drives the "N tables" sub-line and collapse hint.
+  const countLeaves = (t) => t.stores.length ? t.stores.reduce((a, c) => a + countLeaves(c), 0) : 1;
 
   // A field can itself parent sub-fields (a nested record / JSON sub-document). Those are in the header
   // total but are not a datastore's direct child, so recurse and indent them — nothing counted-but-hidden.
@@ -128,7 +130,7 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
     return card;
   };
 
-  const buildHead = (ds, isCollapsed) => {
+  const buildHead = (ds, isCollapsed, leafCount) => {
     const p = PALETTE.datastore;
     const head = el('div', { class: 'dm-node dm-group-head' + (isCollapsed ? ' dm-collapsed' : ''), onclick: () => onToggle(ds.id) });
     const row = el('div', { class: 'dm-node-head' },
@@ -136,7 +138,7 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
       el('span', { class: 'dm-badge', style: `background:${p.fill};color:${p.text}` }, (ds.storeKind || 'store').toUpperCase()),
       el('span', { class: 'dm-node-name' }, ds.label));
     head.append(row);
-    const n = countLeaves(ds);
+    const n = leafCount;
     const bits = [n + (n === 1 ? ' table' : ' tables')];
     if (isCollapsed) bits.push('click to expand');
     head.append(el('div', { class: 'dm-group-sub' }, bits.join(' · ')));
@@ -148,18 +150,21 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
 
   const arrows = [];  // {from:{x,y}, to:{x,y}} parent card bottom -> child card top
 
-  function build(ds) {
-    if (!hasStoreChildren(ds)) {
+  // `tree` is a shared-builder node { node, stores, fields }: a datastore with no child stores is a
+  // leaf card; one with child stores is a container header over its (recursively laid-out) children.
+  function build(tree) {
+    const ds = tree.node;
+    if (!tree.stores.length) {
       const cardEl = buildCard(ds);
       lane.append(cardEl);
       return { ds, kind: 'leaf', el: cardEl, w: CARDW, h: cardEl.offsetHeight };
     }
     const isCollapsed = collapsed.has(ds.id);
-    const header = buildHead(ds, isCollapsed);
+    const header = buildHead(ds, isCollapsed, countLeaves(tree));
     lane.append(header);
     const node = { ds, kind: 'container', collapsed: isCollapsed, el: header };
     if (isCollapsed) { node.w = CARDW; node.h = header.offsetHeight; return node; }
-    node.children = childStores(ds.id).map(build);
+    node.children = tree.stores.map(build);
     node.grid = packGrid(node.children);
     node.w = Math.max(CARDW, node.grid.w);
     node.h = header.offsetHeight + CHILDGAP + node.grid.h;
@@ -191,7 +196,7 @@ export function renderDataModelInto(model, nodeById, lane, ctx) {
     }
   }
 
-  const roots = stores.filter(isRoot).map(build);
+  const roots = treeRoots.map(build);
   if (looseFields.length) {
     const cardEl = buildLooseCard(looseFields);
     lane.append(cardEl);

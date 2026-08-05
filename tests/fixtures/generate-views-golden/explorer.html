@@ -359,6 +359,29 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   // src/application/read-models/indexes.ts
   var DATA_TYPES = ["datastore", "field"];
   var DATA_TYPE_SET = new Set(DATA_TYPES);
+  function dataModelTree(model, nodeById2) {
+    const byId = nodeById2 || new Map(model.nodes.map((n) => [n.id, n]));
+    const stores = model.nodes.filter((n) => n.type === "datastore");
+    const fields = model.nodes.filter((n) => n.type === "field");
+    const childStores = (id) => stores.filter((n) => n.parent === id);
+    const childFields = (id) => fields.filter((n) => n.parent === id);
+    const seen = /* @__PURE__ */ new Set();
+    const build = (ds) => {
+      if (seen.has(ds.id)) return { node: ds, stores: [], fields: [] };
+      seen.add(ds.id);
+      return { node: ds, stores: childStores(ds.id).map(build), fields: childFields(ds.id) };
+    };
+    const isRoot = (n) => !n.parent || !byId.has(n.parent) || (byId.get(n.parent) || {}).type !== "datastore";
+    const roots = stores.filter(isRoot).map(build);
+    const placed = /* @__PURE__ */ new Set();
+    const walk = (t) => {
+      t.fields.forEach((f) => placed.add(f.id));
+      t.stores.forEach(walk);
+    };
+    roots.forEach(walk);
+    const looseFields = fields.filter((f) => !placed.has(f.id) && (!f.parent || (byId.get(f.parent) || {}).type !== "field"));
+    return { roots, looseFields };
+  }
 
   // src/web/lib/flow-geometry.js
   var svgNS = "http://www.w3.org/2000/svg";
@@ -1253,28 +1276,6 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }
     return out;
   }
-  function dataModelTree() {
-    const stores = MODEL.nodes.filter((n) => n.type === "datastore");
-    const fields = MODEL.nodes.filter((n) => n.type === "field");
-    const childStores = (id) => stores.filter((n) => n.parent === id);
-    const childFields = (id) => fields.filter((n) => n.parent === id);
-    const seen = /* @__PURE__ */ new Set();
-    const build = (ds) => {
-      if (seen.has(ds.id)) return { node: ds, stores: [], fields: [] };
-      seen.add(ds.id);
-      return { node: ds, stores: childStores(ds.id).map(build), fields: childFields(ds.id) };
-    };
-    const isRoot = (n) => !n.parent || !nodeById.has(n.parent) || (nodeById.get(n.parent) || {}).type !== "datastore";
-    const roots = stores.filter(isRoot).map(build);
-    const placed = /* @__PURE__ */ new Set();
-    const walk = (t) => {
-      t.fields.forEach((f) => placed.add(f.id));
-      t.stores.forEach(walk);
-    };
-    roots.forEach(walk);
-    const looseFields = fields.filter((f) => !placed.has(f.id) && (!f.parent || (nodeById.get(f.parent) || {}).type !== "field"));
-    return { roots, looseFields };
-  }
   function isRecordSet(ds) {
     if (!ds || ds.type !== "datastore") return false;
     const hasFields = MODEL.nodes.some((n) => n.type === "field" && n.parent === ds.id);
@@ -1365,7 +1366,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   function buildDataModel() {
     const g = document.getElementById("datamodel");
     g.innerHTML = "";
-    const { roots, looseFields } = dataModelTree();
+    const { roots, looseFields } = dataModelTree(MODEL, nodeById);
     const dataCount = MODEL.nodes.filter((n) => DATA_TYPE_SET2.has(n.type)).length;
     const head = el2("div", { class: "dm-head" });
     head.append(el2("h2", {}, "Data model ", el2("span", { class: "count" }, String(dataCount))));

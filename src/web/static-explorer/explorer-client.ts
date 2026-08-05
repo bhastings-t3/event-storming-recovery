@@ -23,6 +23,12 @@ import type { PaletteEntry } from '../../domain/model/palette.js';
 // selectedId/openDetail, and NO onContextMenu (the static explorer stays menu-less), plus no
 // pan-exclusion override (so it keeps the behavioural base set the SPA extends). See flowCtx below.
 import { renderFlowInto, setupPanZoom } from '../lib/flow-geometry.js';
+// The pure datastore-containment tree builder, shared with the live SPA and the MCP/markdown
+// renderer (issue #64 / ADR-0008 consequences). This client formerly carried a byte-identical copy;
+// now all three surfaces consume the one builder in src/application/read-models/indexes. It has no
+// runtime deps (its only import is type-only), so esbuild tree-shakes it into the offline bundle
+// exactly as the shared flow-geometry module already pulls DATA_TYPE_SET from there (#42).
+import { dataModelTree } from '../../application/read-models/indexes.js';
 
 declare global {
   interface Window {
@@ -450,29 +456,8 @@ function nodeStorageLinks(nodeId) {
   }
   return out;
 }
-// Build the datastore containment forest from the flat node list. Each datastore subtree carries its
-// child datastores (recursively) and the fields parented directly to it. Arbitrary depth: the same
-// shape holds server▸database▸table▸column, filesystem▸directory▸file▸key, broker▸queue▸field, etc.
-// Returns { roots, looseFields } (fields orphaned from any datastore).
-function dataModelTree() {
-  const stores = MODEL.nodes.filter(n => n.type === 'datastore');
-  const fields = MODEL.nodes.filter(n => n.type === 'field');
-  const childStores = id => stores.filter(n => n.parent === id);
-  const childFields = id => fields.filter(n => n.parent === id);
-  const seen = new Set();
-  const build = ds => {
-    if (seen.has(ds.id)) return { node: ds, stores: [], fields: [] }; // cycle guard
-    seen.add(ds.id);
-    return { node: ds, stores: childStores(ds.id).map(build), fields: childFields(ds.id) };
-  };
-  const isRoot = n => !n.parent || !nodeById.has(n.parent) || (nodeById.get(n.parent) || {}).type !== 'datastore';
-  const roots = stores.filter(isRoot).map(build);
-  const placed = new Set();
-  const walk = t => { t.fields.forEach(f => placed.add(f.id)); t.stores.forEach(walk); };
-  roots.forEach(walk);
-  const looseFields = fields.filter(f => !placed.has(f.id) && (!f.parent || (nodeById.get(f.parent) || {}).type !== 'field'));
-  return { roots, looseFields };
-}
+// The datastore containment forest (dataModelTree) is now the shared pure builder imported at the
+// top of this file; buildDataModel() below calls it with MODEL/nodeById.
 // Is this datastore a "record set" (fields hang off / behavior targets / a leaf), vs a pure container?
 function isRecordSet(ds) {
   if (!ds || ds.type !== 'datastore') return false;
@@ -566,7 +551,7 @@ function dmStoreNode(tree, depth) {
 }
 function buildDataModel() {
   const g = document.getElementById('datamodel'); g.innerHTML = '';
-  const { roots, looseFields } = dataModelTree();
+  const { roots, looseFields } = dataModelTree(MODEL, nodeById);
   const dataCount = MODEL.nodes.filter(n => DATA_TYPE_SET.has(n.type)).length;
   const head = el('div', { class: 'dm-head' });
   head.append(el('h2', {}, 'Data model ', el('span', { class: 'count' }, String(dataCount))));

@@ -9,6 +9,12 @@ import path from 'node:path';
 
 import { generateViews } from '../dist/node/application/commands/generate-views.js';
 
+// Since #41 the client is a BUILT bundle inlined behind a window.__ES__ preamble, so the per-model
+// root is baked as `REPO_ROOT_DEFAULT: "<root>"` (was `const REPO_ROOT_DEFAULT = "<root>"`) and the
+// bundled client code is esbuild-normalized (e.g. double quotes). These matchers track that form;
+// the #27 behaviour they guard (absolute, forward-slashed, reader-overridable root) is unchanged.
+const bakedRoot = (html) => (html.match(/REPO_ROOT_DEFAULT:\s*"([^"]*)"/) || [])[1];
+
 function buildModel() {
   return {
     version: 1,
@@ -65,14 +71,14 @@ test('generateViews: emitted links carry no backslashes even though path.resolve
   const { dot, html } = generateViews(buildModel(), { repoRoot: '.' });
   const anchor = firstDotAnchor(dot);
   assert.ok(!anchor.includes('\\'), `DOT link must be forward-slash only: ${anchor}`);
-  const baked = (html.match(/REPO_ROOT_DEFAULT = "([^"]*)"/) || [])[1];
+  const baked = bakedRoot(html);
   assert.ok(baked, 'the HTML bakes a REPO_ROOT_DEFAULT');
   assert.ok(!baked.includes('\\'), `baked HTML root must be forward-slash only: ${baked}`);
 });
 
 test('generateViews: the HTML bakes the resolved absolute root as the default (not `.`)', () => {
   const { html } = generateViews(buildModel(), { repoRoot: '.' });
-  const baked = (html.match(/REPO_ROOT_DEFAULT = "([^"]*)"/) || [])[1];
+  const baked = bakedRoot(html);
   assert.notEqual(baked, '.', 'the default must not be the unresolved `.`');
   assert.equal(baked, path.resolve('.').replace(/\\/g, '/'));
 });
@@ -80,7 +86,7 @@ test('generateViews: the HTML bakes the resolved absolute root as the default (n
 test('generateViews: the emitted HTML wires the reader-overridable source root', () => {
   const { html } = generateViews(buildModel(), { repoRoot: '.' });
   // the override reads/writes localStorage under a stable key, falling back to the baked default...
-  assert.match(html, /localStorage\.getItem\('esRepoRoot'\)/);
+  assert.match(html, /localStorage\.getItem\(['"]esRepoRoot['"]\)/);
   assert.match(html, /function currentRepoRoot\(\)/);
   // ...and re-derives already-rendered links when the reader changes their root
   assert.match(html, /function refreshAnchors\(\)/);

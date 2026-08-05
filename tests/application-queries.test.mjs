@@ -19,6 +19,7 @@ import { listModel } from '../dist/node/application/queries/list-model.js';
 import { listDataModel } from '../dist/node/application/queries/list-data-model.js';
 import { getNode } from '../dist/node/application/queries/get-node.js';
 import { getFlow } from '../dist/node/application/queries/get-flow.js';
+import { DEFAULT_MAX_GROUNDED_NODES } from '../dist/node/application/read-models/context.js';
 import { getItem } from '../dist/node/application/queries/get-item.js';
 import { getCurrentSelection } from '../dist/node/application/queries/get-current-selection.js';
 import { listContextBundle } from '../dist/node/application/queries/list-context-bundle.js';
@@ -203,6 +204,76 @@ test('getFlow: by default grounds every node in the flow; includeSource:false st
   assert.match(light, /# Flow: Checkout/, 'the flow structure is unchanged');
   assert.match(light, /`src\/order\/order\.ts:5`/, 'anchors survive in the lighter flow');
   assert.doesNotMatch(light, new RegExp(SOURCE_MARKER), 'no excerpts in the lighter flow');
+});
+
+// ---------------------------------------------------------------------------
+// getFlow grounding cap (issue #11, hot-mcp-grounded-output-unbounded). A flow
+// with more nodes than DEFAULT_MAX_GROUNDED_NODES must not ground every one with
+// source — that can blow a connected terminal's token budget. The first N (in
+// flow order) get full code; the tail keeps its anchor reference but drops the
+// excerpt, and one summary note is appended. Nothing is dropped: get_node still
+// reaches every capped node. Under the cap the output is unchanged (no note).
+// ---------------------------------------------------------------------------
+
+// A flow of `nodeCount` command nodes, each with one anchor, over a gateway that
+// always returns real code — so each grounded node contributes exactly one marker.
+function buildLargeFlowServices(nodeCount) {
+  const nodes = [];
+  const steps = [];
+  for (let i = 0; i < nodeCount; i++) {
+    const id = `cmd-n${i}`;
+    nodes.push({ id, type: 'command', label: `Node ${i}`, description: `Node ${i}.`, tactical: { anchors: [{ path: `src/n${i}.ts`, line: i + 1 }] } });
+    steps.push(id);
+  }
+  const model = { version: 1, meta: { title: 'Large Flow' }, nodes,
+    flows: [{ id: 'flow-big', name: 'Big flow', status: 'live', summary: 'A pathologically large flow.', trigger: 'x', steps, edges: [] }],
+    hotspots: [], terms: [] };
+  const resolved = { model, source: 'bundled', sourcePath: 'flows.json', repoRoot: REPO_ROOT, warnings: [] };
+  const sourceGateway = { read: (_root, relPath, line) => ({ path: relPath, exists: true, line, startLine: line, endLine: line, code: `${SOURCE_MARKER} ${relPath}:${line}` }) };
+  return buildServices(resolved, { comments: null, sourceGateway });
+}
+
+const countMarkers = (md) => (md.match(new RegExp(SOURCE_MARKER, 'g')) || []).length;
+
+test('getFlow: over the cap grounds only the first N with source; the tail is anchor-only', () => {
+  const over = 5;
+  const services = buildLargeFlowServices(DEFAULT_MAX_GROUNDED_NODES + over);
+  const md = getFlow(services, 'flow-big');
+  assert.equal(countMarkers(md), DEFAULT_MAX_GROUNDED_NODES, 'exactly the cap-worth of nodes carry a source excerpt');
+  // Nothing is dropped: both a grounded node and the very last (capped) node keep their anchor.
+  assert.match(md, /`src\/n0\.ts:1`/, 'a grounded node keeps its anchor reference');
+  const last = DEFAULT_MAX_GROUNDED_NODES + over - 1;
+  assert.match(md, new RegExp(`\`src/n${last}\\.ts:${last + 1}\``), 'the last capped node still shows its anchor reference');
+});
+
+test('getFlow: over the cap appends exactly one summary note naming the anchor-only count', () => {
+  const over = 5;
+  const services = buildLargeFlowServices(DEFAULT_MAX_GROUNDED_NODES + over);
+  const md = getFlow(services, 'flow-big');
+  const note = `… ${over} more nodes grounded by anchor only; call get_node for their source.`;
+  assert.match(md, new RegExp(note.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'the anchor-only summary note is present');
+  assert.equal(md.split('grounded by anchor only').length - 1, 1, 'the note appears exactly once');
+});
+
+test('getFlow: exactly at the cap grounds every node with no note (byte-for-byte unchanged behavior)', () => {
+  const services = buildLargeFlowServices(DEFAULT_MAX_GROUNDED_NODES);
+  const md = getFlow(services, 'flow-big');
+  assert.equal(countMarkers(md), DEFAULT_MAX_GROUNDED_NODES, 'every node at the cap is grounded with source');
+  assert.doesNotMatch(md, /grounded by anchor only/, 'no cap note when the flow is not over the cap');
+});
+
+test('getFlow: the cap is overridable per call via maxGroundedNodes (default is the point, not the only option)', () => {
+  const services = buildLargeFlowServices(10);
+  const md = getFlow(services, 'flow-big', { maxGroundedNodes: 3 });
+  assert.equal(countMarkers(md), 3, 'the override caps grounding below the default');
+  assert.match(md, /… 7 more nodes grounded by anchor only; call get_node for their source\./, 'the note reflects the override');
+});
+
+test('getFlow: includeSource:false stays all-or-nothing — the cap never engages, no note', () => {
+  const services = buildLargeFlowServices(DEFAULT_MAX_GROUNDED_NODES + 5);
+  const md = getFlow(services, 'flow-big', { includeSource: false });
+  assert.equal(countMarkers(md), 0, 'no excerpts at all when source is suppressed');
+  assert.doesNotMatch(md, /grounded by anchor only/, 'the cap note is irrelevant when source is off');
 });
 
 // ---------------------------------------------------------------------------

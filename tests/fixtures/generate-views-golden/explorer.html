@@ -344,84 +344,7 @@
 window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","counts":{"flows":2,"nodes":10,"hotspots":1,"terms":1,"unresolvedTerms":1,"byType":{"command":1,"aggregate":1,"event":1,"readModel":1,"externalSystem":1,"datastore":1,"field":4}}},"nodes":[{"id":"cmd-PlaceOrder","type":"command","label":"Place Order","description":"Customer submits a cart to place an order.","tactical":{"explanation":"Entry command for the checkout flow.","anchors":[{"path":"src/order/place-order.ts","line":12,"symbol":"placeOrder","note":"handler"}]},"usages":[{"flow":"flow-checkout","explanation":"Kicks off checkout when the customer confirms the cart.","anchors":[{"path":"src/order/place-order.ts","line":12,"note":"invoked by the HTTP route"}]}]},{"id":"agg-Order","type":"aggregate","label":"Order","description":"The order aggregate enforcing the no-overselling invariant.","tactical":{"anchors":[{"path":"src/order/order.ts","line":5,"symbol":"Order"}]},"fields":[{"name":"total","dataType":"Money","derivation":"Sum of line items.","confidence":"high","conceptual":true,"sources":[{"ref":"fld-orders-total","role":"persisted"}]}]},{"id":"evt-OrderPlaced","type":"event","label":"Order Placed","description":"Emitted once an order is accepted.","tactical":{"anchors":[{"path":"src/order/events.ts","line":20,"symbol":"OrderPlaced"}]}},{"id":"rm-OrderSummary","type":"readModel","label":"Order Summary","description":"Read model projecting placed orders for the customer.","usages":[{"flow":"flow-checkout","explanation":"Returned to the client after checkout.","anchors":[{"path":"src/order/summary.ts","line":8}]}],"fields":[{"name":"orderId","dataType":"string","confidence":"high","sources":[{"ref":"fld-orders-total","role":"read"}]}]},{"id":"ext-PaymentGateway","type":"externalSystem","label":"Payment Gateway","description":"Third-party payment processor.","tactical":{"anchors":[{"path":"src/payment/gateway.ts","line":3}]}},{"id":"ds-OrdersDb","type":"datastore","label":"orders","description":"The orders table.","storeKind":"table","host":"db.internal","engine":"postgres"},{"id":"fld-orders-total","type":"field","label":"total","description":"Persisted order total column.","parent":"ds-OrdersDb","dataType":"numeric","fieldKind":"column","nullable":false},{"id":"fld-orders-shipping","type":"field","label":"shipping","description":"Shipping details, stored as a JSON sub-document.","parent":"ds-OrdersDb","dataType":"jsonb","fieldKind":"column"},{"id":"fld-orders-carrier","type":"field","label":"carrier","description":"Carrier code nested inside the shipping sub-document.","parent":"fld-orders-shipping","dataType":"text","fieldKind":"key"},{"id":"fld-orphan-metric","type":"field","label":"orphaned_metric","description":"A recovered field not yet tied to a data store.","dataType":"text"}],"flows":[{"id":"flow-checkout","name":"Checkout","tier":1,"status":"live","summary":"Customer checks out and an order is placed.","trigger":"Customer submits the cart.","steps":["cmd-PlaceOrder","agg-Order","evt-OrderPlaced","rm-OrderSummary","ext-PaymentGateway","ds-OrdersDb"],"edges":[{"from":"cmd-PlaceOrder","to":"agg-Order","verb":"issues"},{"from":"agg-Order","to":"evt-OrderPlaced","verb":"emits"},{"from":"evt-OrderPlaced","to":"rm-OrderSummary","verb":"updates"},{"from":"agg-Order","to":"ext-PaymentGateway","verb":"calls"},{"from":"evt-OrderPlaced","to":"ds-OrdersDb","verb":"writes"}],"hotspots":["hot-order-overselling"]},{"id":"flow-legacy-checkout","name":"Legacy Checkout","tier":2,"status":"superseded","supersededBy":"flow-checkout","summary":"The retired checkout path.","steps":["cmd-PlaceOrder","agg-Order"],"edges":[{"from":"cmd-PlaceOrder","to":"agg-Order","verb":"issues"}],"hotspots":[]}],"hotspots":[{"id":"hot-order-overselling","label":"Overselling under concurrency","description":"Two concurrent orders can both pass the stock check and oversell.","tactical":{"anchors":[{"path":"src/order/order.ts","line":42,"note":"check-then-act race"}]}}],"terms":[{"id":"term-Overselling","term":"Overselling","definition":"Accepting more orders for an item than there is stock to fulfill.","status":"open","category":"concept","openQuestion":"Is the reservation window authoritative, or the ledger?","relatedNodes":["agg-Order"],"aka":["oversell"]}]}, REPO_ROOT_DEFAULT: "/golden/repo-root", PALETTE: {"event":{"fill":"#E9A23B","edge":"#a56a14","text":"#4a2c02","name":"Domain Event"},"command":{"fill":"#6BA3E8","edge":"#2f68b0","text":"#123252","name":"Command"},"actor":{"fill":"#D2A63A","edge":"#98741a","text":"#432f03","name":"Actor"},"aggregate":{"fill":"#E3D68A","edge":"#a89a4a","text":"#4c4212","name":"Aggregate"},"policy":{"fill":"#BF9BE0","edge":"#8058b0","text":"#3a2160","name":"Policy"},"readModel":{"fill":"#6FC993","edge":"#358a5a","text":"#124a2c","name":"Read Model"},"externalSystem":{"fill":"#E68DAF","edge":"#b05378","text":"#59213b","name":"External System"},"invariant":{"fill":"#26262e","edge":"#42424e","text":"#b7b7c2","name":"Invariant"},"datastore":{"fill":"#6f92b3","edge":"#3f5a76","text":"#16293c","name":"Data store"},"field":{"fill":"#c3d3e2","edge":"#7f96ab","text":"#2c3e50","name":"Field"},"hotspot":{"fill":"#E5645E","edge":"#a83530","text":"#4c110e","name":"Hotspot"}} };
 "use strict";
 (() => {
-  // src/web/static-explorer/explorer-client.ts
-  var { MODEL, REPO_ROOT_DEFAULT, PALETTE } = window.__ES__;
-  var normRoot = (r) => String(r == null ? "" : r).replace(/\\/g, "/").replace(/\/+$/, "");
-  var repoRootOverride = (() => {
-    try {
-      return localStorage.getItem("esRepoRoot") || null;
-    } catch (e) {
-      return null;
-    }
-  })();
-  function currentRepoRoot() {
-    return repoRootOverride ? normRoot(repoRootOverride) : REPO_ROOT_DEFAULT;
-  }
-  function relAnchor(a) {
-    return a.path + (a.line ? ":" + a.line : "");
-  }
-  function buildAnchorUrl(rel) {
-    return "vscode://file/" + currentRepoRoot() + "/" + rel;
-  }
-  function refreshAnchors() {
-    document.querySelectorAll("a[data-anchor]").forEach((a) => {
-      a.href = buildAnchorUrl(a.getAttribute("data-anchor"));
-    });
-  }
-  function promptRepoRoot() {
-    const cur = repoRootOverride || REPO_ROOT_DEFAULT;
-    const next = prompt("Local path to your checkout of this repository, used for the source links.\n\nLeave blank to reset to the board default:\n" + REPO_ROOT_DEFAULT, cur);
-    if (next === null) return;
-    try {
-      if (next.trim() === "") {
-        localStorage.removeItem("esRepoRoot");
-        repoRootOverride = null;
-      } else {
-        repoRootOverride = next.trim();
-        localStorage.setItem("esRepoRoot", repoRootOverride);
-      }
-    } catch (e) {
-      repoRootOverride = next.trim() || null;
-    }
-    refreshAnchors();
-    updateRepoRootBtn();
-  }
-  function updateRepoRootBtn() {
-    const b = document.getElementById("reporoot-btn");
-    if (!b) return;
-    b.textContent = repoRootOverride ? "Source root \u25CF" : "Source root";
-    b.title = "Source links open at: " + currentRepoRoot() + (repoRootOverride ? "  (your local override \u2014 click to change or clear)" : "  (board default \u2014 click to set your local checkout path)");
-  }
-  var nodeById = new Map(MODEL.nodes.map((n) => [n.id, n]));
-  var hotspotById = new Map(MODEL.hotspots.map((h) => [h.id, h]));
-  var currentFlow = null;
-  var selectedId = null;
-  var currentMode = "flows";
-  var groupMode = "tier";
-  var DATA_TYPE_SET = /* @__PURE__ */ new Set(["datastore", "field"]);
-  var isDataNode = (n) => n && DATA_TYPE_SET.has(n.type);
-  var CONF_COLOR = { high: "#6FC993", medium: "#E9A23B", low: "#E5645E" };
-  var galleryTypes = Object.keys(PALETTE).filter((t) => t !== "hotspot" && MODEL.nodes.some((n) => n.type === t));
-  var galleryState = { q: "", active: new Set(galleryTypes) };
-  var galleryBuilt = false;
-  var GL_CAT_ORDER = ["concept", "jargon", "acronym", "role", "system", "state", "metric", "(uncategorized)"];
-  var GL_CAT_STYLE = {
-    concept: { fill: "#33415e", text: "#cfe0ff" },
-    jargon: { fill: "#41335e", text: "#e6d5ff" },
-    acronym: { fill: "#1d4750", text: "#bff0f7" },
-    role: { fill: "#54461c", text: "#f2e0a8" },
-    system: { fill: "#542a3d", text: "#f7c9dd" },
-    state: { fill: "#22462b", text: "#bff0c9" },
-    metric: { fill: "#543619", text: "#f7d9b0" },
-    "(uncategorized)": { fill: "#2a2a33", text: "#c9c9d4" }
-  };
-  var catOf = (t) => t.category || "(uncategorized)";
-  var glossaryCats = () => {
-    const p = new Set((MODEL.terms || []).map(catOf));
-    return GL_CAT_ORDER.filter((c) => p.has(c));
-  };
-  var glossaryState = { q: "", cats: new Set(glossaryCats()), flaggedOnly: false };
-  var glossaryBuilt = false;
+  // src/web/lib/dom.js
   function el(tag, attrs, ...children) {
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -432,74 +355,23 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     for (const c of children) if (c != null) e.append(c);
     return e;
   }
-  function anchorUrl(a) {
-    return buildAnchorUrl(relAnchor(a));
-  }
-  function flowNodeIds(f) {
-    return /* @__PURE__ */ new Set([...f.steps || [], ...(f.edges || []).flatMap((e) => [e.from, e.to])]);
-  }
-  function sidebarGroups() {
-    if (groupMode === "tier") {
-      return [
-        { title: "Tier 1 \u2014 domain flows", pred: (f) => f.tier !== 2 },
-        { title: "Tier 2 \u2014 patterns", pred: (f) => f.tier === 2 }
-      ];
-    }
-    const p = PALETTE[groupMode] || PALETTE.invariant;
-    const flowsByNode = /* @__PURE__ */ new Map();
-    for (const f of MODEL.flows) for (const nid of flowNodeIds(f)) {
-      const nn = nodeById.get(nid);
-      if (!nn || nn.type !== groupMode) continue;
-      (flowsByNode.get(nid) || flowsByNode.set(nid, /* @__PURE__ */ new Set()).get(nid)).add(f.id);
-    }
-    const groups = [...flowsByNode.entries()].map(([nid, fset]) => ({ node: nodeById.get(nid), fset })).sort((a, b) => String(a.node.label).localeCompare(String(b.node.label))).map(({ node, fset }) => ({ title: node.label, pred: (f) => fset.has(f.id), color: p.fill }));
-    const covered = /* @__PURE__ */ new Set();
-    for (const fset of flowsByNode.values()) for (const fid of fset) covered.add(fid);
-    if (MODEL.flows.some((f) => !covered.has(f.id))) groups.push({ title: "No " + p.name.toLowerCase(), pred: (f) => !covered.has(f.id) });
-    return groups;
-  }
-  function renderSidebar(filter) {
-    const list = document.getElementById("flowlist");
-    list.innerHTML = "";
-    for (const g of sidebarGroups()) {
-      const flows = MODEL.flows.filter(g.pred).filter((f) => !filter || (f.name + f.id).toLowerCase().includes(filter));
-      if (!flows.length) continue;
-      const heading = el("div", { class: "flow-group" });
-      if (g.color) heading.append(el("span", { class: "fg-dot", style: "background:" + g.color }));
-      heading.append(g.title);
-      list.append(heading);
-      const kindColor = { read: "#6FC993", policy: "#BF9BE0", write: "#6BA3E8" };
-      for (const f of flows) {
-        const dead = f.status && f.status !== "live";
-        const hs = (f.hotspots || []).length;
-        const item = el("div", {
-          class: "flow-item" + (currentFlow && currentFlow.id === f.id ? " active" : "") + (dead ? " dim" : ""),
-          style: "--kind:" + (kindColor[f.kind] || kindColor.write),
-          title: f.name + (dead ? "  [" + f.status + (f.supersededBy ? " \u2192 " + f.supersededBy : "") + "]" : "") + "  \xB7  " + (f.kind || "write"),
-          onclick: () => selectFlow(f.id)
-        }, el("div", { class: "nm" }, f.name));
-        const tags = el("div", { class: "fi-tags" });
-        if (dead) tags.append(el("div", { class: "status-dot " + f.status }));
-        if (hs) tags.append(el("div", { class: "hs-count" }, String(hs)));
-        if (dead || hs) item.append(tags);
-        list.append(item);
-      }
-    }
-    const legend = document.getElementById("legend");
-    legend.innerHTML = "";
-    for (const [type, p] of Object.entries(PALETTE)) {
-      legend.append(el("span", { class: "lg", style: "background:" + p.fill + ";color:" + p.text }, p.name));
-    }
-  }
-  var CAUSAL_VERBS = /* @__PURE__ */ new Set(["issues", "handled by", "emits", "triggers", "calls", "raises", "returns", "updates"]);
-  var READ_VERBS = /* @__PURE__ */ new Set(["reads", "read by"]);
+
+  // src/application/read-models/indexes.ts
+  var DATA_TYPES = ["datastore", "field"];
+  var DATA_TYPE_SET = new Set(DATA_TYPES);
+
+  // src/web/lib/flow-geometry.js
   var svgNS = "http://www.w3.org/2000/svg";
   var DUP_COLORS = ["#ff6b6b", "#4ecdc4", "#ffd93d", "#a78bfa", "#63d471", "#ff9f43", "#4d96ff", "#ff6ec7", "#c0eb75", "#f78fb3", "#5ed0e0", "#e0a458"];
-  function renderFlowInto(f, lane) {
+  var BASE_PAN_IGNORE = ".sticky, .inv, .dupdot, .zoomctl, .ctx-title";
+  var CAUSAL_VERBS = /* @__PURE__ */ new Set(["issues", "handled by", "emits", "triggers", "calls", "raises", "returns", "updates"]);
+  var READ_VERBS = /* @__PURE__ */ new Set(["reads", "read by"]);
+  function renderFlowInto(f, lane, ctx) {
+    const { nodeById: nodeById2, palette: PALETTE2 } = ctx;
     lane.innerHTML = "";
     lane.style.position = "relative";
     const isData = (id) => {
-      const n = nodeById.get(id);
+      const n = nodeById2.get(id);
       return n && DATA_TYPE_SET.has(n.type);
     };
     f = { ...f, steps: (f.steps || []).filter((id) => !isData(id)), edges: (f.edges || []).filter((e) => !isData(e.from) && !isData(e.to)) };
@@ -508,7 +380,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     (f.steps || []).forEach((id, i) => stepIdx[id] = i);
     const isRM = (n) => n && n.type === "readModel";
     const isInv = (n) => n && n.type === "invariant";
-    const nodesArr = [...flowIds].map((id) => nodeById.get(id)).filter(Boolean);
+    const nodesArr = [...flowIds].map((id) => nodeById2.get(id)).filter(Boolean);
     const edgesByNode = {};
     for (const e of f.edges || []) {
       (edgesByNode[e.from] ||= []).push(e);
@@ -578,24 +450,24 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     });
     const drawn = [];
     for (const e of f.edges || []) {
-      const nf = nodeById.get(e.from), nt = nodeById.get(e.to);
+      const nf = nodeById2.get(e.from), nt = nodeById2.get(e.to);
       if (!nf || !nt) continue;
       if (isSat(nf) || isSat(nt)) {
         const satId = isSat(nf) ? e.from : e.to, rdrId = isSat(nf) ? e.to : e.from, anchor = primary[rdrId];
         if (!anchor) continue;
-        const satInst = mk(nodeById.get(satId), anchor.rank, "rm", anchor.iid);
+        const satInst = mk(nodeById2.get(satId), anchor.rank, "rm", anchor.iid);
         drawn.push({ from: satInst.iid, to: anchor.iid, verb: e.verb, dashed: true, rm: true });
       } else if (isInv(nt)) {
         const anchor = primary[e.from];
         if (!anchor) continue;
-        const invInst = mk(nodeById.get(e.to), anchor.rank, "inv", anchor.iid);
+        const invInst = mk(nodeById2.get(e.to), anchor.rank, "inv", anchor.iid);
         drawn.push({ from: anchor.iid, to: invInst.iid, verb: "", dashed: true });
       } else if (isInv(nf)) {
         continue;
       } else if (CAUSAL_VERBS.has(e.verb)) {
         const u = primary[e.from];
         if (!u) continue;
-        const v = rank[e.to] > rank[e.from] ? primary[e.to] : mk(nodeById.get(e.to), rank[e.from] + 1, "spine");
+        const v = rank[e.to] > rank[e.from] ? primary[e.to] : mk(nodeById2.get(e.to), rank[e.from] + 1, "spine");
         drawn.push({ from: u.iid, to: v.iid, verb: e.verb, dashed: false });
       } else {
         const u = primary[e.from], v = primary[e.to];
@@ -639,7 +511,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       box[o.iid] = b;
     };
     for (const o of spineInsts) {
-      cardByIid[o.iid] = placeCard(o, lane, o.x, o.y, dupColor[o.id]);
+      cardByIid[o.iid] = placeCard(o, lane, o.x, o.y, dupColor[o.id], ctx);
       measure(o);
     }
     let spineTop = Infinity, spineBottom = -Infinity;
@@ -651,7 +523,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const packBand = (list, above, xOf) => {
       if (!list.length) return;
       for (const o of list) {
-        cardByIid[o.iid] = placeCard(o, lane, 0, 0, dupColor[o.id]);
+        cardByIid[o.iid] = placeCard(o, lane, 0, 0, dupColor[o.id], ctx);
         measure(o);
       }
       list.sort((a, b) => box[a.anchorIid].cx - box[b.anchorIid].cx);
@@ -762,61 +634,13 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }
     return { w: maxR + PAD, h: maxB + PAD };
   }
-  function layoutFlow(f, lane) {
-    const dim = renderFlowInto(f, lane);
-    const wrap = document.getElementById("lane-wrap");
-    const pz = setupPanZoom(wrap, lane);
-    requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(dim.w, dim.h)));
-  }
-  var overviewBuilt = false;
-  function renderOverview() {
-    if (overviewBuilt) return;
-    const canvas = document.getElementById("ov-canvas");
-    canvas.innerHTML = "";
-    const boxes = [];
-    for (const f of MODEL.flows) {
-      const dead = f.status && f.status !== "live";
-      const boxEl = el("div", { class: "context-box" + (dead ? " dead" : "") });
-      const title = el("div", { class: "ctx-title", title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name);
-      if (dead) title.append(el("span", { class: "badge " + f.status }, f.status.toUpperCase() + (f.supersededBy ? " \u2192 " + f.supersededBy : "")));
-      else if (f.kind) title.append(el("span", { class: "ctx-kind" }, f.kind));
-      const laneEl = el("div", { class: "ctx-lane" });
-      boxEl.append(title, laneEl);
-      canvas.append(boxEl);
-      renderFlowInto(f, laneEl);
-      boxes.push({ boxEl });
-    }
-    const GAPX = 64, GAPY = 60, PAD = 48;
-    const dims = boxes.map((b) => ({ boxEl: b.boxEl, w: b.boxEl.offsetWidth, h: b.boxEl.offsetHeight }));
-    const widest = Math.max(0, ...dims.map((d) => d.w));
-    const rowLimit = Math.max(1700, widest);
-    let x = PAD, y = PAD, rowH = 0, canvasW = PAD;
-    for (const d of dims) {
-      if (x > PAD && x + d.w > rowLimit) {
-        x = PAD;
-        y += rowH + GAPY;
-        rowH = 0;
-      }
-      d.boxEl.style.left = x + "px";
-      d.boxEl.style.top = y + "px";
-      x += d.w + GAPX;
-      rowH = Math.max(rowH, d.h);
-      canvasW = Math.max(canvasW, x);
-    }
-    const W = canvasW - GAPX + PAD, H = y + rowH + PAD;
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-    overviewBuilt = true;
-    const wrap = document.getElementById("ov-wrap");
-    const pz = setupPanZoom(wrap, canvas, { zin: "ov-zin", zout: "ov-zout", zfit: "ov-zfit" });
-    requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(W, H)));
-  }
-  function setupPanZoom(wrap, lane, ids) {
+  function setupPanZoom(wrap, lane, ids, panIgnore) {
     if (wrap.__pz) {
       wrap.__pz.lane = lane;
       return wrap.__pz;
     }
     ids = ids || { zin: "zin", zout: "zout", zfit: "zfit" };
+    const panIgnoreSel = panIgnore || BASE_PAN_IGNORE;
     const st = { wrap, lane, scale: 1, tx: 0, ty: 0, cw: 0, ch: 0 };
     const MIN = 0.12, MAX = 2.6;
     const apply = () => {
@@ -845,7 +669,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }, { passive: false });
     let panning = false, sx = 0, sy = 0, ox = 0, oy = 0;
     wrap.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || e.target.closest(".sticky, .inv, .dupdot, .zoomctl, .ctx-title")) return;
+      if (e.button !== 0 || e.target.closest(panIgnoreSel)) return;
       panning = true;
       sx = e.clientX;
       sy = e.clientY;
@@ -883,15 +707,16 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     wrap.__pz = st;
     return st;
   }
-  function placeCard(o, lane, x, y, dupColor) {
-    const n = o.node, p = PALETTE[n.type] || PALETTE.invariant;
+  function placeCard(o, lane, x, y, dupColor, ctx) {
+    const { palette: PALETTE2, selectedId: selectedId2, onOpenDetail } = ctx;
+    const n = o.node, p = PALETTE2[n.type] || PALETTE2.invariant;
     let c;
     if (n.type === "invariant") {
-      c = el("div", { class: "inv", style: "left:" + x + "px;top:" + y + "px;background:" + p.fill + ";border:1px dashed " + p.edge + ";color:" + p.text, onclick: () => openDetail(n.id) }, "\u2696 " + n.label);
+      c = el("div", { class: "inv", style: "left:" + x + "px;top:" + y + "px;background:" + p.fill + ";border:1px dashed " + p.edge + ";color:" + p.text, onclick: () => onOpenDetail(n.id) }, "\u2696 " + n.label);
     } else {
       c = el(
         "div",
-        { class: "sticky" + (selectedId === n.id ? " selected" : ""), style: "left:" + x + "px;top:" + y + "px;background:" + p.fill + ";border-color:" + p.edge + ";color:" + p.text, onclick: () => openDetail(n.id) },
+        { class: "sticky" + (selectedId2 === n.id ? " selected" : ""), style: "left:" + x + "px;top:" + y + "px;background:" + p.fill + ";border-color:" + p.edge + ";color:" + p.text, onclick: () => onOpenDetail(n.id) },
         el("div", { class: "ntype" }, p.name),
         el("div", { class: "nlabel" }, n.label)
       );
@@ -901,6 +726,11 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       if (flags.length) c.append(el("div", { class: "flags" }, flags.join(" \xB7 ")));
     }
     if (dupColor) c.append(el("div", { class: "dupdot", style: "background:" + dupColor, title: "this node appears more than once in the flow (same dot color = same node)" }));
+    if (ctx.onContextMenu) c.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      ctx.onContextMenu(e, n.id);
+    });
     lane.append(c);
     return c;
   }
@@ -936,6 +766,207 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const c1y = p1.y + (p2.y >= p1.y ? 1 : -1) * Math.max(14, Math.min(40, Math.abs(p2.y - p1.y) * 0.5));
     return "M" + p1.x + "," + p1.y + " C" + p1.x + "," + c1y + " " + (p2.x - k) + "," + p2.y + " " + p2.x + "," + p2.y;
   }
+
+  // src/web/static-explorer/explorer-client.ts
+  var { MODEL, REPO_ROOT_DEFAULT, PALETTE } = window.__ES__;
+  var normRoot = (r) => String(r == null ? "" : r).replace(/\\/g, "/").replace(/\/+$/, "");
+  var repoRootOverride = (() => {
+    try {
+      return localStorage.getItem("esRepoRoot") || null;
+    } catch (e) {
+      return null;
+    }
+  })();
+  function currentRepoRoot() {
+    return repoRootOverride ? normRoot(repoRootOverride) : REPO_ROOT_DEFAULT;
+  }
+  function relAnchor(a) {
+    return a.path + (a.line ? ":" + a.line : "");
+  }
+  function buildAnchorUrl(rel) {
+    return "vscode://file/" + currentRepoRoot() + "/" + rel;
+  }
+  function refreshAnchors() {
+    document.querySelectorAll("a[data-anchor]").forEach((a) => {
+      a.href = buildAnchorUrl(a.getAttribute("data-anchor"));
+    });
+  }
+  function promptRepoRoot() {
+    const cur = repoRootOverride || REPO_ROOT_DEFAULT;
+    const next = prompt("Local path to your checkout of this repository, used for the source links.\n\nLeave blank to reset to the board default:\n" + REPO_ROOT_DEFAULT, cur);
+    if (next === null) return;
+    try {
+      if (next.trim() === "") {
+        localStorage.removeItem("esRepoRoot");
+        repoRootOverride = null;
+      } else {
+        repoRootOverride = next.trim();
+        localStorage.setItem("esRepoRoot", repoRootOverride);
+      }
+    } catch (e) {
+      repoRootOverride = next.trim() || null;
+    }
+    refreshAnchors();
+    updateRepoRootBtn();
+  }
+  function updateRepoRootBtn() {
+    const b = document.getElementById("reporoot-btn");
+    if (!b) return;
+    b.textContent = repoRootOverride ? "Source root \u25CF" : "Source root";
+    b.title = "Source links open at: " + currentRepoRoot() + (repoRootOverride ? "  (your local override \u2014 click to change or clear)" : "  (board default \u2014 click to set your local checkout path)");
+  }
+  var nodeById = new Map(MODEL.nodes.map((n) => [n.id, n]));
+  var hotspotById = new Map(MODEL.hotspots.map((h) => [h.id, h]));
+  var currentFlow = null;
+  var selectedId = null;
+  var currentMode = "flows";
+  var groupMode = "tier";
+  var DATA_TYPE_SET2 = /* @__PURE__ */ new Set(["datastore", "field"]);
+  var isDataNode = (n) => n && DATA_TYPE_SET2.has(n.type);
+  var CONF_COLOR = { high: "#6FC993", medium: "#E9A23B", low: "#E5645E" };
+  var galleryTypes = Object.keys(PALETTE).filter((t) => t !== "hotspot" && MODEL.nodes.some((n) => n.type === t));
+  var galleryState = { q: "", active: new Set(galleryTypes) };
+  var galleryBuilt = false;
+  var GL_CAT_ORDER = ["concept", "jargon", "acronym", "role", "system", "state", "metric", "(uncategorized)"];
+  var GL_CAT_STYLE = {
+    concept: { fill: "#33415e", text: "#cfe0ff" },
+    jargon: { fill: "#41335e", text: "#e6d5ff" },
+    acronym: { fill: "#1d4750", text: "#bff0f7" },
+    role: { fill: "#54461c", text: "#f2e0a8" },
+    system: { fill: "#542a3d", text: "#f7c9dd" },
+    state: { fill: "#22462b", text: "#bff0c9" },
+    metric: { fill: "#543619", text: "#f7d9b0" },
+    "(uncategorized)": { fill: "#2a2a33", text: "#c9c9d4" }
+  };
+  var catOf = (t) => t.category || "(uncategorized)";
+  var glossaryCats = () => {
+    const p = new Set((MODEL.terms || []).map(catOf));
+    return GL_CAT_ORDER.filter((c) => p.has(c));
+  };
+  var glossaryState = { q: "", cats: new Set(glossaryCats()), flaggedOnly: false };
+  var glossaryBuilt = false;
+  function el2(tag, attrs, ...children) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "class") e.className = v;
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v);
+    }
+    for (const c of children) if (c != null) e.append(c);
+    return e;
+  }
+  function anchorUrl(a) {
+    return buildAnchorUrl(relAnchor(a));
+  }
+  function flowNodeIds(f) {
+    return /* @__PURE__ */ new Set([...f.steps || [], ...(f.edges || []).flatMap((e) => [e.from, e.to])]);
+  }
+  function sidebarGroups() {
+    if (groupMode === "tier") {
+      return [
+        { title: "Tier 1 \u2014 domain flows", pred: (f) => f.tier !== 2 },
+        { title: "Tier 2 \u2014 patterns", pred: (f) => f.tier === 2 }
+      ];
+    }
+    const p = PALETTE[groupMode] || PALETTE.invariant;
+    const flowsByNode = /* @__PURE__ */ new Map();
+    for (const f of MODEL.flows) for (const nid of flowNodeIds(f)) {
+      const nn = nodeById.get(nid);
+      if (!nn || nn.type !== groupMode) continue;
+      (flowsByNode.get(nid) || flowsByNode.set(nid, /* @__PURE__ */ new Set()).get(nid)).add(f.id);
+    }
+    const groups = [...flowsByNode.entries()].map(([nid, fset]) => ({ node: nodeById.get(nid), fset })).sort((a, b) => String(a.node.label).localeCompare(String(b.node.label))).map(({ node, fset }) => ({ title: node.label, pred: (f) => fset.has(f.id), color: p.fill }));
+    const covered = /* @__PURE__ */ new Set();
+    for (const fset of flowsByNode.values()) for (const fid of fset) covered.add(fid);
+    if (MODEL.flows.some((f) => !covered.has(f.id))) groups.push({ title: "No " + p.name.toLowerCase(), pred: (f) => !covered.has(f.id) });
+    return groups;
+  }
+  function renderSidebar(filter) {
+    const list = document.getElementById("flowlist");
+    list.innerHTML = "";
+    for (const g of sidebarGroups()) {
+      const flows = MODEL.flows.filter(g.pred).filter((f) => !filter || (f.name + f.id).toLowerCase().includes(filter));
+      if (!flows.length) continue;
+      const heading = el2("div", { class: "flow-group" });
+      if (g.color) heading.append(el2("span", { class: "fg-dot", style: "background:" + g.color }));
+      heading.append(g.title);
+      list.append(heading);
+      const kindColor = { read: "#6FC993", policy: "#BF9BE0", write: "#6BA3E8" };
+      for (const f of flows) {
+        const dead = f.status && f.status !== "live";
+        const hs = (f.hotspots || []).length;
+        const item = el2("div", {
+          class: "flow-item" + (currentFlow && currentFlow.id === f.id ? " active" : "") + (dead ? " dim" : ""),
+          style: "--kind:" + (kindColor[f.kind] || kindColor.write),
+          title: f.name + (dead ? "  [" + f.status + (f.supersededBy ? " \u2192 " + f.supersededBy : "") + "]" : "") + "  \xB7  " + (f.kind || "write"),
+          onclick: () => selectFlow(f.id)
+        }, el2("div", { class: "nm" }, f.name));
+        const tags = el2("div", { class: "fi-tags" });
+        if (dead) tags.append(el2("div", { class: "status-dot " + f.status }));
+        if (hs) tags.append(el2("div", { class: "hs-count" }, String(hs)));
+        if (dead || hs) item.append(tags);
+        list.append(item);
+      }
+    }
+    const legend = document.getElementById("legend");
+    legend.innerHTML = "";
+    for (const [type, p] of Object.entries(PALETTE)) {
+      legend.append(el2("span", { class: "lg", style: "background:" + p.fill + ";color:" + p.text }, p.name));
+    }
+  }
+  function flowCtx() {
+    return { nodeById, palette: PALETTE, selectedId, onOpenDetail: openDetail };
+  }
+  function layoutFlow(f, lane) {
+    const dim = renderFlowInto(f, lane, flowCtx());
+    const wrap = document.getElementById("lane-wrap");
+    const pz = setupPanZoom(wrap, lane);
+    requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(dim.w, dim.h)));
+  }
+  var overviewBuilt = false;
+  function renderOverview() {
+    if (overviewBuilt) return;
+    const canvas = document.getElementById("ov-canvas");
+    canvas.innerHTML = "";
+    const boxes = [];
+    const ctx = flowCtx();
+    for (const f of MODEL.flows) {
+      const dead = f.status && f.status !== "live";
+      const boxEl = el2("div", { class: "context-box" + (dead ? " dead" : "") });
+      const title = el2("div", { class: "ctx-title", title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name);
+      if (dead) title.append(el2("span", { class: "badge " + f.status }, f.status.toUpperCase() + (f.supersededBy ? " \u2192 " + f.supersededBy : "")));
+      else if (f.kind) title.append(el2("span", { class: "ctx-kind" }, f.kind));
+      const laneEl = el2("div", { class: "ctx-lane" });
+      boxEl.append(title, laneEl);
+      canvas.append(boxEl);
+      renderFlowInto(f, laneEl, ctx);
+      boxes.push({ boxEl });
+    }
+    const GAPX = 64, GAPY = 60, PAD = 48;
+    const dims = boxes.map((b) => ({ boxEl: b.boxEl, w: b.boxEl.offsetWidth, h: b.boxEl.offsetHeight }));
+    const widest = Math.max(0, ...dims.map((d) => d.w));
+    const rowLimit = Math.max(1700, widest);
+    let x = PAD, y = PAD, rowH = 0, canvasW = PAD;
+    for (const d of dims) {
+      if (x > PAD && x + d.w > rowLimit) {
+        x = PAD;
+        y += rowH + GAPY;
+        rowH = 0;
+      }
+      d.boxEl.style.left = x + "px";
+      d.boxEl.style.top = y + "px";
+      x += d.w + GAPX;
+      rowH = Math.max(rowH, d.h);
+      canvasW = Math.max(canvasW, x);
+    }
+    const W = canvasW - GAPX + PAD, H = y + rowH + PAD;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    overviewBuilt = true;
+    const wrap = document.getElementById("ov-wrap");
+    const pz = setupPanZoom(wrap, canvas, { zin: "ov-zin", zout: "ov-zout", zfit: "ov-zfit" });
+    requestAnimationFrame(() => requestAnimationFrame(() => pz.fit(W, H)));
+  }
   function selectFlow(id) {
     setMode("flows");
     currentFlow = MODEL.flows.find((f) => f.id === id);
@@ -958,16 +989,16 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   function buildGallery() {
     const g = document.getElementById("gallery");
     g.innerHTML = "";
-    const head = el("div", { class: "gallery-head" });
-    head.append(el("h2", {}, "All stickies", el("span", { class: "count", id: "gcount" }, "")));
-    const search = el("input", { class: "gallery-search", id: "gsearch", type: "search", placeholder: "Search stickies by name or description..." });
+    const head = el2("div", { class: "gallery-head" });
+    head.append(el2("h2", {}, "All stickies", el2("span", { class: "count", id: "gcount" }, "")));
+    const search = el2("input", { class: "gallery-search", id: "gsearch", type: "search", placeholder: "Search stickies by name or description..." });
     search.addEventListener("input", (e) => {
       galleryState.q = e.target.value.toLowerCase();
       renderGrid();
     });
     head.append(search);
-    const chips = el("div", { class: "type-chips" });
-    const allChip = el("div", { class: "tchip tchip-all on", id: "chip-all" }, "All");
+    const chips = el2("div", { class: "type-chips" });
+    const allChip = el2("div", { class: "tchip tchip-all on", id: "chip-all" }, "All");
     allChip.addEventListener("click", () => {
       galleryTypes.forEach((t) => galleryState.active.add(t));
       syncChips();
@@ -976,7 +1007,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     chips.append(allChip);
     for (const t of galleryTypes) {
       const p = PALETTE[t];
-      const c = el("div", { class: "tchip on", "data-type": t, style: "background:" + p.fill + ";color:" + p.text }, p.name);
+      const c = el2("div", { class: "tchip on", "data-type": t, style: "background:" + p.fill + ";color:" + p.text }, p.name);
       c.addEventListener("click", () => {
         if (galleryState.active.has(t)) galleryState.active.delete(t);
         else galleryState.active.add(t);
@@ -987,7 +1018,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }
     head.append(chips);
     g.append(head);
-    g.append(el("div", { class: "gallery-grid", id: "ggrid" }));
+    g.append(el2("div", { class: "gallery-grid", id: "ggrid" }));
     galleryBuilt = true;
   }
   function renderGrid() {
@@ -998,22 +1029,22 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const nodes = MODEL.nodes.filter((n) => galleryState.active.has(n.type)).filter((n) => !q || (n.label + " " + (n.description || "") + " " + (PALETTE[n.type] ? PALETTE[n.type].name : "")).toLowerCase().includes(q)).sort((a, b) => galleryTypes.indexOf(a.type) - galleryTypes.indexOf(b.type) || String(a.label).localeCompare(String(b.label)));
     document.getElementById("gcount").textContent = nodes.length + " of " + MODEL.nodes.length;
     if (!nodes.length) {
-      grid.append(el("div", { class: "gempty" }, "No stickies match the current filters."));
+      grid.append(el2("div", { class: "gempty" }, "No stickies match the current filters."));
       return;
     }
     for (const n of nodes) {
       const p = PALETTE[n.type] || PALETTE.invariant;
       const flows = nodeFlows(n.id);
       const allDead = flows.length > 0 && flows.every((f) => f.status && f.status !== "live");
-      const card = el("div", {
+      const card = el2("div", {
         class: "gcard" + (selectedId === n.id ? " selected" : ""),
         style: "background:" + p.fill + ";border-color:" + p.edge + ";color:" + p.text,
         onclick: () => openDetail(n.id)
-      }, el("div", { class: "gtype" }, p.name), el("div", { class: "glabel" }, n.label));
-      if (n.description) card.append(el("div", { class: "gdesc" }, n.description));
-      const meta = el("div", { class: "gmeta" });
-      meta.append(el("span", {}, flows.length ? "in " + flows.length + " flow" + (flows.length > 1 ? "s" : "") : "not in any flow"));
-      if (allDead) meta.append(el("span", { class: "gdead" }, "retired"));
+      }, el2("div", { class: "gtype" }, p.name), el2("div", { class: "glabel" }, n.label));
+      if (n.description) card.append(el2("div", { class: "gdesc" }, n.description));
+      const meta = el2("div", { class: "gmeta" });
+      meta.append(el2("span", {}, flows.length ? "in " + flows.length + " flow" + (flows.length > 1 ? "s" : "") : "not in any flow"));
+      if (allDead) meta.append(el2("span", { class: "gdead" }, "retired"));
       card.append(meta);
       grid.append(card);
     }
@@ -1025,8 +1056,8 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   }
   function glSyncChips() {
     glossaryCats().forEach((c) => {
-      const el2 = document.querySelector('.tchip[data-gl-cat="' + c + '"]');
-      if (el2) el2.classList.toggle("on", glossaryState.cats.has(c));
+      const el22 = document.querySelector('.tchip[data-gl-cat="' + c + '"]');
+      if (el22) el22.classList.toggle("on", glossaryState.cats.has(c));
     });
     const all = document.getElementById("gl-chip-all");
     if (all) all.classList.toggle("on", glossaryCats().every((c) => glossaryState.cats.has(c)));
@@ -1036,9 +1067,9 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   function buildGlossary() {
     const g = document.getElementById("glossary");
     g.innerHTML = "";
-    const head = el("div", { class: "gl-head" });
-    head.append(el("h2", {}, "Ubiquitous Language", el("span", { class: "count", id: "glcount" }, "")));
-    const search = el("input", { class: "gl-search", id: "glsearch", type: "search", placeholder: "Search terms and definitions..." });
+    const head = el2("div", { class: "gl-head" });
+    head.append(el2("h2", {}, "Ubiquitous Language", el2("span", { class: "count", id: "glcount" }, "")));
+    const search = el2("input", { class: "gl-search", id: "glsearch", type: "search", placeholder: "Search terms and definitions..." });
     search.addEventListener("input", (e) => {
       glossaryState.q = e.target.value.toLowerCase();
       renderGlossaryList();
@@ -1046,8 +1077,8 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     head.append(search);
     const cats = glossaryCats();
     if (cats.length) {
-      const chips = el("div", { class: "type-chips" });
-      const allChip = el("div", { class: "tchip tchip-all on", id: "gl-chip-all" }, "All");
+      const chips = el2("div", { class: "type-chips" });
+      const allChip = el2("div", { class: "tchip tchip-all on", id: "gl-chip-all" }, "All");
       allChip.addEventListener("click", () => {
         cats.forEach((c) => glossaryState.cats.add(c));
         glSyncChips();
@@ -1056,7 +1087,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       chips.append(allChip);
       for (const c of cats) {
         const s = GL_CAT_STYLE[c] || GL_CAT_STYLE["(uncategorized)"];
-        const chip = el("div", { class: "tchip on", "data-gl-cat": c, style: "background:" + s.fill + ";color:" + s.text }, c);
+        const chip = el2("div", { class: "tchip on", "data-gl-cat": c, style: "background:" + s.fill + ";color:" + s.text }, c);
         chip.addEventListener("click", () => {
           if (glossaryState.cats.has(c)) glossaryState.cats.delete(c);
           else glossaryState.cats.add(c);
@@ -1067,7 +1098,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       }
       const unresolved = MODEL.meta && MODEL.meta.counts && MODEL.meta.counts.unresolvedTerms || 0;
       if (unresolved) {
-        const flag = el("div", { class: "tchip gl-chip-flag", id: "gl-chip-flagged", title: "Terms the mining could not fully resolve - each states what a human should answer" }, "Needs input (" + unresolved + ")");
+        const flag = el2("div", { class: "tchip gl-chip-flag", id: "gl-chip-flagged", title: "Terms the mining could not fully resolve - each states what a human should answer" }, "Needs input (" + unresolved + ")");
         flag.addEventListener("click", () => {
           glossaryState.flaggedOnly = !glossaryState.flaggedOnly;
           glSyncChips();
@@ -1078,9 +1109,9 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       head.append(chips);
     }
     g.append(head);
-    const body = el("div", { class: "gl-body" });
-    body.append(el("div", { class: "gl-list", id: "gllist" }));
-    body.append(el("div", { class: "gl-rail", id: "glrail" }));
+    const body = el2("div", { class: "gl-body" });
+    body.append(el2("div", { class: "gl-list", id: "gllist" }));
+    body.append(el2("div", { class: "gl-rail", id: "glrail" }));
     g.append(body);
     glossaryBuilt = true;
   }
@@ -1095,7 +1126,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   }
   function anchorLink(a) {
     const rel = relAnchor(a);
-    return el("a", { class: "gl-src", href: buildAnchorUrl(rel), "data-anchor": rel, title: a.symbol || a.path, onclick: (e) => e.stopPropagation() }, (a.symbol || a.path.split("/").pop()) + (a.line ? ":" + a.line : ""));
+    return el2("a", { class: "gl-src", href: buildAnchorUrl(rel), "data-anchor": rel, title: a.symbol || a.path, onclick: (e) => e.stopPropagation() }, (a.symbol || a.path.split("/").pop()) + (a.line ? ":" + a.line : ""));
   }
   function renderGlossaryList() {
     const list = document.getElementById("gllist");
@@ -1106,11 +1137,11 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const all = MODEL.terms || [];
     document.getElementById("glcount").textContent = all.length ? all.length + " terms" : "not mined yet";
     if (!all.length) {
-      list.append(el(
+      list.append(el2(
         "div",
         { class: "gl-empty" },
-        el("div", { style: "font-weight:650;color:var(--fg);margin-bottom:6px" }, "The ubiquitous language has not been mined yet."),
-        el("div", {}, "Run the glossary-mining phase to populate this tab with the domain vocabulary and jargon.")
+        el2("div", { style: "font-weight:650;color:var(--fg);margin-bottom:6px" }, "The ubiquitous language has not been mined yet."),
+        el2("div", {}, "Run the glossary-mining phase to populate this tab with the domain vocabulary and jargon.")
       ));
       return;
     }
@@ -1118,7 +1149,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const terms = all.filter((t) => glossaryState.cats.has(catOf(t))).filter((t) => !glossaryState.flaggedOnly || (t.status || "resolved") !== "resolved").filter((t) => !q || ((t.term || "") + " " + (t.aka || []).join(" ") + " " + (t.definition || "") + " " + (t.openQuestion || "")).toLowerCase().includes(q));
     terms.sort((a, b) => String(a.term).localeCompare(String(b.term), void 0, { sensitivity: "base" }));
     if (!terms.length) {
-      list.append(el("div", { class: "gl-empty" }, "No terms match the current filters."));
+      list.append(el2("div", { class: "gl-empty" }, "No terms match the current filters."));
       return;
     }
     const letterOf = (t) => {
@@ -1132,32 +1163,32 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       if (L !== curLetter) {
         curLetter = L;
         present.add(L);
-        list.append(el("div", { class: "gl-letter", id: "gl-L-" + L }, L));
+        list.append(el2("div", { class: "gl-letter", id: "gl-L-" + L }, L));
       }
       const status = t.status || "resolved", flagged = status !== "resolved";
       const cat = catOf(t), cs = GL_CAT_STYLE[cat] || GL_CAT_STYLE["(uncategorized)"];
-      const entry = el("div", { class: "gl-entry" + (flagged ? " flagged" : "") });
-      const head = el(
+      const entry = el2("div", { class: "gl-entry" + (flagged ? " flagged" : "") });
+      const head = el2(
         "div",
         { class: "gl-term" },
-        el("span", { class: "gl-badge", style: "background:" + cs.fill + ";color:" + cs.text }, cat),
-        el("span", { class: "gl-name" }, t.term)
+        el2("span", { class: "gl-badge", style: "background:" + cs.fill + ";color:" + cs.text }, cat),
+        el2("span", { class: "gl-name" }, t.term)
       );
-      if (flagged) head.append(el("span", { class: "gl-flag" }, status === "unresolved" ? "needs input" : "partial"));
-      if ((t.aka || []).length) head.append(el("span", { class: "gl-aka" }, "aka " + t.aka.join(" \xB7 ")));
+      if (flagged) head.append(el2("span", { class: "gl-flag" }, status === "unresolved" ? "needs input" : "partial"));
+      if ((t.aka || []).length) head.append(el2("span", { class: "gl-aka" }, "aka " + t.aka.join(" \xB7 ")));
       entry.append(head);
-      if (t.definition) entry.append(el("div", { class: "gl-def" }, t.definition));
-      if (flagged && t.openQuestion) entry.append(el("div", { class: "gl-oq" }, el("b", {}, "Open question: "), t.openQuestion));
+      if (t.definition) entry.append(el2("div", { class: "gl-def" }, t.definition));
+      if (flagged && t.openQuestion) entry.append(el2("div", { class: "gl-oq" }, el2("b", {}, "Open question: "), t.openQuestion));
       const rel = (t.relatedNodes || []).map((id) => nodeById.get(id)).filter(Boolean);
       if (rel.length || (t.anchors || []).length || termFlows(t).length) {
-        const used = el("div", { class: "gl-used" });
+        const used = el2("div", { class: "gl-used" });
         for (const n of rel) {
           const p = PALETTE[n.type] || PALETTE.invariant;
-          used.append(el("div", { class: "gl-nchip", style: "border-color:" + p.edge, title: "Open " + p.name + ' "' + n.label + '"', onclick: () => openDetail(n.id) }, n.label));
+          used.append(el2("div", { class: "gl-nchip", style: "border-color:" + p.edge, title: "Open " + p.name + ' "' + n.label + '"', onclick: () => openDetail(n.id) }, n.label));
         }
         for (const f of termFlows(t)) {
           const dead = f.status && f.status !== "live";
-          used.append(el("div", { class: "gl-fchip" + (dead ? " dead" : ""), title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name));
+          used.append(el2("div", { class: "gl-fchip" + (dead ? " dead" : ""), title: 'Open "' + f.name + '" in the Flows board', onclick: () => selectFlow(f.id) }, f.name));
         }
         for (const a of t.anchors || []) used.append(anchorLink(a));
         entry.append(used);
@@ -1166,10 +1197,10 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }
     if (rail) for (const L of GL_LETTERS) {
       const has = present.has(L);
-      const s = el("span", has ? {} : { style: "opacity:.22;pointer-events:none" }, L);
+      const s = el2("span", has ? {} : { style: "opacity:.22;pointer-events:none" }, L);
       if (has) s.addEventListener("click", () => {
-        const el2 = document.getElementById("gl-L-" + L);
-        if (el2) el2.scrollIntoView({ behavior: "smooth", block: "start" });
+        const el22 = document.getElementById("gl-L-" + L);
+        if (el22) el22.scrollIntoView({ behavior: "smooth", block: "start" });
       });
       rail.append(s);
     }
@@ -1255,14 +1286,14 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   function dmConsumerChips(ds) {
     const consumers = datastoreConsumers(ds.id);
     if (!consumers.length) return null;
-    const cons = el("div", { class: "dm-consumers" });
+    const cons = el2("div", { class: "dm-consumers" });
     for (const c of consumers) {
       const cp = PALETTE[c.node.type] || PALETTE.invariant;
-      cons.append(el(
+      cons.append(el2(
         "span",
         { class: "dm-consumer", style: "border-color:" + cp.edge, title: cp.name + " \u2014 " + c.verb, onclick: () => openDetail(c.node.id) },
-        el("span", { class: "dm-cdot", style: "background:" + cp.fill }),
-        el("span", { class: "dm-cverb" }, c.verb),
+        el2("span", { class: "dm-cdot", style: "background:" + cp.fill }),
+        el2("span", { class: "dm-cverb" }, c.verb),
         c.node.label
       ));
     }
@@ -1272,9 +1303,9 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     for (const c of fields) {
       const attrs = { class: "dm-col", title: c.description || "", onclick: () => openDetail(c.id) };
       if (depth) attrs.style = "padding-left:" + (12 + depth * 14) + "px";
-      const col = el("div", attrs, el("span", { class: "dm-cn" }, c.label));
-      if (c.dataType) col.append(el("span", { class: "dm-ct" }, c.dataType));
-      if (c.nullable === false) col.append(el("span", { class: "dm-nn" }, "NN"));
+      const col = el2("div", attrs, el2("span", { class: "dm-cn" }, c.label));
+      if (c.dataType) col.append(el2("span", { class: "dm-ct" }, c.dataType));
+      if (c.nullable === false) col.append(el2("span", { class: "dm-nn" }, "NN"));
       cols.append(col);
       const kids = MODEL.nodes.filter((n) => n.type === "field" && n.parent === c.id);
       if (kids.length) dmFieldCols(kids, cols, depth + 1);
@@ -1284,22 +1315,22 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const { node: ds, fields, stores } = tree;
     const p = PALETTE.datastore;
     const kind = (ds.storeKind || "store").toUpperCase();
-    const card = el("div", { class: "dm-table", style: "border-color:" + p.edge });
-    card.append(el(
+    const card = el2("div", { class: "dm-table", style: "border-color:" + p.edge });
+    card.append(el2(
       "div",
       { class: "dm-table-head", style: "background:" + p.fill + ";color:" + p.text, onclick: () => openDetail(ds.id) },
-      el("span", { class: "dm-tt" }, kind),
-      el("span", { class: "dm-tn" }, ds.label)
+      el2("span", { class: "dm-tt" }, kind),
+      el2("span", { class: "dm-tn" }, ds.label)
     ));
     if (fields.length) {
-      const cols = el("div", { class: "dm-cols" });
+      const cols = el2("div", { class: "dm-cols" });
       dmFieldCols(fields, cols, 0);
       card.append(cols);
     }
     const chips = dmConsumerChips(ds);
     if (chips) card.append(chips);
     if (stores.length) {
-      const nested = el("div", { class: "dm-tables" });
+      const nested = el2("div", { class: "dm-tables" });
       for (const s of stores) nested.append(dmStoreNode(s, 99));
       card.append(nested);
     }
@@ -1313,19 +1344,19 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const cardKids = stores.filter((s) => isRecordSet(s.node));
     const headerKids = stores.filter((s) => !isRecordSet(s.node));
     const top = depth === 0;
-    const block = el("div", { class: top ? "dm-server" : "dm-db" });
-    const head = el(
+    const block = el2("div", { class: top ? "dm-server" : "dm-db" });
+    const head = el2(
       "div",
       { class: top ? "dm-server-head" : "dm-db-head", onclick: () => openDetail(ds.id) },
-      el("span", { class: "dm-badge", style: "background:" + p.fill + ";color:" + p.text }, kind),
-      el("span", { class: top ? "dm-sname" : "dm-dname" }, ds.label)
+      el2("span", { class: "dm-badge", style: "background:" + p.fill + ";color:" + p.text }, kind),
+      el2("span", { class: top ? "dm-sname" : "dm-dname" }, ds.label)
     );
-    if (ds.host) head.append(el("span", { class: "dm-host" }, ds.host));
-    if (ds.ownedBy) head.append(el("span", { class: "dm-owned" }, "owned by " + ds.ownedBy));
+    if (ds.host) head.append(el2("span", { class: "dm-host" }, ds.host));
+    if (ds.ownedBy) head.append(el2("span", { class: "dm-owned" }, "owned by " + ds.ownedBy));
     block.append(head);
     for (const s of headerKids) block.append(dmStoreNode(s, depth + 1));
     if (cardKids.length) {
-      const tablesEl = el("div", { class: "dm-tables" });
+      const tablesEl = el2("div", { class: "dm-tables" });
       for (const s of cardKids) tablesEl.append(dmStoreNode(s, depth + 1));
       block.append(tablesEl);
     }
@@ -1335,30 +1366,30 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const g = document.getElementById("datamodel");
     g.innerHTML = "";
     const { roots, looseFields } = dataModelTree();
-    const dataCount = MODEL.nodes.filter((n) => DATA_TYPE_SET.has(n.type)).length;
-    const head = el("div", { class: "dm-head" });
-    head.append(el("h2", {}, "Data model ", el("span", { class: "count" }, String(dataCount))));
-    head.append(el("div", { class: "dm-sub" }, "The storage the code actually touches, recovered from the code and its config \u2014 whatever kind it is: databases, files, queues, caches, in-memory state. Data stores nest to whatever depth exists (server \u25B8 database \u25B8 table, or filesystem \u25B8 directory \u25B8 file, \u2026) and are cross-linked to the read models and aggregates that read and write them. Demand-driven: only the fields a read model or aggregate references appear."));
+    const dataCount = MODEL.nodes.filter((n) => DATA_TYPE_SET2.has(n.type)).length;
+    const head = el2("div", { class: "dm-head" });
+    head.append(el2("h2", {}, "Data model ", el2("span", { class: "count" }, String(dataCount))));
+    head.append(el2("div", { class: "dm-sub" }, "The storage the code actually touches, recovered from the code and its config \u2014 whatever kind it is: databases, files, queues, caches, in-memory state. Data stores nest to whatever depth exists (server \u25B8 database \u25B8 table, or filesystem \u25B8 directory \u25B8 file, \u2026) and are cross-linked to the read models and aggregates that read and write them. Demand-driven: only the fields a read model or aggregate references appear."));
     g.append(head);
-    const body = el("div", { class: "dm-body" });
-    if (dataCount === 0) body.append(el("div", { class: "dm-empty" }, "No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate data stores and field lineage."));
+    const body = el2("div", { class: "dm-body" });
+    if (dataCount === 0) body.append(el2("div", { class: "dm-empty" }, "No data model recovered yet. Run the data-mapping phase (prompts/05-data-mapping.md) to populate data stores and field lineage."));
     const topContainers = roots.filter((r) => !isRecordSet(r.node));
     const topCards = roots.filter((r) => isRecordSet(r.node));
     for (const r of topContainers) body.append(dmStoreNode(r, 0));
     if (topCards.length) {
-      const tablesEl = el("div", { class: "dm-tables" });
+      const tablesEl = el2("div", { class: "dm-tables" });
       for (const r of topCards) tablesEl.append(dmStoreNode(r, 0));
       body.append(tablesEl);
     }
     if (looseFields.length) {
-      const block = el("div", { class: "dm-server" });
-      block.append(el(
+      const block = el2("div", { class: "dm-server" });
+      block.append(el2(
         "div",
         { class: "dm-server-head" },
-        el("span", { class: "dm-badge dm-unattached" }, "UNATTACHED FIELDS"),
-        el("span", { class: "dm-sname" }, "not tied to a data store")
+        el2("span", { class: "dm-badge dm-unattached" }, "UNATTACHED FIELDS"),
+        el2("span", { class: "dm-sname" }, "not tied to a data store")
       ));
-      const cols = el("div", { class: "dm-cols" });
+      const cols = el2("div", { class: "dm-cols" });
       dmFieldCols(looseFields, cols, 0);
       block.append(cols);
       body.append(block);
@@ -1392,37 +1423,37 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     const hdr = document.getElementById("flowheader");
     hdr.innerHTML = "";
     if (!f) {
-      hdr.append(el("h2", {}, "Select a flow"));
+      hdr.append(el2("h2", {}, "Select a flow"));
       return;
     }
-    const h2 = el("h2", {}, f.name);
-    if (f.status && f.status !== "live") h2.append(el("span", { class: "badge " + f.status }, f.status.toUpperCase() + (f.supersededBy ? " \u2192 " + f.supersededBy : "")));
+    const h2 = el2("h2", {}, f.name);
+    if (f.status && f.status !== "live") h2.append(el2("span", { class: "badge " + f.status }, f.status.toUpperCase() + (f.supersededBy ? " \u2192 " + f.supersededBy : "")));
     hdr.append(h2);
-    hdr.append(el("div", { class: "summary" }, f.summary || ""));
-    if (f.trigger) hdr.append(el("div", { class: "trigger" }, el("b", {}, "Trigger: "), f.trigger));
+    hdr.append(el2("div", { class: "summary" }, f.summary || ""));
+    if (f.trigger) hdr.append(el2("div", { class: "trigger" }, el2("b", {}, "Trigger: "), f.trigger));
     layoutFlow(f, document.getElementById("lane"));
     const hs = document.getElementById("hotspots");
     hs.innerHTML = "";
     const spots = (f.hotspots || []).map((h) => hotspotById.get(h)).filter(Boolean);
     if (spots.length) {
-      hs.append(el("h3", {}, "Hotspots", el("span", { class: "n" }, String(spots.length)), el("span", { style: "color:var(--muted);font-weight:600" }, "questions a human should answer")));
-      const cards = el("div", { class: "hs-cards" });
-      for (const s of spots) cards.append(el("div", { class: "hs-card", title: s.description || "", onclick: () => openHotspot(s.id) }, el("b", {}, s.label), el("span", {}, s.description)));
+      hs.append(el2("h3", {}, "Hotspots", el2("span", { class: "n" }, String(spots.length)), el2("span", { style: "color:var(--muted);font-weight:600" }, "questions a human should answer")));
+      const cards = el2("div", { class: "hs-cards" });
+      for (const s of spots) cards.append(el2("div", { class: "hs-card", title: s.description || "", onclick: () => openHotspot(s.id) }, el2("b", {}, s.label), el2("span", {}, s.description)));
       hs.append(cards);
     }
     const inst = document.getElementById("instances");
     inst.innerHTML = "";
     if ((f.instances || []).length) {
-      inst.append(el("h3", {}, "Instances of this pattern", el("span", { class: "n" }, String(f.instances.length))));
-      const t = el("table", {});
+      inst.append(el2("h3", {}, "Instances of this pattern", el2("span", { class: "n" }, String(f.instances.length))));
+      const t = el2("table", {});
       for (const i of f.instances) {
         const base = (i.file || "").split("/").pop();
-        t.append(el(
+        t.append(el2(
           "tr",
           {},
-          el("td", { class: "i-label" }, i.label || ""),
-          el("td", { class: "i-route" }, i.route || ""),
-          el("td", { class: "i-file", title: i.file || "" }, base)
+          el2("td", { class: "i-label" }, i.label || ""),
+          el2("td", { class: "i-route" }, i.route || ""),
+          el2("td", { class: "i-file", title: i.file || "" }, base)
         ));
       }
       inst.append(t);
@@ -1440,87 +1471,87 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     d.classList.add("open");
     const inner = document.getElementById("detail-inner");
     inner.innerHTML = "";
-    inner.append(el("button", { id: "closedetail", onclick: closeDetail }, "\u2715"));
-    inner.append(el("span", { class: "dtype", style: "background:" + p.fill + ";color:" + p.text }, p.name));
-    inner.append(el("h3", {}, n.label));
-    const chips = el("div", { class: "chips" });
-    if (n.inferred) chips.append(el("span", { class: "chip" }, "inferred from code"));
-    if (isDataNode(n) && n.inferred === false) chips.append(el("span", { class: "chip" }, "named in code"));
-    if (n.storeKind) chips.append(el("span", { class: "chip" }, n.storeKind));
-    if (n.fieldKind) chips.append(el("span", { class: "chip" }, n.fieldKind));
-    if (n.engine) chips.append(el("span", { class: "chip" }, n.engine));
-    if (n.ownedBy) chips.append(el("span", { class: "chip" }, "state owned by " + n.ownedBy));
-    if (n.synchronous) chips.append(el("span", { class: "chip" }, "synchronous inline reaction"));
-    for (const pv of n.provenance || []) chips.append(el("span", { class: "chip" }, pv));
+    inner.append(el2("button", { id: "closedetail", onclick: closeDetail }, "\u2715"));
+    inner.append(el2("span", { class: "dtype", style: "background:" + p.fill + ";color:" + p.text }, p.name));
+    inner.append(el2("h3", {}, n.label));
+    const chips = el2("div", { class: "chips" });
+    if (n.inferred) chips.append(el2("span", { class: "chip" }, "inferred from code"));
+    if (isDataNode(n) && n.inferred === false) chips.append(el2("span", { class: "chip" }, "named in code"));
+    if (n.storeKind) chips.append(el2("span", { class: "chip" }, n.storeKind));
+    if (n.fieldKind) chips.append(el2("span", { class: "chip" }, n.fieldKind));
+    if (n.engine) chips.append(el2("span", { class: "chip" }, n.engine));
+    if (n.ownedBy) chips.append(el2("span", { class: "chip" }, "state owned by " + n.ownedBy));
+    if (n.synchronous) chips.append(el2("span", { class: "chip" }, "synchronous inline reaction"));
+    for (const pv of n.provenance || []) chips.append(el2("span", { class: "chip" }, pv));
     inner.append(chips);
-    inner.append(el("div", { class: "desc" }, n.description || ""));
+    inner.append(el2("div", { class: "desc" }, n.description || ""));
     if (isDataNode(n)) {
       const chain = parentChain(n);
       if (chain.length > 1) {
-        const bc = el("div", { class: "breadcrumb" });
+        const bc = el2("div", { class: "breadcrumb" });
         chain.forEach((c, i) => {
-          if (i > 0) bc.append(el("span", { class: "bc-sep" }, "\u25B8"));
-          if (c.id === n.id) bc.append(el("span", { class: "bc-here" }, c.label));
-          else bc.append(el("span", { class: "bc-link", onclick: () => openDetail(c.id) }, c.label));
+          if (i > 0) bc.append(el2("span", { class: "bc-sep" }, "\u25B8"));
+          if (c.id === n.id) bc.append(el2("span", { class: "bc-here" }, c.label));
+          else bc.append(el2("span", { class: "bc-link", onclick: () => openDetail(c.id) }, c.label));
         });
         inner.append(bc);
       }
       const subStores = n.type === "datastore" ? MODEL.nodes.filter((x) => x.type === "datastore" && x.parent === n.id) : [];
       if (subStores.length) {
-        inner.append(el("h4", {}, subStores.length + " data store" + (subStores.length > 1 ? "s" : "")));
+        inner.append(el2("h4", {}, subStores.length + " data store" + (subStores.length > 1 ? "s" : "")));
         for (const c of subStores) {
-          const lbl = el("div", { class: "rlabel" }, c.label);
+          const lbl = el2("div", { class: "rlabel" }, c.label);
           const rel = c.storeKind || c.fieldKind;
-          if (rel) lbl.append(el("span", { class: "fr-role" }, rel));
-          inner.append(el("div", { class: "relrow", onclick: () => openDetail(c.id) }, lbl));
+          if (rel) lbl.append(el2("span", { class: "fr-role" }, rel));
+          inner.append(el2("div", { class: "relrow", onclick: () => openDetail(c.id) }, lbl));
         }
       }
       const fields = n.type === "datastore" ? MODEL.nodes.filter((x) => x.type === "field" && x.parent === n.id) : [];
       if (fields.length) {
-        inner.append(el("h4", {}, fields.length + " field" + (fields.length > 1 ? "s" : "")));
+        inner.append(el2("h4", {}, fields.length + " field" + (fields.length > 1 ? "s" : "")));
         for (const c of fields) {
-          const lbl = el("div", { class: "rlabel" }, c.label);
-          if (c.dataType) lbl.append(el("span", { class: "fr-dtype" }, c.dataType));
-          if (c.fieldKind) lbl.append(el("span", { class: "fr-role" }, c.fieldKind));
-          inner.append(el("div", { class: "relrow", onclick: () => openDetail(c.id) }, lbl));
+          const lbl = el2("div", { class: "rlabel" }, c.label);
+          if (c.dataType) lbl.append(el2("span", { class: "fr-dtype" }, c.dataType));
+          if (c.fieldKind) lbl.append(el2("span", { class: "fr-role" }, c.fieldKind));
+          inner.append(el2("div", { class: "relrow", onclick: () => openDetail(c.id) }, lbl));
         }
       }
       const consumers = n.type === "datastore" ? datastoreConsumers(n.id) : n.type === "field" ? fieldConsumers(n.id).map((c) => ({ node: c.node, verb: "field " + c.field.name })) : [];
       if (consumers.length) {
-        inner.append(el("h4", {}, "Used by " + consumers.length));
+        inner.append(el2("h4", {}, "Used by " + consumers.length));
         for (const c of consumers) {
-          const lbl = el("div", { class: "rlabel" }, c.node.label);
-          lbl.append(el("span", { class: "fr-role" }, c.verb));
-          inner.append(el("div", { class: "relrow", onclick: () => openDetail(c.node.id) }, lbl));
+          const lbl = el2("div", { class: "rlabel" }, c.node.label);
+          lbl.append(el2("span", { class: "fr-role" }, c.verb));
+          inner.append(el2("div", { class: "relrow", onclick: () => openDetail(c.node.id) }, lbl));
         }
       }
     }
     if (n.fields && n.fields.length) {
       const heading = n.type === "readModel" ? "Data returned" : n.type === "aggregate" ? "State & fields" : "Fields";
-      inner.append(el("h4", {}, heading));
+      inner.append(el2("h4", {}, heading));
       for (const field of n.fields) {
-        const fr = el("div", { class: "fieldrow" });
-        const fhead = el("div", { class: "fr-head" }, el("span", { class: "fr-name" }, field.name));
-        if (field.dataType) fhead.append(el("span", { class: "fr-dtype" }, field.dataType));
+        const fr = el2("div", { class: "fieldrow" });
+        const fhead = el2("div", { class: "fr-head" }, el2("span", { class: "fr-name" }, field.name));
+        if (field.dataType) fhead.append(el2("span", { class: "fr-dtype" }, field.dataType));
         const conf = field.confidence && CONF_COLOR[field.confidence];
-        if (conf) fhead.append(el("span", { class: "fr-conf", style: "background:" + conf, title: "derivation confidence: " + field.confidence }));
-        if (field.conceptual) fhead.append(el("span", { class: "fr-tag" }, "conceptual"));
-        if (field.sensitive) fhead.append(el("span", { class: "fr-tag sensitive" }, "sensitive"));
+        if (conf) fhead.append(el2("span", { class: "fr-conf", style: "background:" + conf, title: "derivation confidence: " + field.confidence }));
+        if (field.conceptual) fhead.append(el2("span", { class: "fr-tag" }, "conceptual"));
+        if (field.sensitive) fhead.append(el2("span", { class: "fr-tag sensitive" }, "sensitive"));
         fr.append(fhead);
-        if (field.derivation) fr.append(el("div", { class: "fr-deriv" }, field.derivation));
+        if (field.derivation) fr.append(el2("div", { class: "fr-deriv" }, field.derivation));
         const sources = field.sources || [];
         if (sources.length) {
           for (const s of sources) {
             const col = /^(ds|fld)-/.test(s.ref || "") ? nodeById.get(s.ref) : null;
-            const src = el("div", { class: "fr-src" }, el("span", { class: "fr-role" }, s.role || "from"));
-            if (col) src.append(el("span", { class: "fr-col link", onclick: () => openDetail(col.id) }, col.label));
-            else src.append(el("span", { class: "fr-col addr" }, s.ref || "(unresolved)"));
-            if (s.transform) src.append(el("span", { class: "fr-xform" }, s.transform));
-            if (s.note) src.append(el("span", { class: "fr-note" }, "\u2014 " + s.note));
+            const src = el2("div", { class: "fr-src" }, el2("span", { class: "fr-role" }, s.role || "from"));
+            if (col) src.append(el2("span", { class: "fr-col link", onclick: () => openDetail(col.id) }, col.label));
+            else src.append(el2("span", { class: "fr-col addr" }, s.ref || "(unresolved)"));
+            if (s.transform) src.append(el2("span", { class: "fr-xform" }, s.transform));
+            if (s.note) src.append(el2("span", { class: "fr-note" }, "\u2014 " + s.note));
             fr.append(src);
           }
         } else {
-          fr.append(el("div", { class: "fr-src none" }, "computed / no direct source"));
+          fr.append(el2("div", { class: "fr-src none" }, "computed / no direct source"));
         }
         inner.append(fr);
       }
@@ -1528,11 +1559,11 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     if (!isDataNode(n)) {
       const storageLinks = nodeStorageLinks(n.id);
       if (storageLinks.length) {
-        inner.append(el("h4", {}, "Storage"));
+        inner.append(el2("h4", {}, "Storage"));
         for (const s of storageLinks) {
-          const lbl = el("div", { class: "rlabel" }, s.node.label);
-          lbl.append(el("span", { class: "fr-role" }, s.verb));
-          inner.append(el("div", { class: "relrow", onclick: () => openDetail(s.node.id) }, lbl));
+          const lbl = el2("div", { class: "rlabel" }, s.node.label);
+          lbl.append(el2("span", { class: "fr-role" }, s.verb));
+          inner.append(el2("div", { class: "relrow", onclick: () => openDetail(s.node.id) }, lbl));
         }
       }
     }
@@ -1555,30 +1586,30 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       relHeading = "Enforced by " + related.length + " aggregate" + (related.length > 1 ? "s" : "");
     }
     if (related.length) {
-      inner.append(el("h4", {}, relHeading));
+      inner.append(el2("h4", {}, relHeading));
       for (const r of related) {
         const rp = PALETTE[r.type] || PALETTE.invariant;
-        inner.append(el(
+        inner.append(el2(
           "div",
           { class: "relrow", title: (PALETTE[r.type] || {}).name + " \u2014 " + r.label, onclick: () => openDetail(r.id) },
-          el("div", { class: "rdot", style: "background:" + rp.fill + ";border-color:" + rp.edge }),
-          el("div", { class: "rlabel" }, r.label)
+          el2("div", { class: "rdot", style: "background:" + rp.fill + ";border-color:" + rp.edge }),
+          el2("div", { class: "rlabel" }, r.label)
         ));
       }
     }
     const usages = n.usages && n.usages.length ? n.usages : n.tactical ? [{ flow: "", explanation: n.tactical.explanation, anchors: n.tactical.anchors }] : [];
     if (usages.length) {
-      inner.append(el("h4", {}, "Tactical implementation"));
+      inner.append(el2("h4", {}, "Tactical implementation"));
       for (const u of usages) {
-        const box = el("div", { class: "usage" });
-        if (u.flow) box.append(el("div", { class: "uflow" }, "in flow: " + u.flow));
-        if (u.explanation) box.append(el("div", { class: "uexp" }, u.explanation));
+        const box = el2("div", { class: "usage" });
+        if (u.flow) box.append(el2("div", { class: "uflow" }, "in flow: " + u.flow));
+        if (u.explanation) box.append(el2("div", { class: "uexp" }, u.explanation));
         for (const a of u.anchors || []) {
-          box.append(el(
+          box.append(el2(
             "a",
             { class: "anchor", href: anchorUrl(a), "data-anchor": relAnchor(a) },
             a.path + (a.line ? ":" + a.line : "") + (a.symbol ? "  (" + a.symbol + ")" : ""),
-            a.note ? el("span", { class: "note" }, "  \u2014 " + a.note) : null
+            a.note ? el2("span", { class: "note" }, "  \u2014 " + a.note) : null
           ));
         }
         inner.append(box);
@@ -1586,7 +1617,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }
     const inFlows = MODEL.flows.filter((f) => (f.steps || []).includes(id) || (f.edges || []).some((e) => e.from === id || e.to === id));
     if (inFlows.length) {
-      inner.append(el("h4", {}, "Appears in " + inFlows.length + " flow" + (inFlows.length > 1 ? "s" : "")));
+      inner.append(el2("h4", {}, "Appears in " + inFlows.length + " flow" + (inFlows.length > 1 ? "s" : "")));
       for (const f of inFlows) {
         const fIds = /* @__PURE__ */ new Set([...f.steps || [], ...(f.edges || []).flatMap((e) => [e.from, e.to])]);
         const counts = {};
@@ -1596,15 +1627,15 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
         }
         const total = Object.values(counts).reduce((s, c) => s + c, 0);
         const dead = f.status && f.status !== "live";
-        const row = el("div", { class: "flowrow", title: f.name + " \u2014 " + total + " stickies", onclick: () => selectFlow(f.id) });
-        const name = el("div", { class: "fr-name" }, f.name);
-        if (dead) name.append(el("span", { class: "badge " + f.status }, f.status.toUpperCase()));
+        const row = el2("div", { class: "flowrow", title: f.name + " \u2014 " + total + " stickies", onclick: () => selectFlow(f.id) });
+        const name = el2("div", { class: "fr-name" }, f.name);
+        if (dead) name.append(el2("span", { class: "badge " + f.status }, f.status.toUpperCase()));
         row.append(name);
-        const dots = el("div", { class: "fr-dots" });
+        const dots = el2("div", { class: "fr-dots" });
         for (const t of Object.keys(PALETTE)) {
           if (t === "hotspot" || !counts[t]) continue;
           const p2 = PALETTE[t];
-          dots.append(el("div", { class: "cdot", style: "background:" + p2.fill + ";color:" + p2.text, title: counts[t] + " \xD7 " + p2.name }, String(counts[t])));
+          dots.append(el2("div", { class: "cdot", style: "background:" + p2.fill + ";color:" + p2.text, title: counts[t] + " \xD7 " + p2.name }, String(counts[t])));
         }
         row.append(dots);
         inner.append(row);
@@ -1618,20 +1649,20 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     d.classList.add("open");
     const inner = document.getElementById("detail-inner");
     inner.innerHTML = "";
-    inner.append(el("button", { id: "closedetail", onclick: closeDetail }, "\u2715"));
-    inner.append(el("span", { class: "dtype", style: "background:#FF6B6B;color:#fff" }, "Hotspot"));
-    inner.append(el("h3", {}, h.label));
-    inner.append(el("div", { class: "desc" }, h.description || ""));
+    inner.append(el2("button", { id: "closedetail", onclick: closeDetail }, "\u2715"));
+    inner.append(el2("span", { class: "dtype", style: "background:#FF6B6B;color:#fff" }, "Hotspot"));
+    inner.append(el2("h3", {}, h.label));
+    inner.append(el2("div", { class: "desc" }, h.description || ""));
     if (h.tactical) {
-      inner.append(el("h4", {}, "Evidence"));
-      const box = el("div", { class: "usage" });
-      if (h.tactical.explanation) box.append(el("div", { class: "uexp" }, h.tactical.explanation));
+      inner.append(el2("h4", {}, "Evidence"));
+      const box = el2("div", { class: "usage" });
+      if (h.tactical.explanation) box.append(el2("div", { class: "uexp" }, h.tactical.explanation));
       for (const a of h.tactical.anchors || []) {
-        box.append(el(
+        box.append(el2(
           "a",
           { class: "anchor", href: anchorUrl(a) },
           a.path + (a.line ? ":" + a.line : "") + (a.symbol ? "  (" + a.symbol + ")" : ""),
-          a.note ? el("span", { class: "note" }, "  \u2014 " + a.note) : null
+          a.note ? el2("span", { class: "note" }, "  \u2014 " + a.note) : null
         ));
       }
       inner.append(box);

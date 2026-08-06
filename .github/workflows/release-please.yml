@@ -3,6 +3,11 @@ name: release-please
 on:
   push:
     branches: [main]
+  # Manual escape hatch: publish the CURRENT package.json version via the same
+  # workflow file (so npm's trusted-publisher policy, bound to this file, still
+  # matches). Used to (re)publish a version whose automatic publish failed —
+  # e.g. 0.7.0, whose first publish 422'd on `--provenance` (see below).
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -18,28 +23,35 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Everything below runs ONLY on the push where release-please actually
-      # cuts a release (i.e. the run that merges its Release PR). Publishing
-      # lives here rather than in a separate `on: release` workflow because a
-      # release created with the automatic GITHUB_TOKEN does NOT trigger other
-      # workflows. Same run, no cascade, no stored PAT.
+      # The publish steps run when release-please actually cuts a release (the
+      # push that merges its Release PR), OR on a manual workflow_dispatch (to
+      # publish the current version out-of-band). Publishing lives in THIS job
+      # rather than a separate `on: release` workflow because a release created
+      # with the automatic GITHUB_TOKEN does NOT trigger other workflows, and
+      # because npm Trusted Publishing binds its policy to this workflow file.
       - uses: actions/checkout@v4
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created || github.event_name == 'workflow_dispatch' }}
       - uses: actions/setup-node@v4
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created || github.event_name == 'workflow_dispatch' }}
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
       # Trusted Publishing needs npm CLI 11.5.1+; the npm bundled with
       # setup-node isn't guaranteed to be new enough, so pin explicitly.
       - name: ensure npm supports trusted publishing
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created || github.event_name == 'workflow_dispatch' }}
         run: npm install -g npm@latest
       - name: install dependencies
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created || github.event_name == 'workflow_dispatch' }}
         run: npm ci
-      # `prepack` (npm run build) fires automatically during `npm publish`
-      # and rebuilds dist so the tarball ships the prebuilt CLI + SPA.
+      # `prepack` (npm run build) fires automatically during `npm publish` and
+      # rebuilds dist so the tarball ships the prebuilt CLI + SPA.
+      #
+      # NOTE: no `--provenance`. Sigstore provenance is rejected (npm E422) for a
+      # PRIVATE source repository — "Only public source repositories are supported
+      # when publishing with provenance." OIDC Trusted Publishing itself works for
+      # a private repo; only the provenance attestation does not. Restore
+      # `--provenance` if/when this repository is made public.
       - name: publish to npm
-        if: ${{ steps.release.outputs.release_created }}
-        run: npm publish --provenance
+        if: ${{ steps.release.outputs.release_created || github.event_name == 'workflow_dispatch' }}
+        run: npm publish

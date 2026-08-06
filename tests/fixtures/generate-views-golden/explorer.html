@@ -167,6 +167,15 @@
   .tab { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 15px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background .1s, color .1s; }
   .tab:hover { background: var(--accent); color: var(--dim); }
   .tab.active { background: var(--accent-2); color: #fff; border-color: var(--line); }
+  /* first-open self-heal banner (issue #74): a slim, non-modal bar between the tab bar and the shell
+     that tells a reader the source links need their local checkout path. A flex row in the column
+     body, so it pushes the shell down rather than overlaying (never intercepts board/tab clicks). */
+  #reporoot-banner { display: flex; align-items: center; gap: 12px; padding: 9px 16px; background: #1c1a12; border-bottom: 1px solid #3a3320; color: #e7d9a8; font-size: 12.5px; flex-shrink: 0; }
+  #reporoot-banner .rb-msg { flex: 1; line-height: 1.4; min-width: 0; }
+  #reporoot-banner .rb-set { font: inherit; font-size: 11.5px; font-weight: 650; padding: 5px 12px; border-radius: 7px; border: 1px solid #6b5d2e; background: #2c2713; color: #f2e3ab; cursor: pointer; white-space: nowrap; }
+  #reporoot-banner .rb-set:hover { background: #3a3319; border-color: #8a7838; }
+  #reporoot-banner .rb-x { font: inherit; font-size: 14px; line-height: 1; padding: 4px 7px; border-radius: 6px; border: 0; background: none; color: #b8a86a; cursor: pointer; }
+  #reporoot-banner .rb-x:hover { background: rgba(255,255,255,.06); color: #f2e3ab; }
   #shell { flex: 1; min-height: 0; display: flex; }
   /* gallery: a wall of every sticky in the model, filtered by type chips + search */
   #gallery { flex: 1; min-width: 0; display: none; flex-direction: column; }
@@ -816,7 +825,8 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   }
   function promptRepoRoot() {
     const cur = repoRootOverride || REPO_ROOT_DEFAULT;
-    const next = prompt("Local path to your checkout of this repository, used for the source links.\n\nLeave blank to reset to the board default:\n" + REPO_ROOT_DEFAULT, cur);
+    const defaultLine = REPO_ROOT_DEFAULT ? "Leave blank to reset to the board default:\n" + REPO_ROOT_DEFAULT : "This board was generated elsewhere, so it has no source root baked in \u2014 leave blank to keep the links unset.";
+    const next = prompt("Local path to your checkout of this repository, used for the source links.\n\n" + defaultLine, cur);
     if (next === null) return;
     try {
       if (next.trim() === "") {
@@ -831,12 +841,45 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
     }
     refreshAnchors();
     updateRepoRootBtn();
+    dismissRepoRootBanner();
   }
   function updateRepoRootBtn() {
     const b = document.getElementById("reporoot-btn");
     if (!b) return;
     b.textContent = repoRootOverride ? "Source root \u25CF" : "Source root";
-    b.title = "Source links open at: " + currentRepoRoot() + (repoRootOverride ? "  (your local override \u2014 click to change or clear)" : "  (board default \u2014 click to set your local checkout path)");
+    const root = currentRepoRoot();
+    b.title = repoRootOverride ? "Source links open at: " + root + "  (your local override \u2014 click to change or clear)" : root ? "Source links open at: " + root + "  (board default \u2014 click to set your local checkout path)" : "No local checkout path set \u2014 click to point the source links at your copy of this repo";
+  }
+  var BANNER_DISMISS_KEY = "esRepoRootBannerDismissed";
+  function bannerDismissed() {
+    try {
+      return localStorage.getItem(BANNER_DISMISS_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+  function dismissRepoRootBanner() {
+    try {
+      localStorage.setItem(BANNER_DISMISS_KEY, "1");
+    } catch (e) {
+    }
+    const b = document.getElementById("reporoot-banner");
+    if (b) b.remove();
+  }
+  function showRepoRootBanner() {
+    if (document.getElementById("reporoot-banner")) return;
+    const banner = el2(
+      "div",
+      { id: "reporoot-banner" },
+      el2("span", { class: "rb-msg" }, "Source links point to the checkout this board was generated on. Set your local repository path so they open your files."),
+      el2("button", { class: "rb-set", onclick: promptRepoRoot }, "Set source root"),
+      el2("button", { class: "rb-x", title: "Dismiss", onclick: dismissRepoRootBanner }, "\u2715")
+    );
+    const shell = document.getElementById("shell");
+    if (shell && shell.parentNode) shell.parentNode.insertBefore(banner, shell);
+  }
+  function maybeShowRepoRootBanner() {
+    if (!repoRootOverride && !bannerDismissed()) showRepoRootBanner();
   }
   var nodeById = new Map(MODEL.nodes.map((n) => [n.id, n]));
   var hotspotById = new Map(MODEL.hotspots.map((h) => [h.id, h]));
@@ -1661,7 +1704,7 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
       for (const a of h.tactical.anchors || []) {
         box.append(el2(
           "a",
-          { class: "anchor", href: anchorUrl(a) },
+          { class: "anchor", href: anchorUrl(a), "data-anchor": relAnchor(a) },
           a.path + (a.line ? ":" + a.line : "") + (a.symbol ? "  (" + a.symbol + ")" : ""),
           a.note ? el2("span", { class: "note" }, "  \u2014 " + a.note) : null
         ));
@@ -1687,6 +1730,16 @@ window.__ES__ = { MODEL: {"version":1,"meta":{"title":"Golden Fixture Model","co
   document.getElementById("tab-overview").addEventListener("click", () => setMode("overview"));
   document.getElementById("reporoot-btn").addEventListener("click", promptRepoRoot);
   updateRepoRootBtn();
+  document.addEventListener("click", (e) => {
+    if (repoRootOverride) return;
+    const t = e.target;
+    const a = t && t.closest ? t.closest('a[href^="vscode:"]') : null;
+    if (!a) return;
+    e.preventDefault();
+    e.stopPropagation();
+    promptRepoRoot();
+  }, true);
+  maybeShowRepoRootBanner();
   renderSidebar("");
   if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);
   else setMode("flows");

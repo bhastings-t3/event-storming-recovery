@@ -54,7 +54,12 @@ function buildAnchorUrl(rel) { return 'vscode://file/' + currentRepoRoot() + '/'
 function refreshAnchors() { document.querySelectorAll<HTMLAnchorElement>('a[data-anchor]').forEach(a => { a.href = buildAnchorUrl(a.getAttribute('data-anchor')); }); }
 function promptRepoRoot() {
   const cur = repoRootOverride || REPO_ROOT_DEFAULT;
-  const next = prompt('Local path to your checkout of this repository, used for the source links.\n\nLeave blank to reset to the board default:\n' + REPO_ROOT_DEFAULT, cur);
+  // REPO_ROOT_DEFAULT is empty when the board was generated as a shareable artifact (issue #74): the
+  // baked root is a neutral "generated elsewhere" sentinel, so there is no board default to reset to.
+  const defaultLine = REPO_ROOT_DEFAULT
+    ? 'Leave blank to reset to the board default:\n' + REPO_ROOT_DEFAULT
+    : 'This board was generated elsewhere, so it has no source root baked in — leave blank to keep the links unset.';
+  const next = prompt('Local path to your checkout of this repository, used for the source links.\n\n' + defaultLine, cur);
   if (next === null) return;
   try {
     if (next.trim() === '') { localStorage.removeItem('esRepoRoot'); repoRootOverride = null; }
@@ -62,12 +67,44 @@ function promptRepoRoot() {
   } catch (e) { repoRootOverride = next.trim() || null; }
   refreshAnchors();
   updateRepoRootBtn();
+  // The reader has now engaged the control, so the first-open self-heal banner has served its purpose.
+  dismissRepoRootBanner();
 }
 function updateRepoRootBtn() {
   const b = document.getElementById('reporoot-btn'); if (!b) return;
   b.textContent = repoRootOverride ? 'Source root ●' : 'Source root';
-  b.title = 'Source links open at: ' + currentRepoRoot() + (repoRootOverride ? '  (your local override — click to change or clear)' : '  (board default — click to set your local checkout path)');
+  const root = currentRepoRoot();
+  b.title = repoRootOverride
+    ? 'Source links open at: ' + root + '  (your local override — click to change or clear)'
+    : (root
+        ? 'Source links open at: ' + root + '  (board default — click to set your local checkout path)'
+        : 'No local checkout path set — click to point the source links at your copy of this repo');
 }
+
+// ---- First-open self-heal (issue #74) ----------------------------------------------------------
+// A committed explorer.html is shared: the reader is almost never on the machine it was generated on,
+// so its baked vscode:// source links are dead on arrival for them. The #27 reader-override fixes this
+// but is undiscoverable. So on first open — before the reader has set their own root — surface a
+// dismissible banner, and intercept the first click on any source link to open the Source-root prompt
+// instead of firing a dead deep link. Both reuse the existing promptRepoRoot / esRepoRoot machinery;
+// once the reader sets (or dismisses) a root, the dismissal persists and the banner stays gone.
+const BANNER_DISMISS_KEY = 'esRepoRootBannerDismissed';
+function bannerDismissed(): boolean { try { return localStorage.getItem(BANNER_DISMISS_KEY) === '1'; } catch (e) { return false; } }
+function dismissRepoRootBanner() {
+  try { localStorage.setItem(BANNER_DISMISS_KEY, '1'); } catch (e) { /* private mode: banner just won't persist */ }
+  const b = document.getElementById('reporoot-banner'); if (b) b.remove();
+}
+function showRepoRootBanner() {
+  if (document.getElementById('reporoot-banner')) return;
+  const banner = el('div', { id: 'reporoot-banner' },
+    el('span', { class: 'rb-msg' }, 'Source links point to the checkout this board was generated on. Set your local repository path so they open your files.'),
+    el('button', { class: 'rb-set', onclick: promptRepoRoot }, 'Set source root'),
+    el('button', { class: 'rb-x', title: 'Dismiss', onclick: dismissRepoRootBanner }, '✕'));
+  const shell = document.getElementById('shell');
+  if (shell && shell.parentNode) shell.parentNode.insertBefore(banner, shell);
+}
+// Show the banner only when the reader has neither set a root nor dismissed the banner before.
+function maybeShowRepoRootBanner() { if (!repoRootOverride && !bannerDismissed()) showRepoRootBanner(); }
 const nodeById = new Map(MODEL.nodes.map(n => [n.id, n]));
 const hotspotById = new Map(MODEL.hotspots.map(h => [h.id, h]));
 let currentFlow = null, selectedId = null, currentMode = 'flows', groupMode = 'tier';
@@ -843,7 +880,7 @@ function openHotspot(id) {
     const box = el('div', { class: 'usage' });
     if (h.tactical.explanation) box.append(el('div', { class: 'uexp' }, h.tactical.explanation));
     for (const a of h.tactical.anchors || []) {
-      box.append(el('a', { class: 'anchor', href: anchorUrl(a) },
+      box.append(el('a', { class: 'anchor', href: anchorUrl(a), 'data-anchor': relAnchor(a) },
         a.path + (a.line ? ':' + a.line : '') + (a.symbol ? '  (' + a.symbol + ')' : ''),
         a.note ? el('span', { class: 'note' }, '  — ' + a.note) : null));
     }
@@ -865,6 +902,21 @@ document.getElementById('tab-glossary').addEventListener('click', () => setMode(
 document.getElementById('tab-overview').addEventListener('click', () => setMode('overview'));
 document.getElementById('reporoot-btn').addEventListener('click', promptRepoRoot);
 updateRepoRootBtn();
+
+// First-open self-heal (issue #74): before the reader has set a root, the first click on ANY source
+// link (they all render as vscode://file/ deep links) opens the Source-root prompt instead of firing
+// a link that is dead on the reader's machine. Capture phase so it runs before each anchor's own
+// handler (e.g. the glossary anchor's stopPropagation) and before navigation.
+document.addEventListener('click', (e) => {
+  if (repoRootOverride) return;                       // reader already resolved their local root
+  const t = e.target as Element | null;
+  const a = t && t.closest ? t.closest('a[href^="vscode:"]') : null;
+  if (!a) return;
+  e.preventDefault();
+  e.stopPropagation();
+  promptRepoRoot();
+}, true);
+maybeShowRepoRootBanner();
 
 renderSidebar('');
 if (MODEL.flows.length) selectFlow(MODEL.flows[0].id);

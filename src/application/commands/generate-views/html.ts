@@ -215,6 +215,15 @@ export function renderHtml(model: Model, repoRoot: string, title: string): strin
   .tab { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 15px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background .1s, color .1s; }
   .tab:hover { background: var(--accent); color: var(--dim); }
   .tab.active { background: var(--accent-2); color: #fff; border-color: var(--line); }
+  /* first-open self-heal banner (issue #74): a slim, non-modal bar between the tab bar and the shell
+     that tells a reader the source links need their local checkout path. A flex row in the column
+     body, so it pushes the shell down rather than overlaying (never intercepts board/tab clicks). */
+  #reporoot-banner { display: flex; align-items: center; gap: 12px; padding: 9px 16px; background: #1c1a12; border-bottom: 1px solid #3a3320; color: #e7d9a8; font-size: 12.5px; flex-shrink: 0; }
+  #reporoot-banner .rb-msg { flex: 1; line-height: 1.4; min-width: 0; }
+  #reporoot-banner .rb-set { font: inherit; font-size: 11.5px; font-weight: 650; padding: 5px 12px; border-radius: 7px; border: 1px solid #6b5d2e; background: #2c2713; color: #f2e3ab; cursor: pointer; white-space: nowrap; }
+  #reporoot-banner .rb-set:hover { background: #3a3319; border-color: #8a7838; }
+  #reporoot-banner .rb-x { font: inherit; font-size: 14px; line-height: 1; padding: 4px 7px; border-radius: 6px; border: 0; background: none; color: #b8a86a; cursor: pointer; }
+  #reporoot-banner .rb-x:hover { background: rgba(255,255,255,.06); color: #f2e3ab; }
   #shell { flex: 1; min-height: 0; display: flex; }
   /* gallery: a wall of every sticky in the model, filtered by type chips + search */
   #gallery { flex: 1; min-width: 0; display: none; flex-direction: column; }

@@ -90,11 +90,15 @@ excludes `src/web` so the Node build never compiles the SPA.
   SPA's own `/api.js` module (`vite.config.mjs`).
 - **Windows paths:** `generate` resolves `--repo-root` to an absolute path and
   normalizes separators to `/` for the `vscode://file/` scheme (issue #27), so a
-  committed `explorer.html`/`flows.dot` carries an absolute root. To keep the
-  published self-model free of a real username, `scripts/build-example.mjs` passes
-  a stable placeholder root (`/event-storming-recovery`), not `.`; the emitted
-  `explorer.html` treats the baked root as a default the reader overrides via the
-  "Source root" control (persisted to `localStorage`). See ADR-0006.
+  committed `flows.dot` carries an absolute root (it has no runtime, so it stays
+  machine-local by nature). The committed `explorer.html` is shareable: `generate
+  --shareable` bakes **no** source root (a neutral empty sentinel) and the client
+  self-heals to each reader's local checkout on first open — a dismissible banner
+  plus auto-opening the "Source root" prompt on the first source-link click, reusing
+  the #27 `localStorage['esRepoRoot']` override. `scripts/build-example.mjs` passes
+  `--repo-root /event-storming-recovery --shareable`, so the published self-model's
+  `flows.dot` stays username-free while its `explorer.html` self-heals rather than
+  shipping a dead path. See ADR-0006 and ADR-0010.
 - The `examples/event-storming-recovery/` self-model is pipeline-shaped, an
   atypical but deliberate fixture that exercises the two-plane modeling rule.
 

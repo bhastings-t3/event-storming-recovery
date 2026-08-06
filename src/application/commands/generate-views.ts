@@ -23,6 +23,16 @@ export interface GeneratedViews {
 export interface GenerateViewsOptions {
   repoRoot?: string;
   title?: string;
+  /**
+   * Emit explorer.html as a portable, commit-intended artifact (issue #74): bake a neutral
+   * "generated elsewhere" sentinel as the reader-overridable source-root default instead of the
+   * generating machine's absolute path. The client detects the unset root and self-heals on first
+   * open (a dismissible banner + auto-opening the Source-root prompt on the first source-link click),
+   * so one committed board works for every teammate without shipping a stranger's dead path. Only
+   * affects the HTML default; flows.dot still bakes the resolved `repoRoot` (it has no runtime to
+   * self-heal and is machine-local by nature, ADR-0006).
+   */
+  shareable?: boolean;
 }
 
 export { renderDot, renderHtml };
@@ -33,5 +43,7 @@ export function generateViews(model: Model, opts: GenerateViewsOptions = {}): Ge
   const rawRoot = opts.repoRoot ?? (((model.meta && model.meta.repoRoot) as string) || '.');
   const repoRoot = toUriRoot(path.resolve(rawRoot));
   const title = opts.title ?? (((model.meta && model.meta.title) as string) || 'Event Storming Explorer');
-  return { dot: renderDot(model, repoRoot), html: renderHtml(model, repoRoot, title) };
+  // The empty string is the neutral sentinel the client reads as "no reader root set yet" (issue #74).
+  const htmlRepoRoot = opts.shareable ? '' : repoRoot;
+  return { dot: renderDot(model, repoRoot), html: renderHtml(model, htmlRepoRoot, title) };
 }

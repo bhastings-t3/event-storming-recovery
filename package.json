@@ -16,7 +16,7 @@
     "name": "Blake Hastings"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "bin": {
     "event-storming-recovery": "dist/node/adapters/cli/cli.js",

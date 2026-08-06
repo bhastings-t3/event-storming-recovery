@@ -18,9 +18,10 @@ npx event-storming-recovery [options]          # bare invocation = `view` (the d
 es-view [options]                              # alias for `event-storming-recovery view`
 ```
 
-> **Heads-up:** `npx event-storming-recovery` needs the package published to npm (or linked
-> locally via `npm link`). For a local checkout, run `npm run build` then invoke the built bin
-> directly: `node dist/node/adapters/cli/cli.js <command> [options]`.
+The package is published to npm, so `npx event-storming-recovery <command>` works with no clone or
+prior install (needs Node **>= 22.12**). If you're developing against a local checkout instead, run
+`npm run build` and invoke the built bin directly: `node dist/node/adapters/cli/cli.js <command>
+[options]`.
 
 ### `view`
 

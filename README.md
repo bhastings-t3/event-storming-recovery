@@ -19,9 +19,50 @@ of the tool in a few minutes, with no target codebase of your own required. Ever
 this README is a fast orientation; the [documentation set](docs/README.md) is where each topic
 gets its full treatment.
 
-## Install & quick start
+## Run it right now (zero setup)
 
-Install the plugin: it bundles both skills, the tools, and the explorer's MCP server declaration.
+**Prerequisite:** Node **>= 22.12** and a web browser. Nothing else: no clone, no plugin, no
+account.
+
+The package is published to npm, so one command boots the explorer against a bundled model (this
+tool's own recovered self-model):
+
+```sh
+npx event-storming-recovery view --no-open
+```
+
+It prints a banner with the URL it bound to (usually `http://127.0.0.1:5178`, but it **falls
+forward** to the next free port if that one is taken, so read the printed URL rather than assuming
+5178). Open that URL and you have the full interactive board: click a flow, step through its sticky
+lane, and follow a `vscode://` link into the source. With no `--model`/`--traces` argument, `view`
+auto-discovers a `**/model/flows.json` under the current directory and falls back to the bundled
+self-model when there isn't one, so it always has something to show.
+
+That is the whole of the *runnable* tool. The CLI ships three subcommands (`view`, `merge`,
+`generate`; see the [CLI reference](docs/reference/cli.md)), and they work standalone with just
+Node.
+
+## Recovering a model is an AI orchestration, not a CLI command
+
+Producing a model *for a new codebase* is a different thing from viewing one. **There is no
+`recover` command**: `event-storming-recovery --help` shows only `view`/`merge`/`generate`. The
+model-producing phases are driven by a live, interactive Claude session that spawns several
+concurrent sub-agents (five parallel scouts, then per-flow trace agents in waves of ~5-7) against
+`prompts/00-orchestrator.md`. So recovery has extra prerequisites: **Claude Code (the `claude` CLI)
+installed and on your PATH**, an interactive session to drive it, and a real (non-trivial) token
+budget for the fan-out of agents reading your codebase. Start with
+[how to run the recovery on your own codebase](docs/how-to/run-recovery-on-your-codebase.md), which
+states the prerequisites and cost up front. The `merge`/`generate` CLI then turns the traces those
+agents write into the model you `view`.
+
+## For T3 Expo devs: the plugin path
+
+> This repository is currently private and these instructions are for **T3 Expo developers who have
+> access to it**. A public launch is planned; until then the `git clone` and plugin-marketplace
+> paths below only work for people with repo access. Everyone else uses the `npx` path above.
+
+If you have repo access, install the plugin: it bundles both skills, the tools, and the explorer's
+MCP server declaration:
 
 ```
 /plugin marketplace add bhastings-t3/event-storming-recovery
@@ -36,14 +77,9 @@ Then just tell Claude:
 
 The `event-storming-explorer` skill takes it from there: if the repo has no recovered model yet, it
 **offers to build one first** (the recovery workflow), then it launches the interactive app
-(`npx event-storming-recovery view` on port 5178). Because the plugin declares the app's MCP
-server, your Claude session can read what you click. Select a node and say *"explain the selected
-aggregate"* or *"add these two invariants and open a PR"*, and Claude works on the real files, to a
-PR.
-
-> **Heads-up:** the viewer runs via `npx event-storming-recovery view`, which needs the
-> `event-storming-recovery` npm package published (tracked in the repo issues). Until then it works
-> for local development via `npm link`.
+(`npx event-storming-recovery view`). Because the plugin declares the app's MCP server, your Claude
+session can read what you click. Select a node and say *"explain the selected aggregate"* or *"add
+these two invariants and open a PR"*, and Claude works on the real files, to a PR.
 
 For the full walkthrough, see [Getting Started](docs/tutorials/getting-started.md). For running
 the recovery on your own codebase or connecting your own Claude terminal, see the
@@ -54,6 +90,12 @@ the recovery on your own codebase or connecting your own Claude terminal, see th
 The bundled example is **this tool's own recovered self-model**: the workflow run against this
 very repository (a code-derived Event Storming model of the CLI, the es-view server, and the MCP
 bridge).
+
+```sh
+npx event-storming-recovery view   # zero setup: serves the bundled example, opens your browser
+```
+
+From a clone you can instead rebuild it from its committed traces and open the static file:
 
 ```sh
 npm run demo   # rebuilds examples/event-storming-recovery/model from its traces
@@ -126,6 +168,9 @@ this way.
 - **Run the recovery on your own codebase**, either via the `event-storming-recovery` skill or by
   hand with `prompts/00-orchestrator.md`: see
   [how to run the recovery on your own codebase](docs/how-to/run-recovery-on-your-codebase.md).
+  The npm package ships `prompts/`, `skills/`, `docs/`, and `examples/`, so you can drive the
+  method by hand without a clone: after `npm i -g event-storming-recovery`, the playbook is at
+  `$(npm root -g)/event-storming-recovery/prompts/00-orchestrator.md`.
 - **Connect your own Claude terminal** to a running explorer so it can read your live selection and
   curated context bundle: see
   [how to connect a Claude terminal](docs/how-to/connect-a-claude-terminal.md), and the

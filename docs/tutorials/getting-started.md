@@ -2,74 +2,49 @@
 
 *Tutorial. Part of the [documentation set](../README.md).*
 
-In this tutorial we will install the event-storming-recovery plugin, build this tool's own
-bundled example from its committed traces, then open the interactive explorer and click through
-one flow end to end: sticky lane, tactical explanation, real source, a hotspot, the glossary, and
-the data model. By the end you will have seen every piece this tool produces, without needing a
-target codebase of your own yet.
+In this tutorial we will open the interactive explorer against this tool's own bundled example,
+then click through one flow end to end: sticky lane, tactical explanation, real source, a hotspot,
+the glossary, and the data model. By the end you will have seen every piece this tool produces,
+without needing a target codebase of your own yet, and with nothing to install beyond Node.
 
-## 1. Install the plugin
+## 1. Prerequisites
 
-In a Claude Code session, run:
+You need Node **>= 22.12** and a web browser. That's it: the tool is published to npm, so you run
+it with `npx` and there is no clone, plugin, or account to set up for this tutorial.
 
-```
-/plugin marketplace add bhastings-t3/event-storming-recovery
-/plugin install event-storming-recovery@event-storming-recovery
-```
+## 2. Open the explorer
 
-You should see the plugin install and two new skills become available:
-`event-storming-recovery` (builds a model) and `event-storming-explorer` (opens and works with
-one). We'll come back to both of these in the how-to guides; for now, we're going to build and
-open the example that ships in the repo itself.
-
-## 2. Get a checkout of the repo
-
-The bundled example lives in the repo's own `examples/` directory, so open a terminal in a clone
-of it:
+In a terminal, run:
 
 ```sh
-git clone https://github.com/bhastings-t3/event-storming-recovery.git
-cd event-storming-recovery
+npx event-storming-recovery view --no-open
 ```
 
-## 3. Build the example model
-
-The repo ships this tool's own recovered self-model as a set of already-written per-flow traces
-under `examples/event-storming-recovery/traces/`. Rebuild the merged, validated model and the
-explorer from them:
-
-```sh
-npm run demo
-```
-
-You'll see it merge the traces, print node/flow/hotspot counts, then write the explorer:
+The first run downloads the package, then boots the explorer and prints a banner like:
 
 ```
-merged N trace files -> .../examples/event-storming-recovery/model/flows.json
-...
-validation: OK
-built .../examples/event-storming-recovery/model/explorer.html
+  Event Storming explorer
+  http://127.0.0.1:5178
+
+  model:     bundled example — this tool's own self-model (no model found here)
+  contents:  15 flows, 87 nodes, 13 hotspots
+
+  Ctrl+C to stop.
 ```
 
-This ran the same two steps, merge then generate, that turn any set of traces into a model; you'll
-use them again for your own codebase in
-[how to run the recovery on your own codebase](../how-to/run-recovery-on-your-codebase.md).
+Open the URL from the banner in your browser. It is usually `http://127.0.0.1:5178`, but `view`
+**falls forward** to the next free port if 5178 is taken, so trust the printed URL rather than
+hardcoding the number. (`--no-open` keeps it from launching a browser tab for you; drop it and it
+opens one automatically.)
 
-## 4. Open the explorer
+With no `--model` or `--traces` argument, `view` auto-discovers a `**/model/flows.json` under the
+current directory and, finding none here, falls back to the bundled self-model: the workflow run
+against this very repository. So you are looking at a real recovered model with zero setup.
 
-Open the file it just built in a browser:
-
-```
-examples/event-storming-recovery/model/explorer.html
-```
-
-It's self-contained: the whole model is embedded, so there's no server and no network involved in
-viewing it.
-
-## 5. Click through a flow
+## 3. Click through a flow
 
 In the flow list, click **`merge-traces`** ("Operator merges per-flow traces into the validated
-model"): the exact flow you just ran in step 3, recovered from its own code.
+model").
 
 - Notice the sticky lane: an actor, the `MergeTraces` command, the `agg-model` aggregate, and the
   events it emits, left to right.
@@ -94,3 +69,9 @@ explorer, hotspots, a glossary, and a data model, all generated from one canonic
 - To let a Claude terminal read your live selection while you work in the explorer, see
   [how to connect a Claude terminal](../how-to/connect-a-claude-terminal.md).
 - For the reasoning behind the six-phase process, see [the method](../explanation/METHOD.md).
+
+> **T3 Expo devs with repo access** can also install the plugin
+> (`/plugin marketplace add bhastings-t3/event-storming-recovery`) and just say *"use the event
+> storming explorer"*, or clone the repo and run `npm run demo` to rebuild the same example from its
+> committed traces. A public launch is planned; until then those two paths need access to this
+> private repo, while the `npx` path above works for everyone.

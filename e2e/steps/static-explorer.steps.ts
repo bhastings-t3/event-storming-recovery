@@ -89,3 +89,54 @@ Then('the static gallery lists the node type {string}', async ({ page }, typeNam
 Then('the static gallery renders sticky cards', async ({ page }) => {
   expect(await page.locator('#gallery .gcard').count()).toBeGreaterThan(0);
 });
+
+// ---- Issue #74: first-open self-heal of the source root on a shared (--shareable) board ----------
+// A shareable explorer.html bakes NO source root, so every source link renders as vscode://file//...
+// (empty root). The scenario proves the reader is nudged (banner) and, on the first source-link click,
+// auto-prompted; setting a root flips the links to it and the banner stays gone across a reload.
+Given('the shareable static explorer is open', async ({ page, staticExplorerShareableUrl }) => {
+  await page.goto(staticExplorerShareableUrl);
+  await expect(page.locator('.sticky').first()).toBeVisible();
+});
+
+// The first source (vscode://) link in the open detail panel — the reader-overridable deep link.
+const detailSourceLink = (page: Page) => page.locator('#detail a[href^="vscode:"]').first();
+
+Then('the static source-root banner is shown', async ({ page }) => {
+  await expect(page.locator('#reporoot-banner')).toBeVisible();
+});
+
+Then('the static source-root banner is not shown', async ({ page }) => {
+  await expect(page.locator('#reporoot-banner')).toHaveCount(0);
+});
+
+// Neutral == generated-elsewhere: the empty baked root yields a vscode://file// link (double slash),
+// carrying none of the reader's local path yet.
+Then('a static source link is neutral until a root is set', async ({ page }) => {
+  const href = await detailSourceLink(page).getAttribute('href');
+  expect(href, 'a baked source link is present').toBeTruthy();
+  expect(href!.startsWith('vscode://file//'), `link should carry no reader root yet: ${href}`).toBe(true);
+});
+
+When('I click a static source link and set the source root to {string}', async ({ page }, root: string) => {
+  const link = detailSourceLink(page);
+  await expect(link).toBeVisible();
+  // The client intercepts the first source-link click (no root set) and opens window.prompt. Capture
+  // the dialog to prove the auto-prompt fired, then answer it with the reader's local checkout path.
+  const dialog = new Promise<string>((resolve) => {
+    page.once('dialog', async (d) => { const msg = d.message(); await d.accept(root); resolve(msg); });
+  });
+  await link.click();
+  const message = await dialog;
+  expect(message, 'the first source-link click opens the Source-root prompt').toContain('source links');
+});
+
+Then('the static source link resolves under {string}', async ({ page }, root: string) => {
+  const href = await detailSourceLink(page).getAttribute('href');
+  expect(href, `link should resolve under the reader's root ${root}: ${href}`).toContain(root + '/');
+});
+
+When('I reload the static explorer', async ({ page }) => {
+  await page.reload();
+  await expect(page.locator('.sticky').first()).toBeVisible();
+});

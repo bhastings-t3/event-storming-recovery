@@ -102,3 +102,25 @@ test('generateViews: an absolute repoRoot is preserved (still machine-specific, 
   assert.match(anchor, ABSOLUTE_URI);
   assert.ok(anchor.startsWith('vscode://file/' + abs.replace(/\\/g, '/') + '/'), anchor);
 });
+
+// Issue #74: `--shareable` makes explorer.html a portable, commit-intended artifact — it bakes NO
+// source root (the neutral "generated elsewhere" sentinel), so the client self-heals to each reader's
+// local checkout on first open instead of shipping a stranger's dead absolute path. flows.dot has no
+// runtime and stays machine-local, so it keeps the resolved --repo-root (ADR-0006).
+test('generateViews: --shareable bakes the neutral empty source root into the HTML (not an absolute path)', () => {
+  const { html } = generateViews(buildModel(), { repoRoot: '/some/checkout', shareable: true });
+  const baked = bakedRoot(html);
+  assert.equal(baked, '', 'the shareable HTML bakes the empty sentinel default, not the generating path');
+  // the client still wires the reader override, so the sentinel resolves as soon as the reader sets a root
+  assert.match(html, /localStorage\.getItem\(['"]esRepoRoot['"]\)/);
+  // and it carries the first-open self-heal (the dismissible banner)
+  assert.match(html, /reporoot-banner/);
+});
+
+test('generateViews: --shareable leaves flows.dot machine-local (it keeps the resolved --repo-root)', () => {
+  const abs = path.resolve('/some/checkout');
+  const { dot } = generateViews(buildModel(), { repoRoot: abs, shareable: true });
+  const anchor = firstDotAnchor(dot);
+  assert.match(anchor, ABSOLUTE_URI, 'DOT links stay absolute even when the HTML is shareable');
+  assert.ok(anchor.startsWith('vscode://file/' + abs.replace(/\\/g, '/') + '/'), anchor);
+});

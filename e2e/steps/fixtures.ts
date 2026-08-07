@@ -80,6 +80,15 @@ interface WorkerFixtures {
    * Same worker scope + immutability rationale as `staticExplorerUrl`.
    */
   staticExplorerToyShopUrl: string;
+
+  /**
+   * The static explorer generated as a SHAREABLE, commit-intended artifact (issue #74): `generate
+   * --shareable` bakes NO source root, so the board is portable and self-heals to the reader's local
+   * checkout on first open (a banner + auto-opening the Source-root prompt on the first source-link
+   * click). This is the fixture the self-heal scenario drives, standing in for a board a teammate
+   * opens on a different machine. `--repo-root` still feeds flows.dot's machine-local links only.
+   */
+  staticExplorerShareableUrl: string;
 }
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
@@ -142,6 +151,19 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
       // validates before writing, so reaching `generate` already proves the fixture is a valid model.
       execFileSync(process.execPath, [cliEntry, 'merge', toyShopTraces, model], { stdio: 'pipe' });
       execFileSync(process.execPath, [cliEntry, 'generate', model, dir, '--repo-root', '/x'], { stdio: 'pipe' });
+      await use(pathToFileURL(join(dir, 'explorer.html')).href);
+      rmSync(dir, { recursive: true, force: true });
+    },
+    { scope: 'worker' },
+  ],
+
+  staticExplorerShareableUrl: [
+    async ({}, use) => {
+      const dir = mkdtempSync(join(tmpdir(), 'es-e2e-shareable-'));
+      // `--shareable` (issue #74) is the whole point: the emitted explorer.html bakes an EMPTY source
+      // root, so a reader on a different machine sees the self-heal banner + auto-prompt rather than
+      // dead links. `--repo-root /x` only feeds flows.dot here (which no scenario opens).
+      execFileSync(process.execPath, [cliEntry, 'generate', exampleModel, dir, '--repo-root', '/x', '--shareable'], { stdio: 'pipe' });
       await use(pathToFileURL(join(dir, 'explorer.html')).href);
       rmSync(dir, { recursive: true, force: true });
     },

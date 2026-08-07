@@ -42,3 +42,21 @@ Feature: Static generated explorer — the self-contained explorer.html
     Then the static gallery lists the node type "Command"
     And the static gallery lists the node type "Aggregate"
     And the static gallery renders sticky cards
+
+  # Issue #74: a committed board is shared, so its baked source links are dead on the reader's machine.
+  # A shareable board bakes no root and must self-heal on first open — surface a banner, and auto-open
+  # the Source-root prompt on the first source-link click — so the reader's links resolve without them
+  # having to discover the #27 override. Once they set a root, the links flip and the banner stays gone.
+  Scenario: A shared board self-heals its foreign source root on first open
+    Given the shareable static explorer is open
+    Then the static source-root banner is shown
+    When I click the static node labelled "AddComment"
+    Then the static detail panel names "AddComment"
+    And a static source link is neutral until a root is set
+    When I click a static source link and set the source root to "/home/reader/repo"
+    Then the static source link resolves under "/home/reader/repo"
+    And the static source-root banner is not shown
+    When I reload the static explorer
+    Then the static source-root banner is not shown
+    When I click the static node labelled "AddComment"
+    Then the static source link resolves under "/home/reader/repo"

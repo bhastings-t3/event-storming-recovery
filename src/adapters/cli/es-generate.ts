@@ -11,6 +11,10 @@
  *                to wherever the viewer opens them).
  *   --title      heading shown in the explorer + <title>. Defaults to the model's
  *                meta.title if present, else "Event Storming Explorer".
+ *   --shareable  emit a portable explorer.html for committing/sharing (issue #74):
+ *                bake no source root, so it self-heals to each reader's local
+ *                checkout on first open instead of shipping the generating machine's
+ *                (or a placeholder) dead path. flows.dot still uses --repo-root.
  */
 import path from 'node:path';
 import type { Model as ModelData } from '../../domain/model/types.js';
@@ -27,7 +31,7 @@ import { writeViews } from '../fs/generator-writer.js';
  * server paths use) before rendering, so a broken flows.json fails with the validator's errors
  * instead of producing a corrupt explorer or crashing mid-render.
  */
-export function runGenerate(flowsFile: string, outDir: string, opts: { repoRoot?: string; title?: string } = {}): void {
+export function runGenerate(flowsFile: string, outDir: string, opts: { repoRoot?: string; title?: string; shareable?: boolean } = {}): void {
   let model: ModelData;
   try {
     model = readModelFile(flowsFile);
@@ -48,7 +52,7 @@ export function runGenerate(flowsFile: string, outDir: string, opts: { repoRoot?
   const title = opts.title ?? ((model.meta && model.meta.title) || 'Event Storming Explorer');
 
   try {
-    const views = generateViews(model, { repoRoot, title });
+    const views = generateViews(model, { repoRoot, title, shareable: opts.shareable });
     writeViews(outDir, views);
   } catch (err) {
     console.error(`generate: failed to render ${flowsFile}: ${(err as Error).message}`);

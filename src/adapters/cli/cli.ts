@@ -78,8 +78,9 @@ program
   .argument('<outDir>', 'directory to write flows.dot + explorer.html into')
   .option('--repo-root <path>', 'repo root for the explorer\'s source deep links (default: model meta or ".")')
   .option('--title <text>', 'heading + <title> (default: model meta or "Event Storming Explorer")')
-  .action((flowsJson: string, outDir: string, options: { repoRoot?: string; title?: string }) => {
-    runGenerate(flowsJson, outDir, { repoRoot: options.repoRoot, title: options.title });
+  .option('--shareable', 'emit a portable explorer.html: no baked source root, so it self-heals to each reader\'s local checkout on first open (issue #74)')
+  .action((flowsJson: string, outDir: string, options: { repoRoot?: string; title?: string; shareable?: boolean }) => {
+    runGenerate(flowsJson, outDir, { repoRoot: options.repoRoot, title: options.title, shareable: options.shareable });
   });
 
 program.parseAsync(process.argv).catch((err) => { console.error(err); process.exit(1); });

@@ -20,13 +20,16 @@ const cli = join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js');
 run([cli, 'merge', join(ex, 'traces'), model]);
 // generate now resolves --repo-root to an absolute path (issue #27), so passing '.' would bake
 // THIS machine's absolute path and OS username into the committed, published example. Pass a
-// stable, username-free placeholder instead: the committed board's baked root is only a DEFAULT
-// the reader overrides (the "Source root" control) to point links at their own checkout.
+// stable, username-free placeholder instead: it feeds flows.dot's machine-local vscode:// links.
+// --shareable (issue #74) makes explorer.html a PORTABLE committed artifact: it bakes NO source
+// root (a neutral sentinel), so instead of shipping the dead placeholder path to every reader, the
+// board self-heals on first open — a banner + auto-opening the "Source root" prompt on the first
+// source-link click — to point links at the reader's own local checkout.
 const CANONICAL_ROOT = '/event-storming-recovery';
-run([cli, 'generate', model, join(ex, 'model'), '--repo-root', CANONICAL_ROOT, '--title', 'Event Storming Recovery — self-model']);
+run([cli, 'generate', model, join(ex, 'model'), '--repo-root', CANONICAL_ROOT, '--shareable', '--title', 'Event Storming Recovery — self-model']);
 
-// generate bakes toUriRoot(path.resolve('/event-storming-recovery')) into both files: the
-// REPO_ROOT_DEFAULT constant in explorer.html and every vscode://file/ link in flows.dot. That
+// generate bakes toUriRoot(path.resolve('/event-storming-recovery')) into flows.dot's every
+// vscode://file/ link (explorer.html is --shareable, so it carries no baked root to normalize). That
 // resolves to '/event-storming-recovery' on Linux but 'C:/event-storming-recovery' on Windows, so
 // the committed example would carry a host-specific drive letter and never reproduce cross-OS.
 // Strip it back to the canonical POSIX form (matching what Linux already emits) so the committed

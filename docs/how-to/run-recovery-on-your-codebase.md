@@ -8,15 +8,39 @@ and know the shape of the output. For the reasoning behind each phase, see
 [the method](../explanation/METHOD.md); for the exact data contract every trace conforms to, see
 [the flows.json reference](../reference/flows-schema.md).
 
+## What this actually is (read before you start)
+
+Recovery is **an AI orchestration, not a CLI command.** There is no `recover` subcommand;
+`event-storming-recovery --help` shows only `view`/`merge`/`generate`. The model-producing phases
+(inventory and deep-trace) are run by a **live, interactive Claude session** that spawns several
+concurrent sub-agents against `prompts/00-orchestrator.md`: five parallel scouts up front, then
+per-flow trace agents dispatched in waves (~5-7 concurrent). The runnable CLI only enters at the
+end, when `merge` and `generate` turn the traces those agents write into the model you `view`.
+
+So this workflow has prerequisites beyond the ones for `view`:
+
+- **Node >= 22.12** and **Claude Code (the `claude` CLI) installed and on your PATH**, plus an
+  interactive Claude session to drive the orchestration. This is not something a plain shell script
+  runs.
+- **A real token budget.** The fan-out of agents each reading a slice of your codebase, in waves,
+  is the bulk of the cost. There is no fixed price (it scales with the size of the codebase and how
+  many flows you choose to trace at full depth, which the triage step below lets you control), but
+  plan for a substantial multi-agent run, not a single prompt. Start with **core only** or
+  **tiered depth** (see triage) on a first pass to keep the cost bounded.
+
 ## Start the recovery
 
-If you have the plugin installed, tell Claude:
+**T3 Expo devs with repo access** can install the plugin and tell Claude:
 
 > use the event-storming-recovery skill on this repo
 
 The skill drives all six phases below. If you're driving it by hand, or with any other agent, start
 from `prompts/00-orchestrator.md` instead and fill in its placeholders (`{REPO_ROOT}`, `{EXCLUDE}`,
-`{SCRATCH}`, `{OUT}`).
+`{SCRATCH}`, `{OUT}`). You don't need a clone to get that playbook: the npm package ships `prompts/`,
+so after `npm i -g event-storming-recovery` it's at
+`$(npm root -g)/event-storming-recovery/prompts/00-orchestrator.md` (the scout, trace-briefing,
+glossary-mining, and data-mapping templates it references sit alongside it in the same `prompts/`
+directory).
 
 ## The six phases, as a checklist
 

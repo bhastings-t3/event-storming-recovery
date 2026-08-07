@@ -14,7 +14,7 @@ it, see [how to connect a Claude terminal](../how-to/connect-a-claude-terminal.m
 - **Session:** stateful. An `initialize` request starts a session (`Mcp-Session-Id` header);
   subsequent requests reuse it.
 - **Server name:** `event-storming-recovery` (declared as `event-storming` by the plugin's
-  `.claude-plugin/plugin.json` and `.mcp.json.example`).
+  `.claude-plugin/plugin.json`).
 
 ## Tools
 

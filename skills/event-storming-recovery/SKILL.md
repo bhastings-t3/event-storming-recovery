@@ -92,6 +92,9 @@ Read `prompts/00-orchestrator.md` for the full playbook. In brief:
 - `docs/reference/flows-schema.md` — the node/edge/flow/term contract every trace and term conforms to.
 - the `event-storming-recovery` CLI's `merge` and `generate` subcommands — merge+validate, and
   render DOT+explorer (see the [CLI reference](../../docs/reference/cli.md)).
-- `examples/event-storming-recovery/` — the bundled example (this tool's own recovered self-model);
-  rebuild it in seconds to see the output shape: `npm run demo`. A small synthetic fixture also lives
-  at `tests/fixtures/toy-shop/` if you want the minimal shape.
+- `examples/event-storming-recovery/` — the bundled example (this tool's own recovered self-model),
+  shipped in the npm package. See its output shape at once with `npx event-storming-recovery view`
+  (it falls back to this example when no model is found), or from a clone rebuild it with
+  `npm run demo`. For the minimal shape of a single trace, the
+  [`flows.json` reference](../../docs/reference/flows-schema.md) is the authoritative, always-shipped
+  contract.

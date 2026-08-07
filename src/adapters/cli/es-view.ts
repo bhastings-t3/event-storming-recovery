@@ -11,6 +11,7 @@
  * This is the composition root: it constructs the concrete adapters, injects them
  * into the application layer, and starts the server.
  */
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveModel } from '../../application/commands/resolve-model.js';
@@ -36,6 +37,25 @@ export interface ViewOptions {
   modelPath?: string;
   tracesDir?: string;
   repoRoot?: string;
+}
+
+// Wildcard bind addresses mean "listen on every interface"; none is itself a client-reachable
+// destination, so a connect URL built from one (http://0.0.0.0:PORT) cannot be dialed.
+const WILDCARD_BIND_HOSTS = new Set(['0.0.0.0', '::', '0000:0000:0000:0000:0000:0000:0000:0000']);
+
+/** True if `host` is a wildcard bind address (all interfaces), which is never a client-reachable address. */
+export function isWildcardBindHost(host: string): boolean {
+  return WILDCARD_BIND_HOSTS.has(host.trim());
+}
+
+/** First non-internal IPv4 address of this machine, or null (e.g. offline). Turns a wildcard bind into a URL a remote client can actually reach. */
+export function firstLanIPv4(): string | null {
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const a of addrs || []) {
+      if (a.family === 'IPv4' && !a.internal) return a.address;
+    }
+  }
+  return null;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -107,8 +127,23 @@ export async function runView(opts: ViewOptions): Promise<void> {
   console.log(`  repo-root: ${resolved.repoRoot}`);
   if (c) console.log(`  contents:  ${c.flows} flows, ${c.nodes} nodes, ${c.hotspots} hotspots`);
   for (const w of resolved.warnings || []) console.log(`  ! ${w}`);
+  // A wildcard bind (0.0.0.0/::) makes `url` non-dialable: it is a bind address, not a destination.
+  // Substitute a detected LAN address so the printed `claude mcp add` command actually connects; if
+  // none is detected (or it is the wrong interface), tell the reader to fill in this host (issue #76).
+  let connectUrl = url;
+  let connectNote: string | null = null;
+  if (opts.allowRemote && isWildcardBindHost(opts.host)) {
+    const lan = firstLanIPv4();
+    if (lan) {
+      connectUrl = url.replace(`//${opts.host}:`, `//${lan}:`);
+      connectNote = `${opts.host} is a bind address; using this host's LAN address ${lan}. Replace it if that is not the interface your Claude terminal reaches.`;
+    } else {
+      connectNote = `${opts.host} is a bind address, not reachable from a client; replace it with this host's address your Claude terminal can reach.`;
+    }
+  }
   console.log(`\n  Connect your Claude terminal to this session's context:`);
-  console.log(`    claude mcp add --transport http event-storming ${url}/mcp`);
+  console.log(`    claude mcp add --transport http event-storming ${connectUrl}/mcp`);
+  if (connectNote) console.log(`    (${connectNote})`);
   console.log(`  then, in that Claude session: "explain the selected node" (click one here first).`);
   console.log(`\n  Ctrl+C to stop.\n`);
 

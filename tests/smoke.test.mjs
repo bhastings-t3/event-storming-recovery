@@ -148,6 +148,23 @@ test('merge does NOT leave an invalid flows.json on disk (validate-then-write)',
   }
 });
 
+test('merge CREATES a missing nested output directory instead of throwing ENOENT', () => {
+  // Issue #76: `merge <traces> <out>` where <out>'s parent dir does not exist used to throw a raw
+  // ENOENT. The fs write path now mkdirs the parent recursively (mirroring generate, issues #50/#51),
+  // so writing into a fresh nested path succeeds.
+  const out = mkdtempSync(join(tmpdir(), 'es-'));
+  const nestedOut = join(out, 'does', 'not', 'exist', 'yet', 'flows.json');
+  try {
+    assert.equal(existsSync(dirname(nestedOut)), false, 'the output parent dir does not exist yet');
+    execFileSync('node', [cli, 'merge', toyTraces, nestedOut], { stdio: 'pipe' });
+    assert.equal(existsSync(nestedOut), true, 'merge created the nested dir and wrote flows.json');
+    const m = JSON.parse(readFileSync(nestedOut, 'utf8'));
+    assert.ok(Array.isArray(m.flows) && m.flows.length >= 1, 'the written model is a real flows model');
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
 test('generate REFUSES to render an invalid (but shape-valid) flows.json', () => {
   // Issue #8: generate must not trust merge's output blindly. A dangling step ref is a validator
   // error; generate must fail cleanly instead of rendering a corrupt explorer or crashing.

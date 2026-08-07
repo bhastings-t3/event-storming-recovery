@@ -62,6 +62,11 @@ export function readTraceDocs(dir: string): { sources: TraceSource[]; parseError
 }
 
 export function writeModelFile(file: string, model: Model): void {
+  // Ensure the parent dir exists before writing. recursive makes nested output paths work and is
+  // idempotent, so writing next to an already-present file is unchanged. Mirrors the generate-views
+  // writer, which does the same for its outDir (issues #50/#51); without it, `merge <traces> <out>`
+  // into a not-yet-created directory throws a raw ENOENT (issue #76).
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(model, null, 2));
 }
 

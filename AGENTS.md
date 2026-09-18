@@ -89,13 +89,13 @@ excludes `src/web` so the Node build never compiles the SPA.
 - **The Vite proxy must match `^/api/`** (not bare `/api`) or it swallows the
   SPA's own `/api.js` module (`vite.config.mjs`).
 - **Windows paths:** `generate` resolves `--repo-root` to an absolute path and
-  normalizes separators to `/` for the `vscode://file/` scheme (issue #27), so a
+  normalizes separators to `/` for the `vscode://file/` scheme (issue #88), so a
   committed `flows.dot` carries an absolute root (it has no runtime, so it stays
   machine-local by nature). The committed `explorer.html` is shareable: `generate
   --shareable` bakes **no** source root (a neutral empty sentinel) and the client
   self-heals to each reader's local checkout on first open — a dismissible banner
   plus auto-opening the "Source root" prompt on the first source-link click, reusing
-  the #27 `localStorage['esRepoRoot']` override. `scripts/build-example.mjs` passes
+  the #88 `localStorage['esRepoRoot']` override. `scripts/build-example.mjs` passes
   `--repo-root /event-storming-recovery --shareable`, so the published self-model's
   `flows.dot` stays username-free while its `explorer.html` self-heals rather than
   shipping a dead path. See ADR-0006 and ADR-0010.

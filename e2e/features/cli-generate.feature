@@ -2,7 +2,7 @@ Feature: CLI generate — rendering, validate-then-render, and portable source l
   `generate` renders flows.dot + explorer.html from a canonical flows.json. It runs the one model
   validator first, so a shape-valid but broken model is refused rather than rendered (#8), and it
   resolves --repo-root to an absolute, forward-slashed vscode:// link so the emitted views are
-  portable (#27). A missing input file fails with a clean message, not a stack trace.
+  portable (#88). A missing input file fails with a clean message, not a stack trace.
 
   Scenario: Generating from a valid model writes both views and reports counts
     Given a valid flows.json describing a command and an aggregate

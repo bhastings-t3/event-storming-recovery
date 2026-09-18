@@ -32,7 +32,7 @@ Two coordinated changes, both confined to the static committed artifact:
 
 2. **Self-heal on first open.** The client (`src/web/static-explorer/explorer-client.ts`) shows a
    one-time, dismissible banner when no reader root is set, and intercepts the **first** click on any
-   source link (capture phase) to open the existing #27 `promptRepoRoot` instead of firing a dead deep
+   source link (capture phase) to open the existing #88 `promptRepoRoot` instead of firing a dead deep
    link. Setting a root flips every rendered link via the existing `refreshAnchors`/`data-anchor`
    machinery and dismisses the banner; the dismissal persists (`localStorage['esRepoRootBannerDismissed']`),
    so once resolved the board stays quiet.
@@ -43,7 +43,7 @@ Two coordinated changes, both confined to the static committed artifact:
   the links are foreign and are walked into setting their path on the first click.
 - The bundled example no longer ships a misleading dead absolute path; it ships the honest sentinel and
   self-heals like any shared board.
-- The generator stays a pure string builder; all self-heal logic lives in the client, reusing the #27
+- The generator stays a pure string builder; all self-heal logic lives in the client, reusing the #88
   override rather than reinventing it. The golden fixture (`tests/generate-views-golden.test.mjs`) was
   re-baselined because the emitted client bytes changed (new banner/self-heal code + CSS); `flows.dot`
   output is byte-unchanged. Behaviour is guarded by a new static-explorer E2E scenario.

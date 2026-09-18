@@ -1,4 +1,4 @@
-// Regression tests for issue #27: the committed explorer.html / flows.dot source links must be
+// Regression tests for issue #88: the committed explorer.html / flows.dot source links must be
 // portable. `repoRoot` has to be resolved to an ABSOLUTE path (so the documented `--repo-root .`
 // stops emitting a dead `vscode://file/./...` link) and normalized to forward slashes (so the
 // "absolute" case is well-formed on Windows too). The emitted HTML bakes that absolute value as a
@@ -12,7 +12,7 @@ import { generateViews } from '../dist/node/application/commands/generate-views.
 // Since #41 the client is a BUILT bundle inlined behind a window.__ES__ preamble, so the per-model
 // root is baked as `REPO_ROOT_DEFAULT: "<root>"` (was `const REPO_ROOT_DEFAULT = "<root>"`) and the
 // bundled client code is esbuild-normalized (e.g. double quotes). These matchers track that form;
-// the #27 behaviour they guard (absolute, forward-slashed, reader-overridable root) is unchanged.
+// the #88 behaviour they guard (absolute, forward-slashed, reader-overridable root) is unchanged.
 const bakedRoot = (html) => (html.match(/REPO_ROOT_DEFAULT:\s*"([^"]*)"/) || [])[1];
 
 function buildModel() {

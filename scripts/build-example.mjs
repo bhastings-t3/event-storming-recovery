@@ -18,7 +18,7 @@ run([join(root, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.nod
 run([join(root, 'scripts', 'build-client.mjs')]);
 const cli = join(root, 'dist', 'node', 'adapters', 'cli', 'cli.js');
 run([cli, 'merge', join(ex, 'traces'), model]);
-// generate now resolves --repo-root to an absolute path (issue #27), so passing '.' would bake
+// generate now resolves --repo-root to an absolute path (issue #88), so passing '.' would bake
 // THIS machine's absolute path and OS username into the committed, published example. Pass a
 // stable, username-free placeholder instead: it feeds flows.dot's machine-local vscode:// links.
 // --shareable (issue #74) makes explorer.html a PORTABLE committed artifact: it bakes NO source

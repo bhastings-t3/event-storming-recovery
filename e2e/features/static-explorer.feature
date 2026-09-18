@@ -46,7 +46,7 @@ Feature: Static generated explorer — the self-contained explorer.html
   # Issue #74: a committed board is shared, so its baked source links are dead on the reader's machine.
   # A shareable board bakes no root and must self-heal on first open — surface a banner, and auto-open
   # the Source-root prompt on the first source-link click — so the reader's links resolve without them
-  # having to discover the #27 override. Once they set a root, the links flip and the banner stays gone.
+  # having to discover the #88 override. Once they set a root, the links flip and the banner stays gone.
   Scenario: A shared board self-heals its foreign source root on first open
     Given the shareable static explorer is open
     Then the static source-root banner is shown

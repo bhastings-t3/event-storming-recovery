@@ -30,7 +30,7 @@ So this workflow has prerequisites beyond the ones for `view`:
 
 ## Start the recovery
 
-**T3 Expo devs with repo access** can install the plugin and tell Claude:
+With [the plugin installed](../../README.md#the-plugin-path), tell Claude:
 
 > use the event-storming-recovery skill on this repo
 

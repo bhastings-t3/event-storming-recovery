@@ -47,11 +47,15 @@ jobs:
       # `prepack` (npm run build) fires automatically during `npm publish` and
       # rebuilds dist so the tarball ships the prebuilt CLI + SPA.
       #
-      # NOTE: no `--provenance`. Sigstore provenance is rejected (npm E422) for a
-      # PRIVATE source repository — "Only public source repositories are supported
-      # when publishing with provenance." OIDC Trusted Publishing itself works for
-      # a private repo; only the provenance attestation does not. Restore
-      # `--provenance` if/when this repository is made public.
+      # `--provenance` publishes a Sigstore attestation linking the tarball to the
+      # commit and workflow run that produced it, which npm shows as the package's
+      # verified provenance badge.
+      #
+      # IT REQUIRES THE SOURCE REPOSITORY TO BE PUBLIC. While this repo was private
+      # npm rejected it with E422 ("Only public source repositories are supported
+      # when publishing with provenance") and the flag was dropped. If a publish
+      # ever fails that way again, the repo's visibility is the thing to check
+      # first — drop the flag to unblock the release, then put it back.
       - name: publish to npm
         if: ${{ steps.release.outputs.release_created || github.event_name == 'workflow_dispatch' }}
-        run: npm publish
+        run: npm publish --provenance

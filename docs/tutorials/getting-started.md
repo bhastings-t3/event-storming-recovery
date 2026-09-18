@@ -70,8 +70,7 @@ explorer, hotspots, a glossary, and a data model, all generated from one canonic
   [how to connect a Claude terminal](../how-to/connect-a-claude-terminal.md).
 - For the reasoning behind the six-phase process, see [the method](../explanation/METHOD.md).
 
-> **T3 Expo devs with repo access** can also install the plugin
+> You can also install the plugin
 > (`/plugin marketplace add bhastings-t3/event-storming-recovery`) and just say *"use the event
 > storming explorer"*, or clone the repo and run `npm run demo` to rebuild the same example from its
-> committed traces. A public launch is planned; until then those two paths need access to this
-> private repo, while the `npx` path above works for everyone.
+> committed traces.

@@ -42,10 +42,10 @@ count. Two agents in one module is a rebase you chose.
 
 ## This repo's specifics
 
-- **Private repo, no org.** Branch protection is unavailable, which is the entire
-  reason the enforcement layer exists. If this repo moves into an org or onto a
-  protected-branch plan, protect the branch and delete most of the layer (ADR 0001
-  revisit trigger).
+- **No org, and branch protection not yet enabled.** The enforcement layer exists
+  because protection was unavailable on a private repo. That constraint is gone,
+  so the layer is now interim rather than load-bearing: protect the branch and
+  delete most of it (ADR 0001 revisit trigger, tracked in #85).
 - **One CI check: `test`.** That is the name `merge-pr.mjs` matches. If a merge is
   refused with "test: never ran", confirm the real name against a live PR run
   (`gh pr view <n> --json statusCheckRollup --jq '.statusCheckRollup[].name'`) and

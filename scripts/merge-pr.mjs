@@ -1,9 +1,9 @@
 // The only sanctioned way to land a PR on the default branch.
 //
 // WHAT THIS PREVENTS
-// GitHub cannot enforce required checks here: branch protection needs a paid
-// plan on a private repo. Without enforcement, "check the run first" is a
-// habit, and habits lapse exactly when things are busy. This does the check
+// GitHub does not enforce required checks here yet: branch protection is
+// available but not turned on (#85). Without enforcement, "check the run first"
+// is a habit, and habits lapse exactly when things are busy. This does the check
 // mechanically and refuses otherwise.
 //
 // Always squash: one issue becomes one commit on main, so `git log --oneline`

@@ -83,7 +83,7 @@ function updateRepoRootBtn() {
 
 // ---- First-open self-heal (issue #74) ----------------------------------------------------------
 // A committed explorer.html is shared: the reader is almost never on the machine it was generated on,
-// so its baked vscode:// source links are dead on arrival for them. The #27 reader-override fixes this
+// so its baked vscode:// source links are dead on arrival for them. The #88 reader-override fixes this
 // but is undiscoverable. So on first open — before the reader has set their own root — surface a
 // dismissible banner, and intercept the first click on any source link to open the Source-root prompt
 // instead of firing a dead deep link. Both reuse the existing promptRepoRoot / esRepoRoot machinery;

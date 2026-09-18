@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.0](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.0...event-storming-recovery-v0.8.0) (2026-09-18)
+
+
+### Features
+
+* self-heal the committed static explorer's source root on first open ([#80](https://github.com/bhastings-t3/event-storming-recovery/issues/80)) ([7fc8a3b](https://github.com/bhastings-t3/event-storming-recovery/commit/7fc8a3b4cf0c3db0e72d35bec0ade816d45edf8b)), closes [#74](https://github.com/bhastings-t3/event-storming-recovery/issues/74)
+
+
+### Bug Fixes
+
+* create merge output dir and print a reachable --allow-remote connect URL ([#82](https://github.com/bhastings-t3/event-storming-recovery/issues/82)) ([7c8134e](https://github.com/bhastings-t3/event-storming-recovery/commit/7c8134e66e9c8ecdd90bffe0e692e557969bf79a))
+* keep view serving when no browser opener exists ([#71](https://github.com/bhastings-t3/event-storming-recovery/issues/71)) ([#78](https://github.com/bhastings-t3/event-storming-recovery/issues/78)) ([1594113](https://github.com/bhastings-t3/event-storming-recovery/commit/15941130f115c910cab5c6e74101c698a72a476a))
+* **release:** publish without provenance (private repo) + manual dispatch ([#67](https://github.com/bhastings-t3/event-storming-recovery/issues/67)) ([b85bdbc](https://github.com/bhastings-t3/event-storming-recovery/commit/b85bdbce5eec6871c0bd952bffdd7045f2b32e77))
+* require Node 22.12 to match commander@15's real floor ([#79](https://github.com/bhastings-t3/event-storming-recovery/issues/79)) ([5158953](https://github.com/bhastings-t3/event-storming-recovery/commit/5158953d4a185a57f7400ec98e790a065c9fd7d2))
+
 ## [0.7.0](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.6.0...event-storming-recovery-v0.7.0) (2026-08-05)
 
 
@@ -18,7 +33,7 @@
 * harden es-view server against three reachable robustness bugs ([#44](https://github.com/bhastings-t3/event-storming-recovery/issues/44)) ([5c22024](https://github.com/bhastings-t3/event-storming-recovery/commit/5c22024aeb28203f124abeeefc1844760c3a39ca)), closes [#12](https://github.com/bhastings-t3/event-storming-recovery/issues/12)
 * harden server/resolve against port, discovery, and repoRoot papercuts ([#48](https://github.com/bhastings-t3/event-storming-recovery/issues/48)) ([e5c55b4](https://github.com/bhastings-t3/event-storming-recovery/commit/e5c55b4620656f5df0a193ce3c3ff0d531febd8f))
 * make committed example OS-neutral and guard against demo drift ([#46](https://github.com/bhastings-t3/event-storming-recovery/issues/46)) ([6208a5b](https://github.com/bhastings-t3/event-storming-recovery/commit/6208a5b3b931da5ff110183512da7deba144768c)), closes [#45](https://github.com/bhastings-t3/event-storming-recovery/issues/45)
-* make committed explorer/flows.dot source links portable ([#29](https://github.com/bhastings-t3/event-storming-recovery/issues/29)) ([0a73788](https://github.com/bhastings-t3/event-storming-recovery/commit/0a737882c7cc421016012ae2e6ccdd4128014560)), closes [#88](https://github.com/bhastings-t3/event-storming-recovery/issues/88)
+* make committed explorer/flows.dot source links portable ([#29](https://github.com/bhastings-t3/event-storming-recovery/issues/29)) ([0a73788](https://github.com/bhastings-t3/event-storming-recovery/commit/0a737882c7cc421016012ae2e6ccdd4128014560)), closes [#27](https://github.com/bhastings-t3/event-storming-recovery/issues/27)
 * make model validation a hard boundary on every write/serve path ([#23](https://github.com/bhastings-t3/event-storming-recovery/issues/23)) ([c613ffe](https://github.com/bhastings-t3/event-storming-recovery/commit/c613ffe05ab4d05eb0966109ea173f06e19b15d2)), closes [#8](https://github.com/bhastings-t3/event-storming-recovery/issues/8)
 * render nested and loose data-model fields to match the count ([#11](https://github.com/bhastings-t3/event-storming-recovery/issues/11)) ([#56](https://github.com/bhastings-t3/event-storming-recovery/issues/56)) ([9036c3b](https://github.com/bhastings-t3/event-storming-recovery/commit/9036c3be75a61ff65e4dd8d07d0b441c86bee455))
 * surface copy failures on empty/failed clipboard writes ([#43](https://github.com/bhastings-t3/event-storming-recovery/issues/43)) ([afb2956](https://github.com/bhastings-t3/event-storming-recovery/commit/afb2956c0b1ec2faf5b13079b8a6606c6fac2d94))

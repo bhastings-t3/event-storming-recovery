@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.0](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.7.0...event-storming-recovery-v0.8.0) (2026-09-18)
+
+
+### Features
+
+* self-heal the committed static explorer's source root on first open ([#80](https://github.com/bhastings-t3/event-storming-recovery/issues/80)) ([7fc8a3b](https://github.com/bhastings-t3/event-storming-recovery/commit/7fc8a3b4cf0c3db0e72d35bec0ade816d45edf8b)), closes [#74](https://github.com/bhastings-t3/event-storming-recovery/issues/74)
+
+
+### Bug Fixes
+
+* create merge output dir and print a reachable --allow-remote connect URL ([#82](https://github.com/bhastings-t3/event-storming-recovery/issues/82)) ([7c8134e](https://github.com/bhastings-t3/event-storming-recovery/commit/7c8134e66e9c8ecdd90bffe0e692e557969bf79a))
+* keep view serving when no browser opener exists ([#71](https://github.com/bhastings-t3/event-storming-recovery/issues/71)) ([#78](https://github.com/bhastings-t3/event-storming-recovery/issues/78)) ([1594113](https://github.com/bhastings-t3/event-storming-recovery/commit/15941130f115c910cab5c6e74101c698a72a476a))
+* **release:** publish without provenance (private repo) + manual dispatch ([#67](https://github.com/bhastings-t3/event-storming-recovery/issues/67)) ([b85bdbc](https://github.com/bhastings-t3/event-storming-recovery/commit/b85bdbce5eec6871c0bd952bffdd7045f2b32e77))
+* require Node 22.12 to match commander@15's real floor ([#79](https://github.com/bhastings-t3/event-storming-recovery/issues/79)) ([5158953](https://github.com/bhastings-t3/event-storming-recovery/commit/5158953d4a185a57f7400ec98e790a065c9fd7d2))
+
 ## [0.7.0](https://github.com/bhastings-t3/event-storming-recovery/compare/event-storming-recovery-v0.6.0...event-storming-recovery-v0.7.0) (2026-08-05)
 
 

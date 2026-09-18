@@ -30,7 +30,7 @@ So this workflow has prerequisites beyond the ones for `view`:
 
 ## Start the recovery
 
-With [the plugin installed](../../README.md#the-plugin-path), tell Claude:
+With [the plugin installed](../../README.md#running-it-on-your-own-codebase), tell Claude:
 
 > use the event-storming-recovery skill on this repo
 

@@ -55,14 +55,10 @@ budget for the fan-out of agents reading your codebase. Start with
 states the prerequisites and cost up front. The `merge`/`generate` CLI then turns the traces those
 agents write into the model you `view`.
 
-## For T3 Expo devs: the plugin path
+## The plugin path
 
-> This repository is currently private and these instructions are for **T3 Expo developers who have
-> access to it**. A public launch is planned; until then the `git clone` and plugin-marketplace
-> paths below only work for people with repo access. Everyone else uses the `npx` path above.
-
-If you have repo access, install the plugin: it bundles both skills, the tools, and the explorer's
-MCP server declaration:
+Prefer to drive this from inside Claude Code rather than by hand? Install the plugin: it bundles
+both skills, the tools, and the explorer's MCP server declaration:
 
 ```
 /plugin marketplace add bhastings-t3/event-storming-recovery

@@ -1,7 +1,7 @@
 // PreToolUse guard: nothing reaches `main` except through the sanctioned path.
 //
 // WHAT THIS PREVENTS
-// Branch protection is unavailable on a private repo on this plan, so
+// Branch protection is not enabled on this repo yet (#85), so until it is
 // GitHub will happily accept a merge with CI red, or a direct push to main that
 // skips review entirely. Agents run unattended, and "I was told not to" is not a
 // control. This is the control.

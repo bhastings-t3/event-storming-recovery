@@ -77,9 +77,10 @@ CI runs **1 required check: `test`** (`.github/workflows/ci.yml`, which runs the
 tests and the example smoke build). A separate `provenance` workflow runs on
 pushes to `main` only and is not a PR check.
 
-**GitHub itself does not enforce the check.** Branch protection needs a paid plan
-on a private repo, and this repo is private. Three things stand in for it, and
-each is worth exactly what it covers:
+**GitHub itself does not enforce the check.** Branch protection is available on
+this repo but is not turned on yet (#85 tracks enabling it and deciding what of
+the layer below survives). Until it is, three things stand in for it, and each is
+worth exactly what it covers:
 
 1. **`node scripts/merge-pr.mjs <n>`**, the only sanctioned way to land a PR. It
    refuses unless every required check is green, and always squash merges.

@@ -1,7 +1,7 @@
 // Fail when a commit reached `main` without a pull request behind it.
 //
 // WHAT THIS PREVENTS
-// Branch protection is unavailable on a private repo on this plan, so
+// Branch protection is not enabled on this repo yet (#85), so for now
 // nothing at GitHub's end stops a direct push to `main` or a merge taken with CI
 // red. Two layers stand in for it, and both are preventive: `guard-merge.mjs`
 // only loads in a Claude Code session that started with `.claude/settings.json`
